@@ -7,21 +7,56 @@ impl Parser {
         Parser
     }
 
-    fn parse(&self, xml: &str) -> Document {
-        let doc = Document::new();
-
+    fn parse_preamble(&self, xml: &str) -> uint {
         // Parse the preamble
         let idx = xml.find_str("?>").expect("No preamble end");
         let end_of_preamble = idx + "?>".len();
+        end_of_preamble
+    }
 
-        let next = end_of_preamble + "<".len();
-        let ele = xml.slice_from(next);
-        let end = ele.find_str(" ").expect("Couldn't find end of name"); // really find nmtoken
-        let name = ele.slice_to(end);
+    fn parse_element<'a>(&self, xml: &'a str) -> (uint, &'a str) {
+        // Skip the opening
+        // TODO: verify is a <
+        let after_brace = "<".len();
+        let ele = xml.slice_from(after_brace);
+        let name = ele.slice_name().expect("failed to parse a name!");
+        (after_brace + name.len(), name)
+    }
+
+    fn parse(&self, xml: &str) -> Document {
+        let doc = Document::new();
+
+        let end_of_preamble = self.parse_preamble(xml);
+        let element = xml.slice_from(end_of_preamble);
+        let (_end_of_element, name) = self.parse_element(element);
 
         let e = doc.new_element(name.to_string());
         doc.root().append_child(e);
         doc
+    }
+}
+
+trait XmlStr<'a> {
+    fn slice_name(&self) -> Option<&'a str>;
+}
+
+impl<'a> XmlStr<'a> for &'a str {
+    fn slice_name(&self) -> Option<&'a str> {
+        let mut positions = self.char_indices();
+
+        let first_char = match positions.next() {
+            Some((_, c)) if c.is_name_start_char() => c,
+            Some((_, c)) => return None,
+            None => return None,
+        };
+
+        // Skip past all the name chars
+        let mut positions = positions.skip_while(|&(_, c)| c.is_name_char());
+
+        match positions.next() {
+            Some((offset, _)) => Some(self.slice_to(offset)),
+            None => Some(self.clone()),
+        }
     }
 }
 

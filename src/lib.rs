@@ -6,6 +6,8 @@ use std::rc::{Rc,Weak};
 use std::cell::RefCell;
 use std::collections::hashmap::HashMap;
 
+pub mod parser;
+
 // FIXME: Parents need to be weakref!
 // TODO: See about removing duplication of child / parent implementations.
 // TODO: remove clone from inner?
