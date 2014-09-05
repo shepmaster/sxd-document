@@ -1,5 +1,30 @@
 use super::{Document,Root,RootChild};
 
+struct Parser;
+
+impl Parser {
+    fn new() -> Parser {
+        Parser
+    }
+
+    fn parse(&self, xml: &str) -> Document {
+        let doc = Document::new();
+
+        // Parse the preamble
+        let idx = xml.find_str("?>").expect("No preamble end");
+        let end_of_preamble = idx + "?>".len();
+
+        let next = end_of_preamble + "<".len();
+        let ele = xml.slice_from(next);
+        let end = ele.find_str(" ").expect("Couldn't find end of name"); // really find nmtoken
+        let name = ele.slice_to(end);
+
+        let e = doc.new_element(name.to_string());
+        doc.root().append_child(e);
+        doc
+    }
+}
+
 trait XmlChar {
     fn is_name_start_char(&self) -> bool;
     fn is_name_char(&self) -> bool;
@@ -40,4 +65,23 @@ impl XmlChar for char {
             _ => false
         }
     }
+}
+
+trait Hax {
+    fn first_child(&self) -> Option<RootChild>;
+}
+
+impl Hax for Root {
+    fn first_child(&self) -> Option<RootChild> {
+        self.children().remove(0)
+    }
+}
+
+#[test]
+fn parses_a_document_with_a_single_element() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><hello />");
+    let top = doc.root().first_child().unwrap().element().unwrap();
+
+    assert_eq!(top.name().as_slice(), "hello");
 }
