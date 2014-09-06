@@ -26,6 +26,18 @@ impl Parser {
         }
     }
 
+    fn parse_attribute_value_quote<'a>(&self, xml: &'a str, quote: &str) -> Option<(&'a str, &'a str)> {
+        let (_, xml) = match xml.slice_literal(quote) {
+            None => return None,
+            Some(x) => x,
+        };
+        // TODO: don't consume & or <
+        let (value, xml) = xml.slice_until(quote).expect("No value");
+        let (_, xml) = xml.slice_literal(quote).expect("No quote");
+
+        Some((value, xml))
+    }
+
     fn parse_attribute<'a>(&self, xml: &'a str) -> Option<(ParsedAttribute<'a>, &'a str)> {
         let (name, xml) = match xml.slice_name() {
             Some(x) => x,
@@ -36,9 +48,14 @@ impl Parser {
         let (_, xml) = xml.slice_literal("=").expect("No equal sign");
         let xml = self.optional_space(xml);
 
-        let (_, xml) = xml.slice_literal("'").expect("No quote"); // single and double quotes
-        let (value, xml) = xml.slice_until("'").expect("No value"); // single and double quotes
-        let (_, xml) = xml.slice_literal("'").expect("No quote"); // single and double quotes
+        // Pattern: alternate
+        let (value, xml) = match self.parse_attribute_value_quote(xml, "'") {
+            Some(x) => x,
+            None => match self.parse_attribute_value_quote(xml, "\"") {
+                Some(x) => x,
+                None => fail!("No attribute value"),
+            },
+        };
 
         Some((ParsedAttribute{name: name, value: value}, xml))
     }
@@ -217,6 +234,15 @@ fn parses_a_document_with_a_single_element() {
 fn parses_an_element_with_an_attribute() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello scope='world'/>");
+    let top = doc.root().first_child().unwrap().element().unwrap();
+
+    assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
+}
+
+#[test]
+fn parses_an_element_with_an_attribute_using_double_quotes() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><hello scope=\"world\"/>");
     let top = doc.root().first_child().unwrap().element().unwrap();
 
     assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
