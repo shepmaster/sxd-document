@@ -15,12 +15,13 @@ impl Parser {
     }
 
     fn parse_element<'a>(&self, doc: Document, xml: &'a str) -> (Element, &'a str) {
-        let (_, after_start_brace) = xml.expect_literal("<").expect("no start brace");
+        let (_, after_start_brace) = xml.slice_literal("<").expect("no start brace");
 
         let (name, after_name) = after_start_brace.slice_name().expect("failed to parse a name!");
 
-        // skip_space
-        let (_, after_end_brace) = after_name.expect_literal(" />").expect("no end brace");
+        let (_, after_space) = after_name.slice_space().expect("no space after name");
+
+        let (_, after_end_brace) = after_space.slice_literal("/>").expect("no end brace");
 
         let e = doc.new_element(name.to_string());
 
@@ -41,8 +42,10 @@ impl Parser {
 
 trait XmlStr<'a> {
     fn slice_at(&self, position: uint) -> (&'a str, &'a str);
-    fn expect_literal(&self, expected: &str) -> Option<(&'a str, &'a str)>;
+    fn slice_literal(&self, expected: &str) -> Option<(&'a str, &'a str)>;
+    fn slice_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> Option<(&'a str, &'a str)>;
     fn slice_name(&self) -> Option<(&'a str, &'a str)>;
+    fn slice_space(&self) -> Option<(&'a str, &'a str)>;
 }
 
 impl<'a> XmlStr<'a> for &'a str {
@@ -50,7 +53,7 @@ impl<'a> XmlStr<'a> for &'a str {
         (self.slice_to(position), self.slice_from(position))
     }
 
-    fn expect_literal(&self, expected: &str) -> Option<(&'a str, &'a str)> {
+    fn slice_literal(&self, expected: &str) -> Option<(&'a str, &'a str)> {
         if self.starts_with(expected) {
             Some(self.slice_at(expected.len()))
         } else {
@@ -58,28 +61,39 @@ impl<'a> XmlStr<'a> for &'a str {
         }
     }
 
-    fn slice_name(&self) -> Option<(&'a str, &'a str)> {
+    fn slice_start_rest(&self,
+                        is_first: |char| -> bool,
+                        is_rest: |char| -> bool)
+                        -> Option<(&'a str, &'a str)>
+    {
         let mut positions = self.char_indices();
 
-        let first_char = match positions.next() {
-            Some((_, c)) if c.is_name_start_char() => c,
-            Some((_, c)) => return None,
+        match positions.next() {
+            Some((_, c)) if is_first(c) => (),
+            Some((_, _)) => return None,
             None => return None,
         };
 
-        // Skip past all the name chars
-        let mut positions = positions.skip_while(|&(_, c)| c.is_name_char());
-
+        let mut positions = positions.skip_while(|&(_, c)| is_rest(c));
         match positions.next() {
             Some((offset, _)) => Some(self.slice_at(offset)),
             None => Some((self.clone(), "")),
         }
+    }
+
+    fn slice_name(&self) -> Option<(&'a str, &'a str)> {
+        self.slice_start_rest(|c| c.is_name_start_char(), |c| c.is_name_char())
+    }
+
+    fn slice_space(&self) -> Option<(&'a str, &'a str)> {
+        self.slice_start_rest(|c| c.is_space_char(), |c| c.is_space_char())
     }
 }
 
 trait XmlChar {
     fn is_name_start_char(&self) -> bool;
     fn is_name_char(&self) -> bool;
+    fn is_space_char(&self) -> bool;
 }
 
 impl XmlChar for char {
@@ -115,6 +129,16 @@ impl XmlChar for char {
             '\u0300'..'\u036F' |
             '\u203F'..'\u2040' => true,
             _ => false
+        }
+    }
+
+    fn is_space_char(&self) -> bool {
+        match *self {
+            '\x20' |
+            '\x09' |
+            '\x0D' |
+            '\x0A' => true,
+            _ => false,
         }
     }
 }
