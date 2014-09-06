@@ -161,18 +161,21 @@ impl Parser {
         }
     }
 
-    fn hydrate_parsed_data(&self, element_data: ParsedElement) -> Document {
-        let doc = Document::new();
-
+    fn hydrate_element(&self, doc: Document, element_data: ParsedElement) -> Element {
         let element = doc.new_element(element_data.name.to_string());
         for attr in element_data.attributes.iter() {
             element.set_attribute(attr.name.to_string(), attr.value.to_string());
         }
-        for child in element_data.children.iter() {
-            let c = doc.new_element(child.name.to_string());//attrs; recursive
-            element.append_child(c);
+        for child in element_data.children.move_iter() {
+            element.append_child(self.hydrate_element(doc.clone(), child));
         }
-        doc.root().append_child(element);
+        element
+    }
+
+    fn hydrate_parsed_data(&self, element_data: ParsedElement) -> Document {
+        let doc = Document::new();
+
+        doc.root().append_child(self.hydrate_element(doc.clone(), element_data));
 
         doc
     }
@@ -370,4 +373,25 @@ fn parses_nested_elements() {
     let nested = doc.root().first_child().unwrap().element().unwrap().first_child().unwrap().element().unwrap();
 
     assert_eq!(nested.name().as_slice(), "world");
+}
+
+#[test]
+fn parses_multiply_nested_elements() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><hello><awesome><world/></awesome></hello>");
+    let hello = doc.root().first_child().unwrap().element().unwrap();
+    let awesome = hello.first_child().unwrap().element().unwrap();
+    let world = awesome.first_child().unwrap().element().unwrap();
+
+    assert_eq!(world.name().as_slice(), "world");
+}
+
+#[test]
+fn parses_nested_elements_with_attributes() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><hello><world name='Earth'/></hello>");
+    let hello = doc.root().first_child().unwrap().element().unwrap();
+    let world = hello.first_child().unwrap().element().unwrap();
+
+    assert_eq!(world.get_attribute("name").unwrap().as_slice(), "Earth");
 }
