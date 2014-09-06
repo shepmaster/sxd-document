@@ -1,4 +1,4 @@
-use super::{Document,Root,Element,Text,Comment};
+use super::{Document,Element,Text,Comment};
 
 pub struct Parser;
 
@@ -477,31 +477,11 @@ impl XmlChar for char {
     }
 }
 
-trait Hax {
-    fn first_child(&self) -> Option<super::RootChild>;
-}
-
-impl Hax for Root {
-    fn first_child(&self) -> Option<super::RootChild> {
-        self.children().remove(0)
-    }
-}
-
-trait Hax2 {
-    fn first_child(&self) -> Option<super::ElementChild>;
-}
-
-impl Hax2 for Element {
-    fn first_child(&self) -> Option<super::ElementChild> {
-        self.children().remove(0)
-    }
-}
-
 #[test]
 fn parses_a_document_with_a_single_element() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello />");
-    let top = doc.root().first_child().unwrap().element().unwrap();
+    let top = doc.root().children()[0].element().unwrap();
 
     assert_eq!(top.name().as_slice(), "hello");
 }
@@ -510,7 +490,7 @@ fn parses_a_document_with_a_single_element() {
 fn parses_an_element_with_an_attribute() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello scope='world'/>");
-    let top = doc.root().first_child().unwrap().element().unwrap();
+    let top = doc.root().children()[0].element().unwrap();
 
     assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
 }
@@ -519,7 +499,7 @@ fn parses_an_element_with_an_attribute() {
 fn parses_an_element_with_an_attribute_using_double_quotes() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello scope=\"world\"/>");
-    let top = doc.root().first_child().unwrap().element().unwrap();
+    let top = doc.root().children()[0].element().unwrap();
 
     assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
 }
@@ -528,7 +508,7 @@ fn parses_an_element_with_an_attribute_using_double_quotes() {
 fn parses_an_element_with_multiple_attributes() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello scope=\"world\" happy='true'/>");
-    let top = doc.root().first_child().unwrap().element().unwrap();
+    let top = doc.root().children()[0].element().unwrap();
 
     assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
     assert_eq!(top.get_attribute("happy").unwrap().as_slice(), "true");
@@ -538,7 +518,7 @@ fn parses_an_element_with_multiple_attributes() {
 fn parses_an_element_that_is_not_self_closing() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello></hello>");
-    let top = doc.root().first_child().unwrap().element().unwrap();
+    let top = doc.root().children()[0].element().unwrap();
 
     assert_eq!(top.name().as_slice(), "hello");
 }
@@ -547,7 +527,7 @@ fn parses_an_element_that_is_not_self_closing() {
 fn parses_nested_elements() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello><world/></hello>");
-    let nested = doc.root().first_child().unwrap().element().unwrap().first_child().unwrap().element().unwrap();
+    let nested = doc.root().children()[0].element().unwrap().children()[0].element().unwrap();
 
     assert_eq!(nested.name().as_slice(), "world");
 }
@@ -556,9 +536,9 @@ fn parses_nested_elements() {
 fn parses_multiply_nested_elements() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello><awesome><world/></awesome></hello>");
-    let hello = doc.root().first_child().unwrap().element().unwrap();
-    let awesome = hello.first_child().unwrap().element().unwrap();
-    let world = awesome.first_child().unwrap().element().unwrap();
+    let hello = doc.root().children()[0].element().unwrap();
+    let awesome = hello.children()[0].element().unwrap();
+    let world = awesome.children()[0].element().unwrap();
 
     assert_eq!(world.name().as_slice(), "world");
 }
@@ -567,8 +547,8 @@ fn parses_multiply_nested_elements() {
 fn parses_nested_elements_with_attributes() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello><world name='Earth'/></hello>");
-    let hello = doc.root().first_child().unwrap().element().unwrap();
-    let world = hello.first_child().unwrap().element().unwrap();
+    let hello = doc.root().children()[0].element().unwrap();
+    let world = hello.children()[0].element().unwrap();
 
     assert_eq!(world.get_attribute("name").unwrap().as_slice(), "Earth");
 }
@@ -577,8 +557,8 @@ fn parses_nested_elements_with_attributes() {
 fn parses_element_with_text() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello>world</hello>");
-    let hello = doc.root().first_child().unwrap().element().unwrap();
-    let text = hello.first_child().unwrap().text().unwrap();
+    let hello = doc.root().children()[0].element().unwrap();
+    let text = hello.children()[0].text().unwrap();
 
     assert_eq!(text.text().as_slice(), "world");
 }
@@ -587,8 +567,8 @@ fn parses_element_with_text() {
 fn parses_element_with_cdata() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><words><![CDATA[I have & and < !]]></words>");
-    let words = doc.root().first_child().unwrap().element().unwrap();
-    let text = words.first_child().unwrap().text().unwrap();
+    let words = doc.root().children()[0].element().unwrap();
+    let text = words.children()[0].text().unwrap();
 
     assert_eq!(text.text().as_slice(), "I have & and < !");
 }
@@ -597,8 +577,8 @@ fn parses_element_with_cdata() {
 fn parses_element_with_comment() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello><!-- A comment --></hello>");
-    let words = doc.root().first_child().unwrap().element().unwrap();
-    let comment = words.first_child().unwrap().comment().unwrap();
+    let words = doc.root().children()[0].element().unwrap();
+    let comment = words.children()[0].comment().unwrap();
 
     assert_eq!(comment.text().as_slice(), " A comment ");
 }
@@ -607,7 +587,7 @@ fn parses_element_with_comment() {
 fn parses_comment_before_top_element() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><!-- A comment --><hello />");
-    let comment = doc.root().first_child().unwrap().comment().unwrap();
+    let comment = doc.root().children()[0].comment().unwrap();
 
     assert_eq!(comment.text().as_slice(), " A comment ");
 }
@@ -648,7 +628,7 @@ fn parses_multiple_comments_after_top_element() {
 fn parses_element_with_mixed_children() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello>to <a>the</a> world</hello>");
-    let hello = doc.root().first_child().unwrap().element().unwrap();
+    let hello = doc.root().children()[0].element().unwrap();
     let text1 = hello.children()[0].text().unwrap();
     let middle = hello.children()[1].element().unwrap();
     let text2 = hello.children()[2].text().unwrap();
