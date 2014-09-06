@@ -1,27 +1,22 @@
 use super::{Document,Root,RootChild,Element,ElementChild,Text};
 
-#[allow(dead_code)]
-struct Parser;
+pub struct Parser;
 
-#[allow(dead_code)]
 struct ParsedElement<'a> {
     name: &'a str,
     attributes: Vec<ParsedAttribute<'a>>,
     children: Vec<ParsedChild<'a>>,
 }
 
-#[allow(dead_code)]
 struct ParsedAttribute<'a> {
     name: &'a str,
     value: &'a str,
 }
 
-#[allow(dead_code)]
 struct ParsedText<'a> {
     text: &'a str,
 }
 
-#[allow(dead_code)]
 enum ParsedChild<'a> {
     ElementParsedChild(ParsedElement<'a>),
     TextParsedChild(ParsedText<'a>),
@@ -46,9 +41,8 @@ macro_rules! optional_parse(
     })
 )
 
-#[allow(dead_code)]
 impl Parser {
-    fn new() -> Parser {
+    pub fn new() -> Parser {
         Parser
     }
 
@@ -231,7 +225,7 @@ impl Parser {
         doc
     }
 
-    fn parse(&self, xml: &str) -> Document {
+    pub fn parse(&self, xml: &str) -> Document {
         let after_preamble = self.parse_preamble(xml);
 
         let (element, _tail) = self.parse_element(after_preamble).expect("no element");
