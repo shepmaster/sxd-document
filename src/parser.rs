@@ -2,10 +2,25 @@ use super::{Document,Root,RootChild,Element};
 
 struct Parser;
 
+struct ParsedElement<'a> {
+    name: &'a str,
+    attributes: Vec<ParsedAttribute<'a>>,
+}
+
 struct ParsedAttribute<'a> {
     name: &'a str,
     value: &'a str,
 }
+
+
+macro_rules! try_parse(
+    ($e:expr) => ({
+        match $e {
+            None => return None,
+            Some(x) => x,
+        }
+    })
+)
 
 impl Parser {
     fn new() -> Parser {
@@ -82,23 +97,61 @@ impl Parser {
         }
     }
 
-    fn parse_element<'a>(&self, doc: Document, xml: &'a str) -> (Element, &'a str) {
-        let (_, after_start_brace) = xml.slice_literal("<").expect("no start brace");
+    fn parse_empty_element<'a>(&self, xml: &'a str) -> Option<(ParsedElement<'a>, &'a str)> {
+        let (_, xml) = try_parse!(xml.slice_literal("<"));
+        let (name, xml) = try_parse!(xml.slice_name());
+        let (attrs, xml) = self.parse_attributes(xml);
+        let xml = self.optional_space(xml);
+        let (_, xml) = try_parse!(xml.slice_literal("/>"));
 
-        let (name, after_name) = after_start_brace.slice_name().expect("failed to parse a name!");
+        Some((ParsedElement{name: name, attributes: attrs}, xml))
+    }
 
-        let (attrs, after_attr) = self.parse_attributes(after_name);
+    fn parse_element_start<'a>(&self, xml: &'a str) -> Option<(ParsedElement<'a>, &'a str)> {
+        let (_, xml) = try_parse!(xml.slice_literal("<"));
+        let (name, xml) = try_parse!(xml.slice_name());
+        let (attrs, xml) = self.parse_attributes(xml);
+        let xml = self.optional_space(xml);
+        let (_, xml) = try_parse!(xml.slice_literal(">"));
 
-        let after_attr = self.optional_space(after_attr);
+        Some((ParsedElement{name: name, attributes: attrs}, xml))
+    }
 
-        let (_, after_end_brace) = after_attr.slice_literal("/>").expect("no end brace");
+    fn parse_element_end<'a>(&self, xml: &'a str) -> Option<(&'a str, &'a str)> {
+        let (_, xml) = try_parse!(xml.slice_literal("</"));
+        let (name, xml) = try_parse!(xml.slice_name());
+        let xml = self.optional_space(xml);
+        let (_, xml) = try_parse!(xml.slice_literal(">"));
+        Some((name, xml))
+    }
 
-        let e = doc.new_element(name.to_string());
-        for attr in attrs.iter() {
+    fn parse_non_empty_element<'a>(&self, xml: &'a str) -> Option<(ParsedElement<'a>, &'a str)> {
+        let (element, xml) = try_parse!(self.parse_element_start(xml));
+        let (name, xml) = try_parse!(self.parse_element_end(xml));
+
+        if element.name != name {
+            fail!("tags do not match!");
+        }
+
+        Some((element, xml))
+    }
+
+    fn parse_element<'a>(&self, doc: Document, xml: &'a str) -> Option<(Element, &'a str)> {
+        // Pattern: alternate
+        let (element_data, xml) = match self.parse_empty_element(xml) {
+            Some(x) => x,
+            None => match self.parse_non_empty_element(xml) {
+                Some(x) => x,
+                None => fail!("No element!"),
+            },
+        };
+
+        let e = doc.new_element(element_data.name.to_string());
+        for attr in element_data.attributes.iter() {
             e.set_attribute(attr.name.to_string(), attr.value.to_string());
         }
 
-        (e, after_end_brace)
+        Some((e, xml))
     }
 
     fn parse(&self, xml: &str) -> Document {
@@ -106,7 +159,7 @@ impl Parser {
 
         let after_preamble = self.parse_preamble(xml);
 
-        let (element, _tail) = self.parse_element(doc.clone(), after_preamble);
+        let (element, _tail) = self.parse_element(doc.clone(), after_preamble).expect("no element");
         doc.root().append_child(element);
 
         doc
@@ -269,4 +322,13 @@ fn parses_an_element_with_multiple_attributes() {
 
     assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
     assert_eq!(top.get_attribute("happy").unwrap().as_slice(), "true");
+}
+
+#[test]
+fn parses_an_element_that_is_not_self_closing() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><hello></hello>");
+    let top = doc.root().first_child().unwrap().element().unwrap();
+
+    assert_eq!(top.name().as_slice(), "hello");
 }
