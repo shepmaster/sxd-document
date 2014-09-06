@@ -1,10 +1,11 @@
-use super::{Document,Root,RootChild,Element};
+use super::{Document,Root,RootChild,Element,ElementChild};
 
 struct Parser;
 
 struct ParsedElement<'a> {
     name: &'a str,
     attributes: Vec<ParsedAttribute<'a>>,
+    children: Vec<ParsedElement<'a>>,
 }
 
 struct ParsedAttribute<'a> {
@@ -18,6 +19,16 @@ macro_rules! try_parse(
         match $e {
             None => return None,
             Some(x) => x,
+        }
+    })
+)
+
+// Pattern: 0-or-1
+macro_rules! optional_parse(
+    ($f:expr, $start:expr) => ({
+        match $f {
+            None => (None, $start),
+            Some((value, next)) => (Some(value), next),
         }
     })
 )
@@ -104,7 +115,7 @@ impl Parser {
         let xml = self.optional_space(xml);
         let (_, xml) = try_parse!(xml.slice_literal("/>"));
 
-        Some((ParsedElement{name: name, attributes: attrs}, xml))
+        Some((ParsedElement{name: name, attributes: attrs, children: Vec::new()}, xml))
     }
 
     fn parse_element_start<'a>(&self, xml: &'a str) -> Option<(ParsedElement<'a>, &'a str)> {
@@ -114,7 +125,7 @@ impl Parser {
         let xml = self.optional_space(xml);
         let (_, xml) = try_parse!(xml.slice_literal(">"));
 
-        Some((ParsedElement{name: name, attributes: attrs}, xml))
+        Some((ParsedElement{name: name, attributes: attrs, children: Vec::new()}, xml))
     }
 
     fn parse_element_end<'a>(&self, xml: &'a str) -> Option<(&'a str, &'a str)> {
@@ -126,43 +137,52 @@ impl Parser {
     }
 
     fn parse_non_empty_element<'a>(&self, xml: &'a str) -> Option<(ParsedElement<'a>, &'a str)> {
-        let (element, xml) = try_parse!(self.parse_element_start(xml));
+        let (mut element, xml) = try_parse!(self.parse_element_start(xml));
+        let (child, xml) = optional_parse!(self.parse_element(xml), xml);
         let (name, xml) = try_parse!(self.parse_element_end(xml));
 
         if element.name != name {
             fail!("tags do not match!");
         }
 
+        child.map(|c| element.children.push(c));
+
         Some((element, xml))
     }
 
-    fn parse_element<'a>(&self, doc: Document, xml: &'a str) -> Option<(Element, &'a str)> {
+    fn parse_element<'a>(&self, xml: &'a str) -> Option<(ParsedElement<'a>, &'a str)> {
         // Pattern: alternate
-        let (element_data, xml) = match self.parse_empty_element(xml) {
-            Some(x) => x,
+        match self.parse_empty_element(xml) {
+            Some(x) => Some(x),
             None => match self.parse_non_empty_element(xml) {
-                Some(x) => x,
-                None => fail!("No element!"),
+                Some(x) => Some(x),
+                None => None,
             },
-        };
-
-        let e = doc.new_element(element_data.name.to_string());
-        for attr in element_data.attributes.iter() {
-            e.set_attribute(attr.name.to_string(), attr.value.to_string());
         }
-
-        Some((e, xml))
     }
 
-    fn parse(&self, xml: &str) -> Document {
+    fn hydrate_parsed_data(&self, element_data: ParsedElement) -> Document {
         let doc = Document::new();
 
-        let after_preamble = self.parse_preamble(xml);
-
-        let (element, _tail) = self.parse_element(doc.clone(), after_preamble).expect("no element");
+        let element = doc.new_element(element_data.name.to_string());
+        for attr in element_data.attributes.iter() {
+            element.set_attribute(attr.name.to_string(), attr.value.to_string());
+        }
+        for child in element_data.children.iter() {
+            let c = doc.new_element(child.name.to_string());//attrs; recursive
+            element.append_child(c);
+        }
         doc.root().append_child(element);
 
         doc
+    }
+
+    fn parse(&self, xml: &str) -> Document {
+        let after_preamble = self.parse_preamble(xml);
+
+        let (element, _tail) = self.parse_element(after_preamble).expect("no element");
+
+        self.hydrate_parsed_data(element)
     }
 }
 
@@ -287,6 +307,16 @@ impl Hax for Root {
     }
 }
 
+trait Hax2 {
+    fn first_child(&self) -> Option<ElementChild>;
+}
+
+impl Hax2 for Element {
+    fn first_child(&self) -> Option<ElementChild> {
+        self.children().remove(0)
+    }
+}
+
 #[test]
 fn parses_a_document_with_a_single_element() {
     let parser = Parser::new();
@@ -331,4 +361,13 @@ fn parses_an_element_that_is_not_self_closing() {
     let top = doc.root().first_child().unwrap().element().unwrap();
 
     assert_eq!(top.name().as_slice(), "hello");
+}
+
+#[test]
+fn parses_nested_elements() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><hello><world/></hello>");
+    let nested = doc.root().first_child().unwrap().element().unwrap().first_child().unwrap().element().unwrap();
+
+    assert_eq!(nested.name().as_slice(), "world");
 }
