@@ -151,6 +151,14 @@ impl Parser {
         Some((ParsedText{text: text}, xml))
     }
 
+    fn parse_cdata<'a>(&self, xml: &'a str) -> Option<(ParsedText<'a>, &'a str)> {
+        let (_, xml) = try_parse!(xml.slice_literal("<![CDATA["));
+        let (text, xml) = try_parse!(xml.slice_cdata());
+        let (_, xml) = try_parse!(xml.slice_literal("]]>"));
+
+        Some((ParsedText{text: text}, xml))
+    }
+
     fn parse_content<'a>(&self, xml: &'a str) -> (Vec<ParsedChild<'a>>, &'a str) {
         let mut children = Vec::new();
 
@@ -160,14 +168,18 @@ impl Parser {
         // Pattern: zero-or-more
         let mut start = xml;
         loop {
-            let (e, after) = match self.parse_element(start) {
-                None => return (children, start),
-                Some(x) => x,
+            // Pattern: alternate
+            let (child, after) = match self.parse_element(start) {
+                Some((e, x)) => (ElementParsedChild(e), x),
+                None => match self.parse_cdata(start) {
+                    Some((t, x)) => (TextParsedChild(t), x),
+                    None => return (children, start),
+                },
             };
 
             let (char_data, xml) = optional_parse!(self.parse_char_data(after), after);
 
-            children.push(ElementParsedChild(e));
+            children.push(child);
             char_data.map(|c| children.push(TextParsedChild(c)));
 
             start = xml;
@@ -239,6 +251,7 @@ trait XmlStr<'a> {
     fn slice_until(&self, s: &str) -> Option<(&'a str, &'a str)>;
     fn slice_literal(&self, expected: &str) -> Option<(&'a str, &'a str)>;
     fn slice_char_data(&self) -> Option<(&'a str, &'a str)>;
+    fn slice_cdata(&self) -> Option<(&'a str, &'a str)>;
     fn slice_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> Option<(&'a str, &'a str)>;
     fn slice_name(&self) -> Option<(&'a str, &'a str)>;
     fn slice_space(&self) -> Option<(&'a str, &'a str)>;
@@ -290,6 +303,13 @@ impl<'a> XmlStr<'a> for &'a str {
                     }
                 },
             }
+        }
+    }
+
+    fn slice_cdata(&self) -> Option<(&'a str, &'a str)> {
+        match self.find_str("]]>") {
+            None => None,
+            Some(offset) => Some(self.slice_at(offset)),
         }
     }
 
@@ -479,6 +499,16 @@ fn parses_element_with_text() {
     let text = hello.first_child().unwrap().text().unwrap();
 
     assert_eq!(text.text().as_slice(), "world");
+}
+
+#[test]
+fn parses_element_with_cdata() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><words><![CDATA[I have & and < !]]></words>");
+    let words = doc.root().first_child().unwrap().element().unwrap();
+    let text = words.first_child().unwrap().text().unwrap();
+
+    assert_eq!(text.text().as_slice(), "I have & and < !");
 }
 
 #[test]
