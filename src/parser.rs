@@ -157,27 +157,39 @@ impl Parser {
         Some((ParsedText{text: text}, xml))
     }
 
-    fn parse_content<'a>(&self, xml: &'a str) -> Option<(ParsedChild<'a>, &'a str)> {
-        // Pattern: alternate
-        match self.parse_element(xml) {
-            Some((e, s)) => Some((ElementParsedChild(e), s)),
-            None => match self.parse_char_data(xml) {
-                Some((t, s)) => Some((TextParsedChild(t), s)),
-                None => None,
-            },
+    fn parse_content<'a>(&self, xml: &'a str) -> (Vec<ParsedChild<'a>>, &'a str) {
+        let mut children = Vec::new();
+
+        let (char_data, xml) = optional_parse!(self.parse_char_data(xml), xml);
+        char_data.map(|c| children.push(TextParsedChild(c)));
+
+        // Pattern: zero-or-more
+        let mut start = xml;
+        loop {
+            let (e, after) = match self.parse_element(start) {
+                None => return (children, start),
+                Some(x) => x,
+            };
+
+            let (char_data, xml) = optional_parse!(self.parse_char_data(after), after);
+
+            children.push(ElementParsedChild(e));
+            char_data.map(|c| children.push(TextParsedChild(c)));
+
+            start = xml;
         }
     }
 
     fn parse_non_empty_element<'a>(&self, xml: &'a str) -> Option<(ParsedElement<'a>, &'a str)> {
         let (mut element, xml) = try_parse!(self.parse_element_start(xml));
-        let (child, xml) = optional_parse!(self.parse_content(xml), xml);
+        let (children, xml) = self.parse_content(xml);
         let (name, xml) = try_parse!(self.parse_element_end(xml));
 
         if element.name != name {
             fail!("tags do not match!");
         }
 
-        child.map(|c| element.children.push(c));
+        element.children = children;
 
         Some((element, xml))
     }
@@ -473,6 +485,20 @@ fn parses_element_with_text() {
     let text = hello.first_child().unwrap().text().unwrap();
 
     assert_eq!(text.text().as_slice(), "world");
+}
+
+#[test]
+fn parses_element_with_mixed_children() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><hello>to <a>the</a> world</hello>");
+    let hello = doc.root().first_child().unwrap().element().unwrap();
+    let text1 = hello.children()[0].text().unwrap();
+    let middle = hello.children()[1].element().unwrap();
+    let text2 = hello.children()[2].text().unwrap();
+
+    assert_eq!(text1.text().as_slice(), "to ");
+    assert_eq!(middle.name().as_slice(), "a");
+    assert_eq!(text2.text().as_slice(), " world");
 }
 
 #[test]
