@@ -11,6 +11,7 @@ pub mod parser;
 // FIXME: Parents need to be weakref!
 // TODO: See about removing duplication of child / parent implementations.
 // TODO: remove clone from inner?
+// TODO: duplication of text / comment
 
 // children
 // root nodes -> 1x element, comment, pi
@@ -56,6 +57,10 @@ impl Document {
 
     pub fn new_text(&self, text: String) -> Text {
         Text::new(self.clone(), text)
+    }
+
+    pub fn new_comment(&self, text: String) -> Comment {
+        Comment::new(self.clone(), text)
     }
 
     pub fn root(&self) -> Root {
@@ -311,6 +316,7 @@ impl fmt::Show for Attribute {
 pub enum ElementChild {
     ElementElementChild(Element),
     TextElementChild(Text),
+    CommentElementChild(Comment),
 }
 
 impl ElementChild {
@@ -328,10 +334,18 @@ impl ElementChild {
         }
     }
 
+    pub fn comment(&self) -> Option<Comment> {
+        match self {
+            &CommentElementChild(ref c) => Some(c.clone()),
+            _ => None,
+        }
+    }
+
     pub fn remove_from_parent(&self) {
         match self {
             &ElementElementChild(ref e) => e.remove_from_parent(),
             &TextElementChild(ref t) => t.remove_from_parent(),
+            &CommentElementChild(ref c) => c.remove_from_parent(),
         }
     }
 
@@ -339,6 +353,7 @@ impl ElementChild {
         match self {
             &ElementElementChild(ref e) => e.set_parent(parent),
             &TextElementChild(ref t) => t.set_parent(parent),
+            &CommentElementChild(ref c) => c.set_parent(parent),
         }
     }
 
@@ -351,6 +366,7 @@ impl ElementChild {
                     _ => fail!("An element's child's parent is not an element")
                 },
             &TextElementChild(ref t) => t.parent(),
+            &CommentElementChild(ref c) => c.parent(),
         }
     }
 }
@@ -369,6 +385,10 @@ impl ToElementChild for Element {
 
 impl ToElementChild for Text {
     fn to_element_child(&self) -> ElementChild { TextElementChild(self.clone()) }
+}
+
+impl ToElementChild for Comment {
+    fn to_element_child(&self) -> ElementChild { CommentElementChild(self.clone()) }
 }
 
 impl ToElementChild for RootChild {
@@ -565,12 +585,76 @@ impl fmt::Show for Element {
     }
 }
 
+struct CommentInner {
+    document: Document,
+    text: String,
+    parent: Option<Element>,
+}
+
+#[deriving(Clone)]
+pub struct Comment {
+    inner: Rc<RefCell<CommentInner>>,
+}
+
+impl Comment {
+    fn new(document: Document, text: String) -> Comment {
+        let inner = CommentInner {document: document, text: text, parent: None};
+        Comment {inner: Rc::new(RefCell::new(inner))}
+    }
+
+    pub fn document(&self) -> Document {
+        self.inner.borrow().document.clone()
+    }
+
+    pub fn text(&self) -> String {
+        let inner = self.inner.borrow();
+        inner.text.clone()
+    }
+
+    pub fn set_text(&self, text: String) {
+        let mut inner = self.inner.borrow_mut();
+        inner.text = text;
+    }
+
+    fn remove_from_parent(&self) {
+        let mut inner = self.inner.borrow_mut();
+        match inner.parent {
+            Some(ref e) => e.remove_child(self.clone()),
+            None => {}
+        };
+        inner.parent = None;
+    }
+
+    fn set_parent(&self, parent: Element) {
+        let mut inner = self.inner.borrow_mut();
+        inner.parent = Some(parent);
+    }
+
+    pub fn parent(&self) -> Option<Element> {
+        let inner = self.inner.borrow();
+        inner.parent.clone()
+    }
+}
+
+impl PartialEq for Comment {
+    fn eq(&self, other: &Comment) -> bool {
+        &*self.inner as *const RefCell<CommentInner> == &*other.inner as *const RefCell<CommentInner>
+    }
+}
+
+impl fmt::Show for Comment {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "comment: {}", self.inner.borrow().text)
+    }
+}
+
 #[deriving(Clone,Show,PartialEq)]
 pub enum Any {
     ElementAny(Element),
     AttributeAny(Attribute),
     TextAny(Text),
     RootAny(Root),
+    CommentAny(Comment),
 }
 
 impl Any {
@@ -595,6 +679,13 @@ impl Any {
         }
     }
 
+    pub fn comment(&self) -> Option<Comment> {
+        match self {
+            &CommentAny(ref e) => Some(e.clone()),
+            _ => None,
+        }
+    }
+
     pub fn root(&self) -> Option<Root> {
         match self {
             &RootAny(ref e) => Some(e.clone()),
@@ -608,6 +699,7 @@ impl Any {
             &ElementAny(ref e)   => e.document(),
             &RootAny(ref r)      => r.document(),
             &TextAny(ref t)      => t.document(),
+            &CommentAny(ref c)   => c.document(),
         }
     }
 
@@ -616,6 +708,7 @@ impl Any {
             &AttributeAny(ref a) => a.parent().map(|x| x.to_any()),
             &ElementAny(ref e)   => e.parent().map(|x| x.to_any()),
             &TextAny(ref t)      => t.parent().map(|x| x.to_any()),
+            &CommentAny(ref c)   => c.parent().map(|x| x.to_any()),
             &RootAny(_) => None,
         }
     }
@@ -625,6 +718,7 @@ impl Any {
             &ElementAny(ref e) => e.children().iter().map(|x| x.to_any()).collect(),
             &RootAny(ref r)    => r.children().iter().map(|x| x.to_any()).collect(),
             &TextAny(_)        |
+            &CommentAny(_)     |
             &AttributeAny(_)   => Vec::new(),
         }
     }
@@ -650,6 +744,10 @@ impl ToAny for Text {
     fn to_any(&self) -> Any { TextAny(self.clone()) }
 }
 
+impl ToAny for Comment {
+    fn to_any(&self) -> Any { CommentAny(self.clone()) }
+}
+
 impl ToAny for Root {
     fn to_any(&self) -> Any { RootAny(self.clone()) }
 }
@@ -659,6 +757,7 @@ impl ToAny for ElementChild {
         match self {
             &ElementElementChild(ref e) => ElementAny(e.clone()),
             &TextElementChild(ref t)    => TextAny(t.clone()),
+            &CommentElementChild(ref c) => CommentAny(c.clone()),
         }
     }
 }
@@ -894,6 +993,50 @@ fn text_can_be_changed() {
 }
 
 #[test]
+fn elements_can_have_comment_children() {
+    let doc = Document::new();
+    let sentence = doc.new_element("sentence".to_string());
+    let comment = doc.new_comment("Now is the winter of our discontent.".to_string());
+
+    sentence.append_child(comment);
+
+    let children = sentence.children();
+    assert_eq!(1, children.len());
+
+    let child_comment = children[0].comment().unwrap();
+    assert_eq!(child_comment.text().as_slice(), "Now is the winter of our discontent.");
+}
+
+#[test]
+fn comment_belongs_to_a_document() {
+    let doc = Document::new();
+    let comment = doc.new_comment("Now is the winter of our discontent.".to_string());
+
+    assert_eq!(doc, comment.document());
+}
+
+#[test]
+fn comment_knows_its_parent() {
+    let doc = Document::new();
+    let sentence = doc.new_element("sentence".to_string());
+    let comment = doc.new_comment("Now is the winter of our discontent.".to_string());
+
+    sentence.append_child(comment.clone());
+
+    assert_eq!(comment.parent().unwrap(), sentence);
+}
+
+#[test]
+fn comment_can_be_changed() {
+    let doc = Document::new();
+    let comment = doc.new_comment("Now is the winter of our discontent.".to_string());
+
+    comment.set_text("Made glorious summer by this sun of York".to_string());
+
+    assert_eq!(comment.text().as_slice(), "Made glorious summer by this sun of York");
+}
+
+#[test]
 fn the_root_belongs_to_a_document() {
     let doc = Document::new();
     let root = doc.root();
@@ -952,20 +1095,23 @@ fn nodeset_can_include_all_node_types() {
     let e = doc.new_element("element".to_string());
     let a = e.set_attribute("name".to_string(), "value".to_string());
     let t = doc.new_text("text".to_string());
+    let c = doc.new_comment("comment".to_string());
     let r = doc.root();
 
     nodes.add(e.clone());
     nodes.add(a.clone());
     nodes.add(t.clone());
+    nodes.add(c.clone());
     nodes.add(r.clone());
 
     let node_vec: Vec<&Any> = nodes.iter().collect();
 
-    assert_eq!(4, node_vec.len());
+    assert_eq!(5, node_vec.len());
     assert_eq!(e, node_vec[0].element().unwrap());
     assert_eq!(a, node_vec[1].attribute().unwrap());
     assert_eq!(t, node_vec[2].text().unwrap());
-    assert_eq!(r, node_vec[3].root().unwrap());
+    assert_eq!(c, node_vec[3].comment().unwrap());
+    assert_eq!(r, node_vec[4].root().unwrap());
 }
 
 #[test]
