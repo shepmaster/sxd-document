@@ -1,4 +1,4 @@
-use super::{Document,Root,RootChild,Element,ElementChild,Text,Comment};
+use super::{Document,Root,Element,Text,Comment};
 
 pub struct Parser;
 
@@ -19,6 +19,11 @@ struct ParsedText<'a> {
 
 struct ParsedComment<'a> {
     text: &'a str,
+}
+
+enum ParsedRootChild<'a> {
+    CommentParsedRootChild(ParsedComment<'a>),
+    IgnoredParsedRootChild,
 }
 
 enum ParsedChild<'a> {
@@ -51,18 +56,34 @@ impl Parser {
         Parser
     }
 
-    fn parse_preamble<'a>(&self, xml: &'a str) -> &'a str {
-        // Parse the preamble
+    fn parse_xml_declaration<'a>(&self, xml: &'a str) -> &'a str {
         let idx = xml.find_str("?>").expect("No preamble end");
         let end_of_preamble = idx + "?>".len();
         xml.slice_from(end_of_preamble)
     }
 
-    fn optional_space<'a>(&self, xml: &'a str) -> &'a str {
-        match xml.slice_space() {
-            Some((_, next_xml)) => next_xml,
-            None => xml,
+    fn parse_misc<'a>(&self, xml: &'a str) -> Option<(ParsedRootChild<'a>, &'a str)> {
+        // Pattern: alternate
+        match self.parse_comment(xml) {
+            Some((c, x)) => Some((CommentParsedRootChild(c), x)),
+            None => match xml.slice_space() {
+                Some((_, x)) => Some((IgnoredParsedRootChild, x)),
+                None => None,
+            },
         }
+    }
+
+    fn parse_prolog<'a>(&self, xml: &'a str) -> (Vec<ParsedRootChild<'a>>, &'a str) {
+        let mut before_children = Vec::new();
+
+        let xml = self.parse_xml_declaration(xml);
+
+        // TODO: 0-or-more
+        let (misc, xml) = optional_parse!(self.parse_misc(xml), xml);
+
+        misc.map(|c| before_children.push(c));
+
+        (before_children, xml)
     }
 
     fn parse_attribute_value_quote<'a>(&self, xml: &'a str, quote: &str) -> Option<(&'a str, &'a str)> {
@@ -84,9 +105,9 @@ impl Parser {
             None => return None,
         };
 
-        let xml = self.optional_space(xml);
+        let (_, xml) = optional_parse!(xml.slice_space(), xml);
         let (_, xml) = xml.slice_literal("=").expect("No equal sign");
-        let xml = self.optional_space(xml);
+        let (_, xml) = optional_parse!(xml.slice_space(), xml);
 
         // Pattern: alternate
         let (value, xml) = match self.parse_attribute_value_quote(xml, "'") {
@@ -126,7 +147,7 @@ impl Parser {
         let (_, xml) = try_parse!(xml.slice_literal("<"));
         let (name, xml) = try_parse!(xml.slice_name());
         let (attrs, xml) = self.parse_attributes(xml);
-        let xml = self.optional_space(xml);
+        let (_, xml) = optional_parse!(xml.slice_space(), xml);
         let (_, xml) = try_parse!(xml.slice_literal("/>"));
 
         Some((ParsedElement{name: name, attributes: attrs, children: Vec::new()}, xml))
@@ -136,7 +157,7 @@ impl Parser {
         let (_, xml) = try_parse!(xml.slice_literal("<"));
         let (name, xml) = try_parse!(xml.slice_name());
         let (attrs, xml) = self.parse_attributes(xml);
-        let xml = self.optional_space(xml);
+        let (_, xml) = optional_parse!(xml.slice_space(), xml);
         let (_, xml) = try_parse!(xml.slice_literal(">"));
 
         Some((ParsedElement{name: name, attributes: attrs, children: Vec::new()}, xml))
@@ -145,7 +166,7 @@ impl Parser {
     fn parse_element_end<'a>(&self, xml: &'a str) -> Option<(&'a str, &'a str)> {
         let (_, xml) = try_parse!(xml.slice_literal("</"));
         let (name, xml) = try_parse!(xml.slice_name());
-        let xml = self.optional_space(xml);
+        let (_, xml) = optional_parse!(xml.slice_space(), xml);
         let (_, xml) = try_parse!(xml.slice_literal(">"));
         Some((name, xml))
     }
@@ -250,20 +271,28 @@ impl Parser {
         element
     }
 
-    fn hydrate_parsed_data(&self, element_data: ParsedElement) -> Document {
+    fn hydrate_parsed_data(&self, before_children: Vec<ParsedRootChild>, element_data: ParsedElement) -> Document {
         let doc = Document::new();
+        let root = doc.root();
 
-        doc.root().append_child(self.hydrate_element(doc.clone(), element_data));
+        for child in before_children.move_iter() {
+            match child {
+                CommentParsedRootChild(c) =>
+                    root.append_child(self.hydrate_comment(doc.clone(), c)),
+                IgnoredParsedRootChild => {},
+            }
+        }
+
+        root.append_child(self.hydrate_element(doc.clone(), element_data));
 
         doc
     }
 
     pub fn parse(&self, xml: &str) -> Document {
-        let after_preamble = self.parse_preamble(xml);
+        let (before_children, xml) = self.parse_prolog(xml);
+        let (element, _) = self.parse_element(xml).expect("no element");
 
-        let (element, _tail) = self.parse_element(after_preamble).expect("no element");
-
-        self.hydrate_parsed_data(element)
+        self.hydrate_parsed_data(before_children, element)
     }
 }
 
@@ -428,21 +457,21 @@ impl XmlChar for char {
 }
 
 trait Hax {
-    fn first_child(&self) -> Option<RootChild>;
+    fn first_child(&self) -> Option<super::RootChild>;
 }
 
 impl Hax for Root {
-    fn first_child(&self) -> Option<RootChild> {
+    fn first_child(&self) -> Option<super::RootChild> {
         self.children().remove(0)
     }
 }
 
 trait Hax2 {
-    fn first_child(&self) -> Option<ElementChild>;
+    fn first_child(&self) -> Option<super::ElementChild>;
 }
 
 impl Hax2 for Element {
-    fn first_child(&self) -> Option<ElementChild> {
+    fn first_child(&self) -> Option<super::ElementChild> {
         self.children().remove(0)
     }
 }
@@ -549,6 +578,15 @@ fn parses_element_with_comment() {
     let doc = parser.parse("<?xml version='1.0' ?><hello><!-- A comment --></hello>");
     let words = doc.root().first_child().unwrap().element().unwrap();
     let comment = words.first_child().unwrap().comment().unwrap();
+
+    assert_eq!(comment.text().as_slice(), " A comment ");
+}
+
+#[test]
+fn parses_comment_before_top_element() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><!-- A comment --><hello />");
+    let comment = doc.root().first_child().unwrap().comment().unwrap();
 
     assert_eq!(comment.text().as_slice(), " A comment ");
 }
