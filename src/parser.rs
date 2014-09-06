@@ -62,6 +62,7 @@ impl Parser {
             Some(x) => x,
         };
         // TODO: don't consume & or <
+        // TODO: support references
         let (value, xml) = xml.slice_until(quote).expect("No value");
         let (_, xml) = xml.slice_literal(quote).expect("No quote");
 
