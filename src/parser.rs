@@ -1,4 +1,4 @@
-use super::{Document,Root,RootChild,Element,ElementChild};
+use super::{Document,Root,RootChild,Element,ElementChild,Text};
 
 #[allow(dead_code)]
 struct Parser;
@@ -7,7 +7,7 @@ struct Parser;
 struct ParsedElement<'a> {
     name: &'a str,
     attributes: Vec<ParsedAttribute<'a>>,
-    children: Vec<ParsedElement<'a>>,
+    children: Vec<ParsedChild<'a>>,
 }
 
 #[allow(dead_code)]
@@ -16,6 +16,16 @@ struct ParsedAttribute<'a> {
     value: &'a str,
 }
 
+#[allow(dead_code)]
+struct ParsedText<'a> {
+    text: &'a str,
+}
+
+#[allow(dead_code)]
+enum ParsedChild<'a> {
+    ElementParsedChild(ParsedElement<'a>),
+    TextParsedChild(ParsedText<'a>),
+}
 
 macro_rules! try_parse(
     ($e:expr) => ({
@@ -141,9 +151,26 @@ impl Parser {
         Some((name, xml))
     }
 
+    fn parse_char_data<'a>(&self, xml: &'a str) -> Option<(ParsedText<'a>, &'a str)> {
+        let (text, xml) = try_parse!(xml.slice_char_data());
+
+        Some((ParsedText{text: text}, xml))
+    }
+
+    fn parse_content<'a>(&self, xml: &'a str) -> Option<(ParsedChild<'a>, &'a str)> {
+        // Pattern: alternate
+        match self.parse_element(xml) {
+            Some((e, s)) => Some((ElementParsedChild(e), s)),
+            None => match self.parse_char_data(xml) {
+                Some((t, s)) => Some((TextParsedChild(t), s)),
+                None => None,
+            },
+        }
+    }
+
     fn parse_non_empty_element<'a>(&self, xml: &'a str) -> Option<(ParsedElement<'a>, &'a str)> {
         let (mut element, xml) = try_parse!(self.parse_element_start(xml));
-        let (child, xml) = optional_parse!(self.parse_element(xml), xml);
+        let (child, xml) = optional_parse!(self.parse_content(xml), xml);
         let (name, xml) = try_parse!(self.parse_element_end(xml));
 
         if element.name != name {
@@ -166,13 +193,20 @@ impl Parser {
         }
     }
 
+    fn hydrate_text(&self, doc: Document, text_data: ParsedText) -> Text {
+        doc.new_text(text_data.text.to_string())
+    }
+
     fn hydrate_element(&self, doc: Document, element_data: ParsedElement) -> Element {
         let element = doc.new_element(element_data.name.to_string());
         for attr in element_data.attributes.iter() {
             element.set_attribute(attr.name.to_string(), attr.value.to_string());
         }
         for child in element_data.children.move_iter() {
-            element.append_child(self.hydrate_element(doc.clone(), child));
+            match child {
+                ElementParsedChild(e) => element.append_child(self.hydrate_element(doc.clone(), e)),
+                TextParsedChild(t) => element.append_child(self.hydrate_text(doc.clone(), t)),
+            }
         }
         element
     }
@@ -198,6 +232,7 @@ trait XmlStr<'a> {
     fn slice_at(&self, position: uint) -> (&'a str, &'a str);
     fn slice_until(&self, s: &str) -> Option<(&'a str, &'a str)>;
     fn slice_literal(&self, expected: &str) -> Option<(&'a str, &'a str)>;
+    fn slice_char_data(&self) -> Option<(&'a str, &'a str)>;
     fn slice_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> Option<(&'a str, &'a str)>;
     fn slice_name(&self) -> Option<(&'a str, &'a str)>;
     fn slice_space(&self) -> Option<(&'a str, &'a str)>;
@@ -220,6 +255,35 @@ impl<'a> XmlStr<'a> for &'a str {
             Some(self.slice_at(expected.len()))
         } else {
             None
+        }
+    }
+
+    fn slice_char_data(&self) -> Option<(&'a str, &'a str)> {
+        if self.starts_with("<") ||
+           self.starts_with("&") ||
+           self.starts_with("]]>")
+        {
+            return None
+        }
+
+        // Using a hex literal because emacs' rust-mode doesn't
+        // understand ] in a char literal. :-(
+        let mut positions = self.char_indices().skip_while(|&(_, c)| c != '<' && c != '&' && c != '\x5d');
+
+        loop {
+            match positions.next() {
+                None => return Some((self.clone(), "")),
+                Some((offset, c)) if c == '<' || c == '&' => return Some(self.slice_at(offset)),
+                Some((offset, _)) => {
+                    let (head, tail) = self.slice_at(offset);
+                    if tail.starts_with("]]>") {
+                        return Some((head, tail))
+                    } else {
+                        // False alarm, resume scanning
+                        continue;
+                    }
+                },
+            }
         }
     }
 
@@ -399,4 +463,49 @@ fn parses_nested_elements_with_attributes() {
     let world = hello.first_child().unwrap().element().unwrap();
 
     assert_eq!(world.get_attribute("name").unwrap().as_slice(), "Earth");
+}
+
+#[test]
+fn parses_element_with_text() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><hello>world</hello>");
+    let hello = doc.root().first_child().unwrap().element().unwrap();
+    let text = hello.first_child().unwrap().text().unwrap();
+
+    assert_eq!(text.text().as_slice(), "world");
+}
+
+#[test]
+fn slice_char_data_leading_ampersand() {
+    assert_eq!("&".slice_char_data(), None);
+}
+
+#[test]
+fn slice_char_data_leading_less_than() {
+    assert_eq!("<".slice_char_data(), None);
+}
+
+#[test]
+fn slice_char_data_leading_cdata_end() {
+    assert_eq!("]]>".slice_char_data(), None);
+}
+
+#[test]
+fn slice_char_data_until_ampersand() {
+    assert_eq!("hello&world".slice_char_data(), Some(("hello", "&world")));
+}
+
+#[test]
+fn slice_char_data_until_less_than() {
+    assert_eq!("hello<world".slice_char_data(), Some(("hello", "<world")));
+}
+
+#[test]
+fn slice_char_data_until_cdata_end() {
+    assert_eq!("hello]]>world".slice_char_data(), Some(("hello", "]]>world")));
+}
+
+#[test]
+fn slice_char_data_includes_right_square() {
+    assert_eq!("hello]world".slice_char_data(), Some(("hello]world", "")));
 }
