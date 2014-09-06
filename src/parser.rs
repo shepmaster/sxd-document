@@ -60,21 +60,34 @@ impl Parser {
         Some((ParsedAttribute{name: name, value: value}, xml))
     }
 
+    fn parse_attributes<'a>(&self, xml: &'a str) -> (Vec<ParsedAttribute<'a>>, &'a str) {
+        let mut xml = xml;
+        let mut attrs = Vec::new();
+
+        // Pattern: zero-or-more
+        // On failure, return the end of the last successful parse
+        loop {
+            let (_, after_space) = match xml.slice_space() {
+                None => return (attrs, xml),
+                Some(x) => x,
+            };
+
+            xml = match self.parse_attribute(after_space) {
+                None => return (attrs, xml),
+                Some((attr, after_attr)) => {
+                    attrs.push(attr);
+                    after_attr
+                },
+            };
+        }
+    }
+
     fn parse_element<'a>(&self, doc: Document, xml: &'a str) -> (Element, &'a str) {
         let (_, after_start_brace) = xml.slice_literal("<").expect("no start brace");
 
         let (name, after_name) = after_start_brace.slice_name().expect("failed to parse a name!");
 
-        let (_, after_space) = after_name.slice_space().expect("no space after name");
-
-        let mut attrs = Vec::new();
-        let after_attr = match self.parse_attribute(after_space) {
-            None => after_space,
-            Some((attr, after_attr)) => {
-                attrs.push(attr);
-                after_attr
-            },
-        };
+        let (attrs, after_attr) = self.parse_attributes(after_name);
 
         let after_attr = self.optional_space(after_attr);
 
@@ -246,4 +259,14 @@ fn parses_an_element_with_an_attribute_using_double_quotes() {
     let top = doc.root().first_child().unwrap().element().unwrap();
 
     assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
+}
+
+#[test]
+fn parses_an_element_with_multiple_attributes() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><hello scope=\"world\" happy='true'/>");
+    let top = doc.root().first_child().unwrap().element().unwrap();
+
+    assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
+    assert_eq!(top.get_attribute("happy").unwrap().as_slice(), "true");
 }
