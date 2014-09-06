@@ -64,6 +64,10 @@ impl Document {
         Comment::new(self.clone(), text)
     }
 
+    pub fn new_processing_instruction(&self, target: String, value: Option<String>) -> ProcessingInstruction {
+        ProcessingInstruction::new(self.clone(), target, value)
+    }
+
     pub fn root(&self) -> Root {
         let inner = self.inner.borrow();
         inner.root.clone().unwrap()
@@ -87,6 +91,7 @@ impl fmt::Show for Document {
 pub enum RootChild {
     ElementRootChild(Element),
     CommentRootChild(Comment),
+    PIRootChild(ProcessingInstruction),
 }
 
 impl RootChild {
@@ -111,10 +116,18 @@ impl RootChild {
         }
     }
 
+    pub fn processing_instruction(&self) -> Option<ProcessingInstruction> {
+        match self {
+            &PIRootChild(ref p) => Some(p.clone()),
+            _ => None,
+        }
+    }
+
     pub fn remove_from_parent(&self) {
         match self {
             &ElementRootChild(ref e) => e.remove_from_parent(),
             &CommentRootChild(ref c) => c.remove_from_parent(),
+            &PIRootChild(ref p)      => p.remove_from_parent(),
         }
     }
 
@@ -122,6 +135,7 @@ impl RootChild {
         match self {
             &ElementRootChild(ref e) => e.set_parent(parent),
             &CommentRootChild(ref c) => c.set_parent(parent),
+            &PIRootChild(ref p)      => p.set_parent(parent),
         }
     }
 }
@@ -140,6 +154,10 @@ impl ToRootChild for Element {
 
 impl ToRootChild for Comment {
     fn to_root_child(&self) -> RootChild { CommentRootChild(self.clone()) }
+}
+
+impl ToRootChild for ProcessingInstruction {
+    fn to_root_child(&self) -> RootChild { PIRootChild(self.clone()) }
 }
 
 #[deriving(Clone)]
@@ -334,6 +352,7 @@ pub enum ElementChild {
     ElementElementChild(Element),
     TextElementChild(Text),
     CommentElementChild(Comment),
+    PIElementChild(ProcessingInstruction),
 }
 
 impl ElementChild {
@@ -358,19 +377,28 @@ impl ElementChild {
         }
     }
 
+    pub fn processing_instruction(&self) -> Option<ProcessingInstruction> {
+        match self {
+            &PIElementChild(ref c) => Some(c.clone()),
+            _ => None,
+        }
+    }
+
     pub fn remove_from_parent(&self) {
         match self {
             &ElementElementChild(ref e) => e.remove_from_parent(),
-            &TextElementChild(ref t) => t.remove_from_parent(),
+            &TextElementChild(ref t)    => t.remove_from_parent(),
             &CommentElementChild(ref c) => c.remove_from_parent(),
+            &PIElementChild(ref p)      => p.remove_from_parent(),
         }
     }
 
     fn set_parent(&self, parent: Element) {
         match self {
             &ElementElementChild(ref e) => e.set_parent(parent),
-            &TextElementChild(ref t) => t.set_parent(parent),
+            &TextElementChild(ref t)    => t.set_parent(parent),
             &CommentElementChild(ref c) => c.set_parent(parent),
+            &PIElementChild(ref p)      => p.set_parent(parent),
         }
     }
 
@@ -386,6 +414,12 @@ impl ElementChild {
                 match c.parent() {
                     None => None,
                     Some(ElementElementParent(ref c)) => Some(c.clone()),
+                    _ => fail!("An element's child's parent is not an element")
+                },
+            &PIElementChild(ref p) =>
+                match p.parent() {
+                    None => None,
+                    Some(ElementElementParent(ref p)) => Some(p.clone()),
                     _ => fail!("An element's child's parent is not an element")
                 },
             &TextElementChild(ref t) => t.parent(),
@@ -413,11 +447,16 @@ impl ToElementChild for Comment {
     fn to_element_child(&self) -> ElementChild { CommentElementChild(self.clone()) }
 }
 
+impl ToElementChild for ProcessingInstruction {
+    fn to_element_child(&self) -> ElementChild { PIElementChild(self.clone()) }
+}
+
 impl ToElementChild for RootChild {
     fn to_element_child(&self) -> ElementChild {
         match self {
             &ElementRootChild(ref e) => ElementElementChild(e.clone()),
             &CommentRootChild(ref c) => CommentElementChild(c.clone()),
+            &PIRootChild(ref c) => PIElementChild(c.clone()),
         }
     }
 }
@@ -448,10 +487,11 @@ impl ElementParent {
     pub fn remove_child<C : ToElementChild>(&self, child: C) {
         match self {
             &ElementElementParent(ref e) => e.remove_child(child),
-            &RootElementParent(ref r) => match child.to_element_child() {
+            &RootElementParent(ref r)    => match child.to_element_child() {
                 ElementElementChild(ref e) => r.remove_child(e.clone()),
                 CommentElementChild(ref c) => r.remove_child(c.clone()),
-                TextElementChild(_) => fail!("A text node may not be a child of the root node"),
+                PIElementChild(ref p)      => r.remove_child(p.clone()),
+                TextElementChild(_)        => fail!("A text node may not be a child of the root node"),
             }
         }
     }
@@ -677,6 +717,85 @@ impl fmt::Show for Comment {
     }
 }
 
+struct ProcessingInstructionInner {
+    document: Document,
+    target: String,
+    value: Option<String>,
+    parent: Option<ElementParent>,
+}
+
+#[deriving(Clone)]
+pub struct ProcessingInstruction {
+    inner: Rc<RefCell<ProcessingInstructionInner>>,
+}
+
+impl ProcessingInstruction {
+    fn new(document: Document, target: String, value: Option<String>) -> ProcessingInstruction {
+        let inner = ProcessingInstructionInner {document: document,
+                                                target: target,
+                                                value: value,
+                                                parent: None};
+        ProcessingInstruction {inner: Rc::new(RefCell::new(inner))}
+    }
+
+    pub fn document(&self) -> Document {
+        self.inner.borrow().document.clone()
+    }
+
+    pub fn target(&self) -> String {
+        let inner = self.inner.borrow();
+        inner.target.clone()
+    }
+
+    pub fn set_target(&self, target: String) {
+        let mut inner = self.inner.borrow_mut();
+        inner.target = target;
+    }
+
+    pub fn value(&self) -> Option<String> {
+        let inner = self.inner.borrow();
+        inner.value.clone()
+    }
+
+    pub fn set_value(&self, value: Option<String>) {
+        let mut inner = self.inner.borrow_mut();
+        inner.value = value;
+    }
+
+    fn remove_from_parent(&self) {
+        let mut inner = self.inner.borrow_mut();
+        match inner.parent {
+            Some(ref e) => e.remove_child(self.clone()),
+            None => {}
+        };
+        inner.parent = None;
+    }
+
+    fn set_parent<P : ToElementParent>(&self, parent: P) {
+        let parent = parent.to_element_parent();
+        let mut inner = self.inner.borrow_mut();
+        inner.parent = Some(parent);
+    }
+
+    pub fn parent(&self) -> Option<ElementParent> {
+        let inner = self.inner.borrow();
+        inner.parent.clone()
+    }
+}
+
+impl PartialEq for ProcessingInstruction {
+    fn eq(&self, other: &ProcessingInstruction) -> bool {
+        &*self.inner as *const RefCell<ProcessingInstructionInner> == &*other.inner as *const RefCell<ProcessingInstructionInner>
+    }
+}
+
+impl fmt::Show for ProcessingInstruction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let inner = self.inner.borrow();
+        write!(f, "PI: {}: {}", inner.target, inner.value)
+    }
+}
+
 #[deriving(Clone,Show,PartialEq)]
 pub enum Any {
     ElementAny(Element),
@@ -684,6 +803,7 @@ pub enum Any {
     TextAny(Text),
     RootAny(Root),
     CommentAny(Comment),
+    PIAny(ProcessingInstruction),
 }
 
 impl Any {
@@ -729,6 +849,7 @@ impl Any {
             &RootAny(ref r)      => r.document(),
             &TextAny(ref t)      => t.document(),
             &CommentAny(ref c)   => c.document(),
+            &PIAny(ref p)        => p.document(),
         }
     }
 
@@ -738,6 +859,7 @@ impl Any {
             &ElementAny(ref e)   => e.parent().map(|x| x.to_any()),
             &TextAny(ref t)      => t.parent().map(|x| x.to_any()),
             &CommentAny(ref c)   => c.parent().map(|x| x.to_any()),
+            &PIAny(ref p)        => p.parent().map(|x| x.to_any()),
             &RootAny(_) => None,
         }
     }
@@ -748,6 +870,7 @@ impl Any {
             &RootAny(ref r)    => r.children().iter().map(|x| x.to_any()).collect(),
             &TextAny(_)        |
             &CommentAny(_)     |
+            &PIAny(_)          |
             &AttributeAny(_)   => Vec::new(),
         }
     }
@@ -787,6 +910,7 @@ impl ToAny for ElementChild {
             &ElementElementChild(ref e) => ElementAny(e.clone()),
             &TextElementChild(ref t)    => TextAny(t.clone()),
             &CommentElementChild(ref c) => CommentAny(c.clone()),
+            &PIElementChild(ref p)      => PIAny(p.clone()),
         }
     }
 }
@@ -805,6 +929,7 @@ impl ToAny for RootChild {
         match self {
             &ElementRootChild(ref r) => ElementAny(r.clone()),
             &CommentRootChild(ref c) => CommentAny(c.clone()),
+            &PIRootChild(ref c)      => PIAny(c.clone()),
         }
     }
 }
@@ -1067,6 +1192,53 @@ fn comment_can_be_changed() {
 }
 
 #[test]
+fn elements_can_have_processing_instruction_children() {
+    let doc = Document::new();
+    let e = doc.new_element("element".to_string());
+    let pi = doc.new_processing_instruction("device".to_string(), None);
+
+    e.append_child(pi);
+
+    let children = e.children();
+    assert_eq!(1, children.len());
+
+    let child_pi = children[0].processing_instruction().unwrap();
+    assert_eq!(child_pi.target().as_slice(), "device");
+    assert_eq!(child_pi.value(), None);
+}
+
+#[test]
+fn processing_instruction_belongs_to_a_document() {
+    let doc = Document::new();
+    let pi = doc.new_processing_instruction("device".to_string(), None);
+
+    assert_eq!(doc, pi.document());
+}
+
+#[test]
+fn processing_instruction_knows_its_parent() {
+    let doc = Document::new();
+    let e = doc.new_element("element".to_string());
+    let pi = doc.new_processing_instruction("device".to_string(), None);
+
+    e.append_child(pi.clone());
+
+    assert_eq!(pi.parent().unwrap().element().unwrap(), e);
+}
+
+#[test]
+fn processing_instruction_can_be_changed() {
+    let doc = Document::new();
+    let pi = doc.new_processing_instruction("device".to_string(), None);
+
+    pi.set_target("output".to_string());
+    pi.set_value(Some("full-screen".to_string()));
+
+    assert_eq!(pi.target().as_slice(), "output");
+    assert_eq!(pi.value().unwrap().as_slice(), "full-screen");
+}
+
+#[test]
 fn the_root_belongs_to_a_document() {
     let doc = Document::new();
     let root = doc.root();
@@ -1102,6 +1274,21 @@ fn root_can_have_comment_children() {
 
     let child = children[0].comment().unwrap();
     assert_eq!(child, comment);
+}
+
+#[test]
+fn root_can_have_processing_instruction_children() {
+    let doc = Document::new();
+    let root = doc.root();
+    let pi = doc.new_processing_instruction("device".to_string(), None);
+
+    root.append_child(pi.clone());
+
+    let children = root.children();
+    assert_eq!(1, children.len());
+
+    let child = children[0].processing_instruction().unwrap();
+    assert_eq!(child, pi);
 }
 
 #[test]
