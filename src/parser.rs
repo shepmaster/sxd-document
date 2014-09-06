@@ -1,4 +1,6 @@
-use super::{Document,Element,Text,Comment};
+use std::ascii::AsciiExt;
+
+use super::{Document,Element,Text,Comment,ProcessingInstruction};
 
 pub struct Parser;
 
@@ -21,8 +23,14 @@ struct ParsedComment<'a> {
     text: &'a str,
 }
 
+struct ParsedProcessingInstruction<'a> {
+    target: &'a str,
+    value: Option<&'a str>,
+}
+
 enum ParsedRootChild<'a> {
     CommentParsedRootChild(ParsedComment<'a>),
+    PIParsedRootChild(ParsedProcessingInstruction<'a>),
     IgnoredParsedRootChild,
 }
 
@@ -30,6 +38,7 @@ enum ParsedChild<'a> {
     ElementParsedChild(ParsedElement<'a>),
     TextParsedChild(ParsedText<'a>),
     CommentParsedChild(ParsedComment<'a>),
+    PIParsedChild(ParsedProcessingInstruction<'a>),
 }
 
 macro_rules! try_parse(
@@ -66,9 +75,12 @@ impl Parser {
         // Pattern: alternate
         match self.parse_comment(xml) {
             Some((c, x)) => Some((CommentParsedRootChild(c), x)),
-            None => match xml.slice_space() {
-                Some((_, x)) => Some((IgnoredParsedRootChild, x)),
-                None => None,
+            None => match self.parse_pi(xml) {
+                Some((p, x)) => Some((PIParsedRootChild(p), x)),
+                None => match xml.slice_space() {
+                    Some((_, x)) => Some((IgnoredParsedRootChild, x)),
+                    None => None,
+                },
             },
         }
     }
@@ -202,6 +214,24 @@ impl Parser {
         Some((ParsedComment{text: text}, xml))
     }
 
+    fn parse_pi_value<'a>(&self, xml: &'a str) -> Option<(&'a str, &'a str)> {
+        let (_, xml) = try_parse!(xml.slice_space());
+        xml.slice_pi_value()
+    }
+
+    fn parse_pi<'a>(&self, xml: &'a str) -> Option<(ParsedProcessingInstruction<'a>, &'a str)> {
+        let (_, xml) = try_parse!(xml.slice_literal("<?"));
+        let (target, xml) = try_parse!(xml.slice_name());
+        let (value, xml) = optional_parse!(self.parse_pi_value(xml), xml);
+        let (_, xml) = try_parse!(xml.slice_literal("?>"));
+
+        if target.eq_ignore_ascii_case("xml") {
+            fail!("Can't use xml as a PI target");
+        }
+
+        Some((ParsedProcessingInstruction{target: target, value: value}, xml))
+    }
+
     fn parse_content<'a>(&self, xml: &'a str) -> (Vec<ParsedChild<'a>>, &'a str) {
         let mut children = Vec::new();
 
@@ -218,7 +248,10 @@ impl Parser {
                     Some((t, x)) => (TextParsedChild(t), x),
                     None => match self.parse_comment(start) {
                         Some((c, x)) => (CommentParsedChild(c), x),
-                        None => return (children, start),
+                        None => match self.parse_pi(start) {
+                            Some((p, x)) => (PIParsedChild(p), x),
+                            None => return (children, start),
+                        },
                     },
                 },
             };
@@ -265,6 +298,10 @@ impl Parser {
         doc.new_comment(comment_data.text.to_string())
     }
 
+    fn hydrate_pi(&self, doc: &Document, pi_data: ParsedProcessingInstruction) -> ProcessingInstruction {
+        doc.new_processing_instruction(pi_data.target.to_string(), pi_data.value.map(|v| v.to_string()))
+    }
+
     fn hydrate_element(&self, doc: &Document, element_data: ParsedElement) -> Element {
         let element = doc.new_element(element_data.name.to_string());
         for attr in element_data.attributes.iter() {
@@ -273,8 +310,9 @@ impl Parser {
         for child in element_data.children.move_iter() {
             match child {
                 ElementParsedChild(e) => element.append_child(self.hydrate_element(doc, e)),
-                TextParsedChild(t) => element.append_child(self.hydrate_text(doc, t)),
+                TextParsedChild(t)    => element.append_child(self.hydrate_text(doc, t)),
                 CommentParsedChild(c) => element.append_child(self.hydrate_comment(doc, c)),
+                PIParsedChild(pi)     => element.append_child(self.hydrate_pi(doc, pi)),
             }
         }
         element
@@ -285,6 +323,8 @@ impl Parser {
             match child {
                 CommentParsedRootChild(c) =>
                     doc.root().append_child(self.hydrate_comment(doc, c)),
+                PIParsedRootChild(p) =>
+                    doc.root().append_child(self.hydrate_pi(doc, p)),
                 IgnoredParsedRootChild => {},
             }
         }
@@ -324,6 +364,7 @@ trait XmlStr<'a> {
     fn slice_char_data(&self) -> Option<(&'a str, &'a str)>;
     fn slice_cdata(&self) -> Option<(&'a str, &'a str)>;
     fn slice_comment(&self) -> Option<(&'a str, &'a str)>;
+    fn slice_pi_value(&self) -> Option<(&'a str, &'a str)>;
     fn slice_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> Option<(&'a str, &'a str)>;
     fn slice_name(&self) -> Option<(&'a str, &'a str)>;
     fn slice_space(&self) -> Option<(&'a str, &'a str)>;
@@ -390,6 +431,13 @@ impl<'a> XmlStr<'a> for &'a str {
         // in a comment, so we can just test the end if it matches the
         // complete close delimiter.
         match self.find_str("--") {
+            None => None,
+            Some(offset) => Some(self.slice_at(offset)),
+        }
+    }
+
+    fn slice_pi_value(&self) -> Option<(&'a str, &'a str)> {
+        match self.find_str("?>") {
             None => None,
             Some(offset) => Some(self.slice_at(offset)),
         }
@@ -622,6 +670,37 @@ fn parses_multiple_comments_after_top_element() {
 
     assert_eq!(comment1.text().as_slice(), "Comment 1");
     assert_eq!(comment2.text().as_slice(), "Comment 2");
+}
+
+#[test]
+fn parses_element_with_processing_instruction() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><hello><?device?></hello>");
+    let hello = doc.root().children()[0].element().unwrap();
+    let pi = hello.children()[0].processing_instruction().unwrap();
+
+    assert_eq!(pi.target().as_slice(), "device");
+    assert_eq!(pi.value(), None);
+}
+
+#[test]
+fn parses_top_level_processing_instructions() {
+    let parser = Parser::new();
+    let xml = r"
+<?xml version='1.0' ?>
+<?output printer?>
+<hello />
+<?validated?>";
+
+    let doc = parser.parse(xml);
+    let pi1 = doc.root().children()[0].processing_instruction().unwrap();
+    let pi2 = doc.root().children()[2].processing_instruction().unwrap();
+
+    assert_eq!(pi1.target().as_slice(), "output");
+    assert_eq!(pi1.value().unwrap().as_slice(), "printer");
+
+    assert_eq!(pi2.target().as_slice(), "validated");
+    assert_eq!(pi2.value(), None);
 }
 
 #[test]
