@@ -1,13 +1,16 @@
 use super::{Document,Root,RootChild,Element,ElementChild};
 
+#[allow(dead_code)]
 struct Parser;
 
+#[allow(dead_code)]
 struct ParsedElement<'a> {
     name: &'a str,
     attributes: Vec<ParsedAttribute<'a>>,
     children: Vec<ParsedElement<'a>>,
 }
 
+#[allow(dead_code)]
 struct ParsedAttribute<'a> {
     name: &'a str,
     value: &'a str,
@@ -33,6 +36,7 @@ macro_rules! optional_parse(
     })
 )
 
+#[allow(dead_code)]
 impl Parser {
     fn new() -> Parser {
         Parser
