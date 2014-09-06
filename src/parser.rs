@@ -2,6 +2,11 @@ use super::{Document,Root,RootChild,Element};
 
 struct Parser;
 
+struct ParsedAttribute<'a> {
+    name: &'a str,
+    value: &'a str,
+}
+
 impl Parser {
     fn new() -> Parser {
         Parser
@@ -14,6 +19,30 @@ impl Parser {
         xml.slice_from(end_of_preamble)
     }
 
+    fn optional_space<'a>(&self, xml: &'a str) -> &'a str {
+        match xml.slice_space() {
+            Some((_, next_xml)) => next_xml,
+            None => xml,
+        }
+    }
+
+    fn parse_attribute<'a>(&self, xml: &'a str) -> Option<(ParsedAttribute<'a>, &'a str)> {
+        let (name, xml) = match xml.slice_name() {
+            Some(x) => x,
+            None => return None,
+        };
+
+        let xml = self.optional_space(xml);
+        let (_, xml) = xml.slice_literal("=").expect("No equal sign");
+        let xml = self.optional_space(xml);
+
+        let (_, xml) = xml.slice_literal("'").expect("No quote"); // single and double quotes
+        let (value, xml) = xml.slice_until("'").expect("No value"); // single and double quotes
+        let (_, xml) = xml.slice_literal("'").expect("No quote"); // single and double quotes
+
+        Some((ParsedAttribute{name: name, value: value}, xml))
+    }
+
     fn parse_element<'a>(&self, doc: Document, xml: &'a str) -> (Element, &'a str) {
         let (_, after_start_brace) = xml.slice_literal("<").expect("no start brace");
 
@@ -21,9 +50,23 @@ impl Parser {
 
         let (_, after_space) = after_name.slice_space().expect("no space after name");
 
-        let (_, after_end_brace) = after_space.slice_literal("/>").expect("no end brace");
+        let mut attrs = Vec::new();
+        let after_attr = match self.parse_attribute(after_space) {
+            None => after_space,
+            Some((attr, after_attr)) => {
+                attrs.push(attr);
+                after_attr
+            },
+        };
+
+        let after_attr = self.optional_space(after_attr);
+
+        let (_, after_end_brace) = after_attr.slice_literal("/>").expect("no end brace");
 
         let e = doc.new_element(name.to_string());
+        for attr in attrs.iter() {
+            e.set_attribute(attr.name.to_string(), attr.value.to_string());
+        }
 
         (e, after_end_brace)
     }
@@ -42,6 +85,7 @@ impl Parser {
 
 trait XmlStr<'a> {
     fn slice_at(&self, position: uint) -> (&'a str, &'a str);
+    fn slice_until(&self, s: &str) -> Option<(&'a str, &'a str)>;
     fn slice_literal(&self, expected: &str) -> Option<(&'a str, &'a str)>;
     fn slice_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> Option<(&'a str, &'a str)>;
     fn slice_name(&self) -> Option<(&'a str, &'a str)>;
@@ -51,6 +95,13 @@ trait XmlStr<'a> {
 impl<'a> XmlStr<'a> for &'a str {
     fn slice_at(&self, position: uint) -> (&'a str, &'a str) {
         (self.slice_to(position), self.slice_from(position))
+    }
+
+    fn slice_until(&self, s: &str) -> Option<(&'a str, &'a str)> {
+        match self.find_str(s) {
+            Some(position) => Some(self.slice_at(position)),
+            None => None
+        }
     }
 
     fn slice_literal(&self, expected: &str) -> Option<(&'a str, &'a str)> {
@@ -160,4 +211,13 @@ fn parses_a_document_with_a_single_element() {
     let top = doc.root().first_child().unwrap().element().unwrap();
 
     assert_eq!(top.name().as_slice(), "hello");
+}
+
+#[test]
+fn parses_an_element_with_an_attribute() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><hello scope='world'/>");
+    let top = doc.root().first_child().unwrap().element().unwrap();
+
+    assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
 }
