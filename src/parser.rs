@@ -1,4 +1,4 @@
-use super::{Document,Root,RootChild,Element,ElementChild,Text};
+use super::{Document,Root,RootChild,Element,ElementChild,Text,Comment};
 
 pub struct Parser;
 
@@ -17,9 +17,14 @@ struct ParsedText<'a> {
     text: &'a str,
 }
 
+struct ParsedComment<'a> {
+    text: &'a str,
+}
+
 enum ParsedChild<'a> {
     ElementParsedChild(ParsedElement<'a>),
     TextParsedChild(ParsedText<'a>),
+    CommentParsedChild(ParsedComment<'a>),
 }
 
 macro_rules! try_parse(
@@ -159,6 +164,14 @@ impl Parser {
         Some((ParsedText{text: text}, xml))
     }
 
+    fn parse_comment<'a>(&self, xml: &'a str) -> Option<(ParsedComment<'a>, &'a str)> {
+        let (_, xml) = try_parse!(xml.slice_literal("<!--"));
+        let (text, xml) = try_parse!(xml.slice_comment());
+        let (_, xml) = try_parse!(xml.slice_literal("-->"));
+
+        Some((ParsedComment{text: text}, xml))
+    }
+
     fn parse_content<'a>(&self, xml: &'a str) -> (Vec<ParsedChild<'a>>, &'a str) {
         let mut children = Vec::new();
 
@@ -173,7 +186,10 @@ impl Parser {
                 Some((e, x)) => (ElementParsedChild(e), x),
                 None => match self.parse_cdata(start) {
                     Some((t, x)) => (TextParsedChild(t), x),
-                    None => return (children, start),
+                    None => match self.parse_comment(start) {
+                        Some((c, x)) => (CommentParsedChild(c), x),
+                        None => return (children, start),
+                    },
                 },
             };
 
@@ -215,6 +231,10 @@ impl Parser {
         doc.new_text(text_data.text.to_string())
     }
 
+    fn hydrate_comment(&self, doc: Document, comment_data: ParsedComment) -> Comment {
+        doc.new_comment(comment_data.text.to_string())
+    }
+
     fn hydrate_element(&self, doc: Document, element_data: ParsedElement) -> Element {
         let element = doc.new_element(element_data.name.to_string());
         for attr in element_data.attributes.iter() {
@@ -224,6 +244,7 @@ impl Parser {
             match child {
                 ElementParsedChild(e) => element.append_child(self.hydrate_element(doc.clone(), e)),
                 TextParsedChild(t) => element.append_child(self.hydrate_text(doc.clone(), t)),
+                CommentParsedChild(c) => element.append_child(self.hydrate_comment(doc.clone(), c)),
             }
         }
         element
@@ -252,6 +273,7 @@ trait XmlStr<'a> {
     fn slice_literal(&self, expected: &str) -> Option<(&'a str, &'a str)>;
     fn slice_char_data(&self) -> Option<(&'a str, &'a str)>;
     fn slice_cdata(&self) -> Option<(&'a str, &'a str)>;
+    fn slice_comment(&self) -> Option<(&'a str, &'a str)>;
     fn slice_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> Option<(&'a str, &'a str)>;
     fn slice_name(&self) -> Option<(&'a str, &'a str)>;
     fn slice_space(&self) -> Option<(&'a str, &'a str)>;
@@ -308,6 +330,16 @@ impl<'a> XmlStr<'a> for &'a str {
 
     fn slice_cdata(&self) -> Option<(&'a str, &'a str)> {
         match self.find_str("]]>") {
+            None => None,
+            Some(offset) => Some(self.slice_at(offset)),
+        }
+    }
+
+    fn slice_comment(&self) -> Option<(&'a str, &'a str)> {
+        // This deliberately does not include the >. -- is not allowed
+        // in a comment, so we can just test the end if it matches the
+        // complete close delimiter.
+        match self.find_str("--") {
             None => None,
             Some(offset) => Some(self.slice_at(offset)),
         }
@@ -509,6 +541,16 @@ fn parses_element_with_cdata() {
     let text = words.first_child().unwrap().text().unwrap();
 
     assert_eq!(text.text().as_slice(), "I have & and < !");
+}
+
+#[test]
+fn parses_element_with_comment() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><hello><!-- A comment --></hello>");
+    let words = doc.root().first_child().unwrap().element().unwrap();
+    let comment = words.first_child().unwrap().comment().unwrap();
+
+    assert_eq!(comment.text().as_slice(), " A comment ");
 }
 
 #[test]
