@@ -257,51 +257,63 @@ impl Parser {
         }
     }
 
-    fn hydrate_text(&self, doc: Document, text_data: ParsedText) -> Text {
+    fn hydrate_text(&self, doc: &Document, text_data: ParsedText) -> Text {
         doc.new_text(text_data.text.to_string())
     }
 
-    fn hydrate_comment(&self, doc: Document, comment_data: ParsedComment) -> Comment {
+    fn hydrate_comment(&self, doc: &Document, comment_data: ParsedComment) -> Comment {
         doc.new_comment(comment_data.text.to_string())
     }
 
-    fn hydrate_element(&self, doc: Document, element_data: ParsedElement) -> Element {
+    fn hydrate_element(&self, doc: &Document, element_data: ParsedElement) -> Element {
         let element = doc.new_element(element_data.name.to_string());
         for attr in element_data.attributes.iter() {
             element.set_attribute(attr.name.to_string(), attr.value.to_string());
         }
         for child in element_data.children.move_iter() {
             match child {
-                ElementParsedChild(e) => element.append_child(self.hydrate_element(doc.clone(), e)),
-                TextParsedChild(t) => element.append_child(self.hydrate_text(doc.clone(), t)),
-                CommentParsedChild(c) => element.append_child(self.hydrate_comment(doc.clone(), c)),
+                ElementParsedChild(e) => element.append_child(self.hydrate_element(doc, e)),
+                TextParsedChild(t) => element.append_child(self.hydrate_text(doc, t)),
+                CommentParsedChild(c) => element.append_child(self.hydrate_comment(doc, c)),
             }
         }
         element
     }
 
-    fn hydrate_parsed_data(&self, before_children: Vec<ParsedRootChild>, element_data: ParsedElement) -> Document {
-        let doc = Document::new();
-        let root = doc.root();
-
-        for child in before_children.move_iter() {
+    fn hydrate_misc(&self, doc: &Document, children: Vec<ParsedRootChild>) {
+        for child in children.move_iter() {
             match child {
                 CommentParsedRootChild(c) =>
-                    root.append_child(self.hydrate_comment(doc.clone(), c)),
+                    doc.root().append_child(self.hydrate_comment(doc, c)),
                 IgnoredParsedRootChild => {},
             }
         }
+    }
 
-        root.append_child(self.hydrate_element(doc.clone(), element_data));
+    fn hydrate_parsed_data(&self,
+                           before_children: Vec<ParsedRootChild>,
+                           element_data: ParsedElement,
+                           after_children: Vec<ParsedRootChild>)
+                           -> Document
+    {
+        let doc = Document::new();
+        let root = doc.root();
+
+        self.hydrate_misc(&doc, before_children);
+
+        root.append_child(self.hydrate_element(&doc, element_data));
+
+        self.hydrate_misc(&doc, after_children);
 
         doc
     }
 
     pub fn parse(&self, xml: &str) -> Document {
         let (before_children, xml) = self.parse_prolog(xml);
-        let (element, _) = self.parse_element(xml).expect("no element");
+        let (element, xml) = self.parse_element(xml).expect("no element");
+        let (after_children, _xml) = self.parse_miscs(xml);
 
-        self.hydrate_parsed_data(before_children, element)
+        self.hydrate_parsed_data(before_children, element, after_children)
     }
 }
 
@@ -611,6 +623,22 @@ fn parses_multiple_comments_before_top_element() {
     let doc = parser.parse(xml);
     let comment1 = doc.root().children()[0].comment().unwrap();
     let comment2 = doc.root().children()[1].comment().unwrap();
+
+    assert_eq!(comment1.text().as_slice(), "Comment 1");
+    assert_eq!(comment2.text().as_slice(), "Comment 2");
+}
+
+#[test]
+fn parses_multiple_comments_after_top_element() {
+    let parser = Parser::new();
+    let xml = r"
+<?xml version='1.0' ?>
+<hello />
+<!--Comment 1-->
+<!--Comment 2-->";
+    let doc = parser.parse(xml);
+    let comment1 = doc.root().children()[1].comment().unwrap();
+    let comment2 = doc.root().children()[2].comment().unwrap();
 
     assert_eq!(comment1.text().as_slice(), "Comment 1");
     assert_eq!(comment2.text().as_slice(), "Comment 2");
