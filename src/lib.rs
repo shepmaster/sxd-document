@@ -12,6 +12,7 @@ pub mod parser;
 // TODO: See about removing duplication of child / parent implementations.
 // TODO: remove clone from inner?
 // TODO: duplication of text / comment
+// TODO: reevaluate each fail!
 
 // children
 // root nodes -> 1x element, comment, pi
@@ -28,8 +29,8 @@ pub mod parser;
 // text nodes -> element
 // attribute nodes -> element
 // namespace nodes -> element
-// processing instruction nodes -> element
-// comment nodes -> element
+// processing instruction nodes -> element, root
+// comment nodes -> element, root
 
 struct DocumentInner {
     // We will always have a root, but during construction we have to
@@ -85,30 +86,42 @@ impl fmt::Show for Document {
 #[deriving(Clone,PartialEq)]
 pub enum RootChild {
     ElementRootChild(Element),
+    CommentRootChild(Comment),
 }
 
 impl RootChild {
     fn is_element(&self) -> bool {
         match self {
             &ElementRootChild(_) => true,
+            _ => false,
         }
     }
 
     pub fn element(&self) -> Option<Element> {
         match self {
             &ElementRootChild(ref e) => Some(e.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn comment(&self) -> Option<Comment> {
+        match self {
+            &CommentRootChild(ref c) => Some(c.clone()),
+            _ => None,
         }
     }
 
     pub fn remove_from_parent(&self) {
         match self {
             &ElementRootChild(ref e) => e.remove_from_parent(),
+            &CommentRootChild(ref c) => c.remove_from_parent(),
         }
     }
 
     pub fn set_parent(&self, parent: Root) {
         match self {
             &ElementRootChild(ref e) => e.set_parent(parent),
+            &CommentRootChild(ref c) => c.set_parent(parent),
         }
     }
 }
@@ -123,6 +136,10 @@ impl ToRootChild for RootChild {
 
 impl ToRootChild for Element {
     fn to_root_child(&self) -> RootChild { ElementRootChild(self.clone()) }
+}
+
+impl ToRootChild for Comment {
+    fn to_root_child(&self) -> RootChild { CommentRootChild(self.clone()) }
 }
 
 #[deriving(Clone)]
@@ -365,8 +382,13 @@ impl ElementChild {
                     Some(ElementElementParent(ref e)) => Some(e.clone()),
                     _ => fail!("An element's child's parent is not an element")
                 },
+            &CommentElementChild(ref c) =>
+                match c.parent() {
+                    None => None,
+                    Some(ElementElementParent(ref c)) => Some(c.clone()),
+                    _ => fail!("An element's child's parent is not an element")
+                },
             &TextElementChild(ref t) => t.parent(),
-            &CommentElementChild(ref c) => c.parent(),
         }
     }
 }
@@ -395,11 +417,13 @@ impl ToElementChild for RootChild {
     fn to_element_child(&self) -> ElementChild {
         match self {
             &ElementRootChild(ref e) => ElementElementChild(e.clone()),
+            &CommentRootChild(ref c) => CommentElementChild(c.clone()),
         }
     }
 }
 
 /// Items that may be parents of element nodes
+// TODO: rename betterer, not just element nodes (comment, pi)
 #[deriving(PartialEq,Clone)]
 pub enum ElementParent {
     ElementElementParent(Element),
@@ -421,10 +445,14 @@ impl ElementParent {
         }
     }
 
-    pub fn remove_child(&self, child: Element) {
+    pub fn remove_child<C : ToElementChild>(&self, child: C) {
         match self {
             &ElementElementParent(ref e) => e.remove_child(child),
-            &RootElementParent(ref r) => r.remove_child(child),
+            &RootElementParent(ref r) => match child.to_element_child() {
+                ElementElementChild(ref e) => r.remove_child(e.clone()),
+                CommentElementChild(ref c) => r.remove_child(c.clone()),
+                TextElementChild(_) => fail!("A text node may not be a child of the root node"),
+            }
         }
     }
 
@@ -588,7 +616,7 @@ impl fmt::Show for Element {
 struct CommentInner {
     document: Document,
     text: String,
-    parent: Option<Element>,
+    parent: Option<ElementParent>,
 }
 
 #[deriving(Clone)]
@@ -625,12 +653,13 @@ impl Comment {
         inner.parent = None;
     }
 
-    fn set_parent(&self, parent: Element) {
+    fn set_parent<P : ToElementParent>(&self, parent: P) {
+        let parent = parent.to_element_parent();
         let mut inner = self.inner.borrow_mut();
         inner.parent = Some(parent);
     }
 
-    pub fn parent(&self) -> Option<Element> {
+    pub fn parent(&self) -> Option<ElementParent> {
         let inner = self.inner.borrow();
         inner.parent.clone()
     }
@@ -775,6 +804,7 @@ impl ToAny for RootChild {
     fn to_any(&self) -> Any {
         match self {
             &ElementRootChild(ref r) => ElementAny(r.clone()),
+            &CommentRootChild(ref c) => CommentAny(c.clone()),
         }
     }
 }
@@ -1023,7 +1053,7 @@ fn comment_knows_its_parent() {
 
     sentence.append_child(comment.clone());
 
-    assert_eq!(comment.parent().unwrap(), sentence);
+    assert_eq!(comment.parent().unwrap().element().unwrap(), sentence);
 }
 
 #[test]
@@ -1057,6 +1087,21 @@ fn root_can_have_element_children() {
 
     let child = children[0].element().unwrap();
     assert_eq!(child, element);
+}
+
+#[test]
+fn root_can_have_comment_children() {
+    let doc = Document::new();
+    let root = doc.root();
+    let comment = doc.new_comment("Now is the winter of our discontent.".to_string());
+
+    root.append_child(comment.clone());
+
+    let children = root.children();
+    assert_eq!(1, children.len());
+
+    let child = children[0].comment().unwrap();
+    assert_eq!(child, comment);
 }
 
 #[test]
