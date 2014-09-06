@@ -73,17 +73,26 @@ impl Parser {
         }
     }
 
-    fn parse_prolog<'a>(&self, xml: &'a str) -> (Vec<ParsedRootChild<'a>>, &'a str) {
+    fn parse_miscs<'a>(&self, xml: &'a str) -> (Vec<ParsedRootChild<'a>>, &'a str) {
         let mut before_children = Vec::new();
 
+        // Pattern: zero-or-more
+        let mut start = xml;
+        loop {
+            let (child, after) = match self.parse_misc(start) {
+                Some(x) => x,
+                None => return (before_children, start),
+            };
+
+            before_children.push(child);
+            start = after;
+        }
+    }
+
+    fn parse_prolog<'a>(&self, xml: &'a str) -> (Vec<ParsedRootChild<'a>>, &'a str) {
         let xml = self.parse_xml_declaration(xml);
 
-        // TODO: 0-or-more
-        let (misc, xml) = optional_parse!(self.parse_misc(xml), xml);
-
-        misc.map(|c| before_children.push(c));
-
-        (before_children, xml)
+        self.parse_miscs(xml)
     }
 
     fn parse_attribute_value_quote<'a>(&self, xml: &'a str, quote: &str) -> Option<(&'a str, &'a str)> {
@@ -589,6 +598,22 @@ fn parses_comment_before_top_element() {
     let comment = doc.root().first_child().unwrap().comment().unwrap();
 
     assert_eq!(comment.text().as_slice(), " A comment ");
+}
+
+#[test]
+fn parses_multiple_comments_before_top_element() {
+    let parser = Parser::new();
+    let xml = r"
+<?xml version='1.0' ?>
+<!--Comment 1-->
+<!--Comment 2-->
+<hello />";
+    let doc = parser.parse(xml);
+    let comment1 = doc.root().children()[0].comment().unwrap();
+    let comment2 = doc.root().children()[1].comment().unwrap();
+
+    assert_eq!(comment1.text().as_slice(), "Comment 1");
+    assert_eq!(comment2.text().as_slice(), "Comment 2");
 }
 
 #[test]
