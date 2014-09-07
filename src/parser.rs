@@ -1,4 +1,6 @@
 use std::ascii::AsciiExt;
+use std::num::from_str_radix;
+use std::char::from_u32;
 
 use super::{Document,Element,Text,Comment,ProcessingInstruction};
 
@@ -19,6 +21,14 @@ struct ParsedText<'a> {
     text: &'a str,
 }
 
+struct ParsedHexChar<'a> {
+    text: &'a str,
+}
+
+enum ParsedReference<'a> {
+    HexCharParsedReference(ParsedHexChar<'a>),
+}
+
 struct ParsedComment<'a> {
     text: &'a str,
 }
@@ -37,6 +47,7 @@ enum ParsedRootChild<'a> {
 enum ParsedChild<'a> {
     ElementParsedChild(ParsedElement<'a>),
     TextParsedChild(ParsedText<'a>),
+    ReferenceParsedChild(ParsedReference<'a>),
     CommentParsedChild(ParsedComment<'a>),
     PIParsedChild(ParsedProcessingInstruction<'a>),
 }
@@ -206,6 +217,15 @@ impl Parser {
         Some((ParsedText{text: text}, xml))
     }
 
+    fn parse_reference<'a>(&self, xml: &'a str) -> Option<(ParsedReference<'a>, &'a str)> {
+        let (_, xml) = try_parse!(xml.slice_literal("&#x"));
+        let (hex, xml) = try_parse!(xml.slice_hex_chars());
+        let (_, xml) = try_parse!(xml.slice_literal(";"));
+
+        let hexchar = ParsedHexChar{text: hex};
+        Some((HexCharParsedReference(hexchar), xml))
+    }
+
     fn parse_comment<'a>(&self, xml: &'a str) -> Option<(ParsedComment<'a>, &'a str)> {
         let (_, xml) = try_parse!(xml.slice_literal("<!--"));
         let (text, xml) = try_parse!(xml.slice_comment());
@@ -246,11 +266,14 @@ impl Parser {
                 Some((e, x)) => (ElementParsedChild(e), x),
                 None => match self.parse_cdata(start) {
                     Some((t, x)) => (TextParsedChild(t), x),
-                    None => match self.parse_comment(start) {
-                        Some((c, x)) => (CommentParsedChild(c), x),
-                        None => match self.parse_pi(start) {
-                            Some((p, x)) => (PIParsedChild(p), x),
-                            None => return (children, start),
+                    None => match self.parse_reference(start) {
+                        Some((e, x)) => (ReferenceParsedChild(e), x),
+                        None => match self.parse_comment(start) {
+                            Some((c, x)) => (CommentParsedChild(c), x),
+                            None => match self.parse_pi(start) {
+                                Some((p, x)) => (PIParsedChild(p), x),
+                                None => return (children, start),
+                            },
                         },
                     },
                 },
@@ -294,6 +317,17 @@ impl Parser {
         doc.new_text(text_data.text.to_string())
     }
 
+    fn hydrate_reference(&self, doc: &Document, ref_data: ParsedReference) -> Text {
+        let val = match ref_data {
+            HexCharParsedReference(h) => {
+                let code: u32 = from_str_radix(h.text, 16).expect("Not valid hex");
+                let c: char = from_u32(code).expect("Not a valid codepoint");
+                c.to_string()
+            }
+        };
+        doc.new_text(val)
+    }
+
     fn hydrate_comment(&self, doc: &Document, comment_data: ParsedComment) -> Comment {
         doc.new_comment(comment_data.text.to_string())
     }
@@ -309,10 +343,11 @@ impl Parser {
         }
         for child in element_data.children.move_iter() {
             match child {
-                ElementParsedChild(e) => element.append_child(self.hydrate_element(doc, e)),
-                TextParsedChild(t)    => element.append_child(self.hydrate_text(doc, t)),
-                CommentParsedChild(c) => element.append_child(self.hydrate_comment(doc, c)),
-                PIParsedChild(pi)     => element.append_child(self.hydrate_pi(doc, pi)),
+                ElementParsedChild(e)   => element.append_child(self.hydrate_element(doc, e)),
+                TextParsedChild(t)      => element.append_child(self.hydrate_text(doc, t)),
+                ReferenceParsedChild(r) => element.append_child(self.hydrate_reference(doc, r)),
+                CommentParsedChild(c)   => element.append_child(self.hydrate_comment(doc, c)),
+                PIParsedChild(pi)       => element.append_child(self.hydrate_pi(doc, pi)),
             }
         }
         element
@@ -363,6 +398,7 @@ trait XmlStr<'a> {
     fn slice_literal(&self, expected: &str) -> Option<(&'a str, &'a str)>;
     fn slice_char_data(&self) -> Option<(&'a str, &'a str)>;
     fn slice_cdata(&self) -> Option<(&'a str, &'a str)>;
+    fn slice_hex_chars(&self) -> Option<(&'a str, &'a str)>;
     fn slice_comment(&self) -> Option<(&'a str, &'a str)>;
     fn slice_pi_value(&self) -> Option<(&'a str, &'a str)>;
     fn slice_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> Option<(&'a str, &'a str)>;
@@ -426,6 +462,11 @@ impl<'a> XmlStr<'a> for &'a str {
         }
     }
 
+    fn slice_hex_chars(&self) -> Option<(&'a str, &'a str)> {
+        self.slice_start_rest(|c| c.is_hex_char(),
+                              |c| c.is_hex_char())
+    }
+
     fn slice_comment(&self) -> Option<(&'a str, &'a str)> {
         // This deliberately does not include the >. -- is not allowed
         // in a comment, so we can just test the end if it matches the
@@ -476,6 +517,7 @@ trait XmlChar {
     fn is_name_start_char(&self) -> bool;
     fn is_name_char(&self) -> bool;
     fn is_space_char(&self) -> bool;
+    fn is_hex_char(&self) -> bool;
 }
 
 impl XmlChar for char {
@@ -520,6 +562,15 @@ impl XmlChar for char {
             '\x09' |
             '\x0D' |
             '\x0A' => true,
+            _ => false,
+        }
+    }
+
+    fn is_hex_char(&self) -> bool {
+        match *self {
+            '0'..'9' |
+            'a'..'f' |
+            'A'..'F' => true,
             _ => false,
         }
     }
@@ -701,6 +752,20 @@ fn parses_top_level_processing_instructions() {
 
     assert_eq!(pi2.target().as_slice(), "validated");
     assert_eq!(pi2.value(), None);
+}
+
+#[test]
+fn parses_element_with_char_reference() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><math>1 &#x3c; 2</math>");
+    let math = doc.root().children()[0].element().unwrap();
+    let text1 = math.children()[0].text().unwrap();
+    let text2 = math.children()[1].text().unwrap();
+    let text3 = math.children()[2].text().unwrap();
+
+    assert_eq!(text1.text().as_slice(), "1 ");
+    assert_eq!(text2.text().as_slice(), "<");
+    assert_eq!(text3.text().as_slice(), " 2");
 }
 
 #[test]
