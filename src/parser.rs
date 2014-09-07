@@ -21,17 +21,22 @@ struct ParsedText<'a> {
     text: &'a str,
 }
 
-struct ParsedDecimalChar<'a> {
+struct ParsedEntityRef<'a> {
     text: &'a str,
 }
 
-struct ParsedHexChar<'a> {
+struct ParsedDecimalCharRef<'a> {
+    text: &'a str,
+}
+
+struct ParsedHexCharRef<'a> {
     text: &'a str,
 }
 
 enum ParsedReference<'a> {
-    DecimalCharParsedReference(ParsedDecimalChar<'a>),
-    HexCharParsedReference(ParsedHexChar<'a>),
+    EntityParsedReference(ParsedEntityRef<'a>),
+    DecimalCharParsedReference(ParsedDecimalCharRef<'a>),
+    HexCharParsedReference(ParsedHexCharRef<'a>),
 }
 
 struct ParsedComment<'a> {
@@ -222,29 +227,40 @@ impl Parser {
         Some((ParsedText{text: text}, xml))
     }
 
-    fn parse_decimal_char_ref<'a>(&self, xml: &'a str) -> Option<(ParsedDecimalChar<'a>, &'a str)> {
+    fn parse_entity_ref<'a>(&self, xml: &'a str) -> Option<(ParsedEntityRef<'a>, &'a str)> {
+        let (_, xml) = try_parse!(xml.slice_literal("&"));
+        let (name, xml) = try_parse!(xml.slice_name());
+        let (_, xml) = try_parse!(xml.slice_literal(";"));
+
+        Some((ParsedEntityRef{text: name}, xml))
+    }
+
+    fn parse_decimal_char_ref<'a>(&self, xml: &'a str) -> Option<(ParsedDecimalCharRef<'a>, &'a str)> {
         let (_, xml) = try_parse!(xml.slice_literal("&#"));
         let (dec, xml) = try_parse!(xml.slice_decimal_chars());
         let (_, xml) = try_parse!(xml.slice_literal(";"));
 
-        Some((ParsedDecimalChar{text: dec}, xml))
+        Some((ParsedDecimalCharRef{text: dec}, xml))
     }
 
-    fn parse_hex_char_ref<'a>(&self, xml: &'a str) -> Option<(ParsedHexChar<'a>, &'a str)> {
+    fn parse_hex_char_ref<'a>(&self, xml: &'a str) -> Option<(ParsedHexCharRef<'a>, &'a str)> {
         let (_, xml) = try_parse!(xml.slice_literal("&#x"));
         let (hex, xml) = try_parse!(xml.slice_hex_chars());
         let (_, xml) = try_parse!(xml.slice_literal(";"));
 
-        Some((ParsedHexChar{text: hex}, xml))
+        Some((ParsedHexCharRef{text: hex}, xml))
     }
 
     fn parse_reference<'a>(&self, xml: &'a str) -> Option<(ParsedReference<'a>, &'a str)> {
         // Pattern: alternate
-        match self.parse_decimal_char_ref(xml) {
-            Some((d, x)) => Some((DecimalCharParsedReference(d), x)),
-            None => match self.parse_hex_char_ref(xml) {
-                Some((h, x)) => Some((HexCharParsedReference(h), x)),
-                None => None,
+        match self.parse_entity_ref(xml) {
+            Some((e, x)) => Some((EntityParsedReference(e), x)),
+            None => match self.parse_decimal_char_ref(xml) {
+                Some((d, x)) => Some((DecimalCharParsedReference(d), x)),
+                None => match self.parse_hex_char_ref(xml) {
+                    Some((h, x)) => Some((HexCharParsedReference(h), x)),
+                    None => None,
+                },
             },
         }
     }
@@ -352,6 +368,16 @@ impl Parser {
                 let c: char = from_u32(code).expect("Not a valid codepoint");
                 c.to_string()
             },
+            EntityParsedReference(e) => {
+                match e.text {
+                    "amp"  => "&",
+                    "lt"   => "<",
+                    "gt"   => ">",
+                    "apos" => "'",
+                    "quot" => "\"",
+                    _      => fail!("unknown entity"),
+                }.to_string()
+            }
         };
         doc.new_text(val)
     }
@@ -822,6 +848,20 @@ fn parses_element_with_hexidecimal_char_reference() {
     assert_eq!(text1.text().as_slice(), "1 ");
     assert_eq!(text2.text().as_slice(), "<");
     assert_eq!(text3.text().as_slice(), " 2");
+}
+
+#[test]
+fn parses_element_with_entity_reference() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><math>I &lt;3 math</math>");
+    let math = doc.root().children()[0].element().unwrap();
+    let text1 = math.children()[0].text().unwrap();
+    let text2 = math.children()[1].text().unwrap();
+    let text3 = math.children()[2].text().unwrap();
+
+    assert_eq!(text1.text().as_slice(), "I ");
+    assert_eq!(text2.text().as_slice(), "<");
+    assert_eq!(text3.text().as_slice(), "3 math");
 }
 
 #[test]
