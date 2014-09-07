@@ -165,10 +165,10 @@ impl Parser {
     }
 
     fn parse_one_quoted_value<'a, T>(&self,
-                   xml: &'a str,
-                   quote: &str,
-                   f: |&'a str| -> ParseResult<'a, T>)
-                   -> ParseResult<'a, T>
+                                     xml: &'a str,
+                                     quote: &str,
+                                     f: |&'a str| -> ParseResult<'a, T>)
+                                     -> ParseResult<'a, T>
     {
         let (_, xml) = try_parse!(xml.slice_literal(quote));
         let (value, xml) = try_parse!(f(xml));
@@ -178,9 +178,9 @@ impl Parser {
     }
 
     fn parse_quoted_value<'a, T>(&self,
-                  xml: &'a str,
-                  f: |&'a str, &str| -> ParseResult<'a, T>)
-                  -> ParseResult<'a, T>
+                                 xml: &'a str,
+                                 f: |&'a str, &str| -> ParseResult<'a, T>)
+                                 -> ParseResult<'a, T>
     {
         alternate_parse!(xml, {
             [|xml| self.parse_one_quoted_value(xml, "'",  |xml| f(xml, "'"))  -> |v| v],
@@ -189,7 +189,7 @@ impl Parser {
     }
 
     fn parse_attribute_values<'a>(&self, xml: &'a str, quote: &str)
-                                 -> ParseResult<'a, Vec<AttributeValue<'a>>>
+                                  -> ParseResult<'a, Vec<AttributeValue<'a>>>
     {
         parse_zero_or_more!(xml, |xml|
             alternate_parse!(xml, {
