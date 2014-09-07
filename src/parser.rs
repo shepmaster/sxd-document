@@ -12,9 +12,14 @@ struct ParsedElement<'a> {
     children: Vec<ParsedChild<'a>>,
 }
 
+enum ParsedAttributeValue<'a> {
+    ReferenceAttributeValue(ParsedReference<'a>),
+    LiteralAttributeValue(&'a str),
+}
+
 struct ParsedAttribute<'a> {
     name: &'a str,
-    value: &'a str,
+    values: Vec<ParsedAttributeValue<'a>>,
 }
 
 struct ParsedText<'a> {
@@ -187,6 +192,29 @@ impl Parser {
         })
     }
 
+    fn parse_attribute_values<'a>(&self, xml: &'a str, quote: &str)
+                                 -> Option<(Vec<ParsedAttributeValue<'a>>, &'a str)>
+    {
+        // Pattern zero-or-more
+        let mut values = Vec::new();
+
+        let mut start = xml;
+        loop {
+            let x = alternate_parse!(start, {
+                [|xml: &'a str| xml.slice_attribute(quote) -> |v| LiteralAttributeValue(v)],
+                [|xml: &'a str| self.parse_reference(xml)  -> |e| ReferenceAttributeValue(e)],
+            });
+
+            let (value, xml) = match x {
+                Some(x) => x,
+                None => return Some((values, start)),
+            };
+
+            values.push(value);
+            start = xml;
+        }
+    }
+
     fn parse_attribute<'a>(&self, xml: &'a str) -> Option<(ParsedAttribute<'a>, &'a str)> {
         let (name, xml) = match xml.slice_name() {
             Some(x) => x,
@@ -195,13 +223,11 @@ impl Parser {
 
         let (_, xml) = try_parse!(self.parse_eq(xml));
 
-        // TODO: don't consume & or <
-        // TODO: support references
-        let (value, xml) = try_parse!(
-            self.parse_quoted_value(xml, |xml, quote| xml.slice_until(quote))
+        let (values, xml) = try_parse!(
+            self.parse_quoted_value(xml, |xml, quote| self.parse_attribute_values(xml, quote))
         );
 
-        Some((ParsedAttribute{name: name, value: value}, xml))
+        Some((ParsedAttribute{name: name, values: values}, xml))
     }
 
     fn parse_attributes<'a>(&self, xml: &'a str) -> (Vec<ParsedAttribute<'a>>, &'a str) {
@@ -382,8 +408,8 @@ impl Parser {
         doc.new_text(text_data.text.to_string())
     }
 
-    fn hydrate_reference(&self, doc: &Document, ref_data: ParsedReference) -> Text {
-        let val = match ref_data {
+    fn hydrate_reference_raw(&self, ref_data: ParsedReference) -> String {
+        match ref_data {
             DecimalCharParsedReference(d) => {
                 let code: u32 = from_str_radix(d.text, 10).expect("Not valid decimal");
                 let c: char = from_u32(code).expect("Not a valid codepoint");
@@ -404,8 +430,11 @@ impl Parser {
                     _      => fail!("unknown entity"),
                 }.to_string()
             }
-        };
-        doc.new_text(val)
+        }
+    }
+
+    fn hydrate_reference(&self, doc: &Document, ref_data: ParsedReference) -> Text {
+        doc.new_text(self.hydrate_reference_raw(ref_data))
     }
 
     fn hydrate_comment(&self, doc: &Document, comment_data: ParsedComment) -> Comment {
@@ -418,9 +447,17 @@ impl Parser {
 
     fn hydrate_element(&self, doc: &Document, element_data: ParsedElement) -> Element {
         let element = doc.new_element(element_data.name.to_string());
-        for attr in element_data.attributes.iter() {
-            element.set_attribute(attr.name.to_string(), attr.value.to_string());
+
+        for attr in element_data.attributes.move_iter() {
+            let to_v_str = |v: ParsedAttributeValue| match v {
+                LiteralAttributeValue(v) => v.to_string(),
+                ReferenceAttributeValue(r) => self.hydrate_reference_raw(r),
+            };
+
+            let v = attr.values.move_iter().fold(String::new(), |s, v| s.append(to_v_str(v).as_slice()));
+            element.set_attribute(attr.name.to_string(), v);
         }
+
         for child in element_data.children.move_iter() {
             match child {
                 ElementParsedChild(e)   => element.append_child(self.hydrate_element(doc, e)),
@@ -430,6 +467,7 @@ impl Parser {
                 PIParsedChild(pi)       => element.append_child(self.hydrate_pi(doc, pi)),
             }
         }
+
         element
     }
 
@@ -474,7 +512,7 @@ impl Parser {
 
 trait XmlStr<'a> {
     fn slice_at(&self, position: uint) -> (&'a str, &'a str);
-    fn slice_until(&self, s: &str) -> Option<(&'a str, &'a str)>;
+    fn slice_attribute(&self, quote: &str) -> Option<(&'a str, &'a str)>;
     fn slice_literal(&self, expected: &str) -> Option<(&'a str, &'a str)>;
     fn slice_version_num(&self) -> Option<(&'a str, &'a str)>;
     fn slice_char_data(&self) -> Option<(&'a str, &'a str)>;
@@ -493,10 +531,22 @@ impl<'a> XmlStr<'a> for &'a str {
         (self.slice_to(position), self.slice_from(position))
     }
 
-    fn slice_until(&self, s: &str) -> Option<(&'a str, &'a str)> {
-        match self.find_str(s) {
-            Some(position) => Some(self.slice_at(position)),
-            None => None
+    fn slice_attribute(&self, quote: &str) -> Option<(&'a str, &'a str)> {
+        if self.starts_with("&") ||
+           self.starts_with("<") ||
+           self.starts_with(quote)
+        {
+            return None;
+        }
+
+        let (quote_char, _) = quote.slice_shift_char();
+        let quote_char = quote_char.expect("Cant have null quote");
+
+        let mut positions = self.char_indices().skip_while(|&(_, c)| c != '&' && c != '<' && c != quote_char);
+
+        match positions.next() {
+            Some((offset, _)) => Some(self.slice_at(offset)),
+            None => Some((self.clone(), ""))
         }
     }
 
@@ -752,6 +802,15 @@ fn an_element_with_multiple_attributes() {
 
     assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
     assert_eq!(top.get_attribute("happy").unwrap().as_slice(), "true");
+}
+
+#[test]
+fn an_attribute_with_references() {
+    let parser = Parser::new();
+    let doc = parser.parse("<log msg='I &lt;3 math' />");
+    let top = doc.root().children()[0].element().unwrap();
+
+    assert_eq!(top.get_attribute("msg").unwrap().as_slice(), "I <3 math");
 }
 
 #[test]
