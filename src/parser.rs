@@ -100,6 +100,24 @@ macro_rules! alternate_parse(
     );
 )
 
+// Pattern: zero-or-more
+macro_rules! parse_zero_or_more(
+    ($start:expr, $parser:expr) => {{
+        let mut items = Vec::new();
+
+        let mut start = $start;
+        loop {
+            let (item, next_start) = match $parser(start) {
+                Some(x) => x,
+                None => return Some((items, start)),
+            };
+
+            items.push(item);
+            start = next_start;
+        }
+    }};
+)
+
 impl Parser {
     pub fn new() -> Parser {
         Parser
@@ -147,23 +165,11 @@ impl Parser {
         })
     }
 
-    fn parse_miscs<'a>(&self, xml: &'a str) -> (Vec<ParsedRootChild<'a>>, &'a str) {
-        let mut before_children = Vec::new();
-
-        // Pattern: zero-or-more
-        let mut start = xml;
-        loop {
-            let (child, after) = match self.parse_misc(start) {
-                Some(x) => x,
-                None => return (before_children, start),
-            };
-
-            before_children.push(child);
-            start = after;
-        }
+    fn parse_miscs<'a>(&self, xml: &'a str) -> Option<(Vec<ParsedRootChild<'a>>, &'a str)> {
+        parse_zero_or_more!(xml, |xml| self.parse_misc(xml))
     }
 
-    fn parse_prolog<'a>(&self, xml: &'a str) -> (Vec<ParsedRootChild<'a>>, &'a str) {
+    fn parse_prolog<'a>(&self, xml: &'a str) -> Option<(Vec<ParsedRootChild<'a>>, &'a str)> {
         let (_, xml) = optional_parse!(self.parse_xml_declaration(xml), xml);
         self.parse_miscs(xml)
     }
@@ -195,28 +201,18 @@ impl Parser {
     fn parse_attribute_values<'a>(&self, xml: &'a str, quote: &str)
                                  -> Option<(Vec<ParsedAttributeValue<'a>>, &'a str)>
     {
-        // Pattern zero-or-more
-        let mut values = Vec::new();
-
-        let mut start = xml;
-        loop {
-            let x = alternate_parse!(start, {
+        parse_zero_or_more!(xml, |xml|
+            alternate_parse!(xml, {
                 [|xml: &'a str| xml.slice_attribute(quote) -> |v| LiteralAttributeValue(v)],
                 [|xml: &'a str| self.parse_reference(xml)  -> |e| ReferenceAttributeValue(e)],
-            });
-
-            let (value, xml) = match x {
-                Some(x) => x,
-                None => return Some((values, start)),
-            };
-
-            values.push(value);
-            start = xml;
-        }
+            }))
     }
 
     fn parse_attribute<'a>(&self, xml: &'a str) -> Option<(ParsedAttribute<'a>, &'a str)> {
+        let (_, xml) = try_parse!(xml.slice_space());
+
         let (name, xml) = try_parse!(xml.slice_name());
+
         let (_, xml) = try_parse!(self.parse_eq(xml));
 
         let (values, xml) = try_parse!(
@@ -226,32 +222,14 @@ impl Parser {
         Some((ParsedAttribute{name: name, values: values}, xml))
     }
 
-    fn parse_attributes<'a>(&self, xml: &'a str) -> (Vec<ParsedAttribute<'a>>, &'a str) {
-        let mut xml = xml;
-        let mut attrs = Vec::new();
-
-        // Pattern: zero-or-more
-        // On failure, return the end of the last successful parse
-        loop {
-            let (_, after_space) = match xml.slice_space() {
-                None => return (attrs, xml),
-                Some(x) => x,
-            };
-
-            xml = match self.parse_attribute(after_space) {
-                None => return (attrs, xml),
-                Some((attr, after_attr)) => {
-                    attrs.push(attr);
-                    after_attr
-                },
-            };
-        }
+    fn parse_attributes<'a>(&self, xml: &'a str) -> Option<(Vec<ParsedAttribute<'a>>, &'a str)> {
+        parse_zero_or_more!(xml, |xml| self.parse_attribute(xml))
     }
 
     fn parse_empty_element<'a>(&self, xml: &'a str) -> Option<(ParsedElement<'a>, &'a str)> {
         let (_, xml) = try_parse!(xml.slice_literal("<"));
         let (name, xml) = try_parse!(xml.slice_name());
-        let (attrs, xml) = self.parse_attributes(xml);
+        let (attrs, xml) = try_parse!(self.parse_attributes(xml));
         let (_, xml) = optional_parse!(xml.slice_space(), xml);
         let (_, xml) = try_parse!(xml.slice_literal("/>"));
 
@@ -261,7 +239,7 @@ impl Parser {
     fn parse_element_start<'a>(&self, xml: &'a str) -> Option<(ParsedElement<'a>, &'a str)> {
         let (_, xml) = try_parse!(xml.slice_literal("<"));
         let (name, xml) = try_parse!(xml.slice_name());
-        let (attrs, xml) = self.parse_attributes(xml);
+        let (attrs, xml) = try_parse!(self.parse_attributes(xml));
         let (_, xml) = optional_parse!(xml.slice_space(), xml);
         let (_, xml) = try_parse!(xml.slice_literal(">"));
 
@@ -498,11 +476,13 @@ impl Parser {
     }
 
     pub fn parse(&self, xml: &str) -> Document {
-        let (before_children, xml) = self.parse_prolog(xml);
+        let (before_children, xml) = optional_parse!(self.parse_prolog(xml), xml);
         let (element, xml) = self.parse_element(xml).expect("no element");
-        let (after_children, _xml) = self.parse_miscs(xml);
+        let (after_children, _xml) = optional_parse!(self.parse_miscs(xml), xml);
 
-        self.hydrate_parsed_data(before_children, element, after_children)
+        self.hydrate_parsed_data(before_children.unwrap_or(Vec::new()),
+                                 element,
+                                 after_children.unwrap_or(Vec::new()))
     }
 }
 
