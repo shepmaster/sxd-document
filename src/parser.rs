@@ -100,10 +100,34 @@ impl Parser {
         Parser
     }
 
-    fn parse_xml_declaration<'a>(&self, xml: &'a str) -> &'a str {
-        let idx = xml.find_str("?>").expect("No preamble end");
-        let end_of_preamble = idx + "?>".len();
-        xml.slice_from(end_of_preamble)
+    fn parse_eq<'a>(&self, xml: &'a str) -> Option<((), &'a str)> {
+        let (_, xml) = optional_parse!(xml.slice_space(), xml);
+        let (_, xml) = try_parse!(xml.slice_literal("="));
+        let (_, xml) = optional_parse!(xml.slice_space(), xml);
+
+        Some(((), xml))
+    }
+
+    fn parse_version_info<'a>(&self, xml: &'a str) -> Option<(&'a str, &'a str)> {
+        let (_, xml) = try_parse!(xml.slice_space());
+        let (_, xml) = try_parse!(xml.slice_literal("version"));
+        let (_, xml) = try_parse!(self.parse_eq(xml));
+        let (_, xml) = try_parse!(xml.slice_literal("'"));
+        let (version, xml) = try_parse!(xml.slice_version_num());
+        let (_, xml) = try_parse!(xml.slice_literal("'"));
+
+        Some((version, xml))
+    }
+
+    fn parse_xml_declaration<'a>(&self, xml: &'a str) -> Option<((), &'a str)> {
+        let (_, xml) = try_parse!(xml.slice_literal("<?xml"));
+        let (_version, xml) = try_parse!(self.parse_version_info(xml));
+        // let (encoding, xml) = optional_parse!(self.parse_encoding_declaration(xml));
+        // let (standalone, xml) = optional_parse!(self.parse_standalone_declaration(xml));
+        let (_, xml) = optional_parse!(xml.slice_space(), xml);
+        let (_, xml) = try_parse!(xml.slice_literal("?>"));
+
+        Some(((), xml))
     }
 
     fn parse_space<'a>(&self, xml: &'a str) -> Option<(&'a str, &'a str)> {
@@ -135,8 +159,7 @@ impl Parser {
     }
 
     fn parse_prolog<'a>(&self, xml: &'a str) -> (Vec<ParsedRootChild<'a>>, &'a str) {
-        let xml = self.parse_xml_declaration(xml);
-
+        let (_, xml) = optional_parse!(self.parse_xml_declaration(xml), xml);
         self.parse_miscs(xml)
     }
 
@@ -159,9 +182,7 @@ impl Parser {
             None => return None,
         };
 
-        let (_, xml) = optional_parse!(xml.slice_space(), xml);
-        let (_, xml) = xml.slice_literal("=").expect("No equal sign");
-        let (_, xml) = optional_parse!(xml.slice_space(), xml);
+        let (_, xml) = try_parse!(self.parse_eq(xml));
 
         let xxx = alternate_parse!(xml, {
             [|xml| self.parse_attribute_value_quote(xml, "'")  -> |v| v],
@@ -445,6 +466,7 @@ trait XmlStr<'a> {
     fn slice_at(&self, position: uint) -> (&'a str, &'a str);
     fn slice_until(&self, s: &str) -> Option<(&'a str, &'a str)>;
     fn slice_literal(&self, expected: &str) -> Option<(&'a str, &'a str)>;
+    fn slice_version_num(&self) -> Option<(&'a str, &'a str)>;
     fn slice_char_data(&self) -> Option<(&'a str, &'a str)>;
     fn slice_cdata(&self) -> Option<(&'a str, &'a str)>;
     fn slice_decimal_chars(&self) -> Option<(&'a str, &'a str)>;
@@ -475,6 +497,29 @@ impl<'a> XmlStr<'a> for &'a str {
             None
         }
     }
+
+    fn slice_version_num(&self) -> Option<(&'a str, &'a str)> {
+        if self.starts_with("1.") {
+            let mut positions = self.char_indices().peekable();
+            positions.next();
+            positions.next();
+
+            // Need at least one character
+            match positions.peek() {
+                Some(&(_, c)) if c.is_decimal_char() => {},
+                _ => return None,
+            };
+
+            let mut positions = positions.skip_while(|&(_, c)| c.is_decimal_char());
+            match positions.next() {
+                Some((offset, _)) => Some(self.slice_at(offset)),
+                None => Some((self.clone(), "")),
+            }
+        } else {
+            None
+        }
+    }
+
 
     fn slice_char_data(&self) -> Option<(&'a str, &'a str)> {
         if self.starts_with("<") ||
@@ -640,7 +685,7 @@ impl XmlChar for char {
 }
 
 #[test]
-fn parses_a_document_with_a_single_element() {
+fn parses_a_document_with_a_prolog() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello />");
     let top = doc.root().children()[0].element().unwrap();
@@ -649,9 +694,18 @@ fn parses_a_document_with_a_single_element() {
 }
 
 #[test]
+fn parses_a_document_with_a_single_element() {
+    let parser = Parser::new();
+    let doc = parser.parse("<hello />");
+    let top = doc.root().children()[0].element().unwrap();
+
+    assert_eq!(top.name().as_slice(), "hello");
+}
+
+#[test]
 fn parses_an_element_with_an_attribute() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><hello scope='world'/>");
+    let doc = parser.parse("<hello scope='world'/>");
     let top = doc.root().children()[0].element().unwrap();
 
     assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
@@ -660,7 +714,7 @@ fn parses_an_element_with_an_attribute() {
 #[test]
 fn parses_an_element_with_an_attribute_using_double_quotes() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><hello scope=\"world\"/>");
+    let doc = parser.parse("<hello scope=\"world\"/>");
     let top = doc.root().children()[0].element().unwrap();
 
     assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
@@ -669,7 +723,7 @@ fn parses_an_element_with_an_attribute_using_double_quotes() {
 #[test]
 fn parses_an_element_with_multiple_attributes() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><hello scope=\"world\" happy='true'/>");
+    let doc = parser.parse("<hello scope=\"world\" happy='true'/>");
     let top = doc.root().children()[0].element().unwrap();
 
     assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
@@ -679,7 +733,7 @@ fn parses_an_element_with_multiple_attributes() {
 #[test]
 fn parses_an_element_that_is_not_self_closing() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><hello></hello>");
+    let doc = parser.parse("<hello></hello>");
     let top = doc.root().children()[0].element().unwrap();
 
     assert_eq!(top.name().as_slice(), "hello");
@@ -688,7 +742,7 @@ fn parses_an_element_that_is_not_self_closing() {
 #[test]
 fn parses_nested_elements() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><hello><world/></hello>");
+    let doc = parser.parse("<hello><world/></hello>");
     let nested = doc.root().children()[0].element().unwrap().children()[0].element().unwrap();
 
     assert_eq!(nested.name().as_slice(), "world");
@@ -697,7 +751,7 @@ fn parses_nested_elements() {
 #[test]
 fn parses_multiply_nested_elements() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><hello><awesome><world/></awesome></hello>");
+    let doc = parser.parse("<hello><awesome><world/></awesome></hello>");
     let hello = doc.root().children()[0].element().unwrap();
     let awesome = hello.children()[0].element().unwrap();
     let world = awesome.children()[0].element().unwrap();
@@ -708,7 +762,7 @@ fn parses_multiply_nested_elements() {
 #[test]
 fn parses_nested_elements_with_attributes() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><hello><world name='Earth'/></hello>");
+    let doc = parser.parse("<hello><world name='Earth'/></hello>");
     let hello = doc.root().children()[0].element().unwrap();
     let world = hello.children()[0].element().unwrap();
 
@@ -718,7 +772,7 @@ fn parses_nested_elements_with_attributes() {
 #[test]
 fn parses_element_with_text() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><hello>world</hello>");
+    let doc = parser.parse("<hello>world</hello>");
     let hello = doc.root().children()[0].element().unwrap();
     let text = hello.children()[0].text().unwrap();
 
@@ -728,7 +782,7 @@ fn parses_element_with_text() {
 #[test]
 fn parses_element_with_cdata() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><words><![CDATA[I have & and < !]]></words>");
+    let doc = parser.parse("<words><![CDATA[I have & and < !]]></words>");
     let words = doc.root().children()[0].element().unwrap();
     let text = words.children()[0].text().unwrap();
 
@@ -738,7 +792,7 @@ fn parses_element_with_cdata() {
 #[test]
 fn parses_element_with_comment() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><hello><!-- A comment --></hello>");
+    let doc = parser.parse("<hello><!-- A comment --></hello>");
     let words = doc.root().children()[0].element().unwrap();
     let comment = words.children()[0].comment().unwrap();
 
@@ -748,7 +802,7 @@ fn parses_element_with_comment() {
 #[test]
 fn parses_comment_before_top_element() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><!-- A comment --><hello />");
+    let doc = parser.parse("<!-- A comment --><hello />");
     let comment = doc.root().children()[0].comment().unwrap();
 
     assert_eq!(comment.text().as_slice(), " A comment ");
@@ -758,7 +812,6 @@ fn parses_comment_before_top_element() {
 fn parses_multiple_comments_before_top_element() {
     let parser = Parser::new();
     let xml = r"
-<?xml version='1.0' ?>
 <!--Comment 1-->
 <!--Comment 2-->
 <hello />";
@@ -774,7 +827,6 @@ fn parses_multiple_comments_before_top_element() {
 fn parses_multiple_comments_after_top_element() {
     let parser = Parser::new();
     let xml = r"
-<?xml version='1.0' ?>
 <hello />
 <!--Comment 1-->
 <!--Comment 2-->";
@@ -789,7 +841,7 @@ fn parses_multiple_comments_after_top_element() {
 #[test]
 fn parses_element_with_processing_instruction() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><hello><?device?></hello>");
+    let doc = parser.parse("<hello><?device?></hello>");
     let hello = doc.root().children()[0].element().unwrap();
     let pi = hello.children()[0].processing_instruction().unwrap();
 
@@ -801,7 +853,6 @@ fn parses_element_with_processing_instruction() {
 fn parses_top_level_processing_instructions() {
     let parser = Parser::new();
     let xml = r"
-<?xml version='1.0' ?>
 <?output printer?>
 <hello />
 <?validated?>";
@@ -820,7 +871,7 @@ fn parses_top_level_processing_instructions() {
 #[test]
 fn parses_element_with_decimal_char_reference() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><math>2 &#62; 1</math>");
+    let doc = parser.parse("<math>2 &#62; 1</math>");
     let math = doc.root().children()[0].element().unwrap();
     let text1 = math.children()[0].text().unwrap();
     let text2 = math.children()[1].text().unwrap();
@@ -834,7 +885,7 @@ fn parses_element_with_decimal_char_reference() {
 #[test]
 fn parses_element_with_hexidecimal_char_reference() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><math>1 &#x3c; 2</math>");
+    let doc = parser.parse("<math>1 &#x3c; 2</math>");
     let math = doc.root().children()[0].element().unwrap();
     let text1 = math.children()[0].text().unwrap();
     let text2 = math.children()[1].text().unwrap();
@@ -848,7 +899,7 @@ fn parses_element_with_hexidecimal_char_reference() {
 #[test]
 fn parses_element_with_entity_reference() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><math>I &lt;3 math</math>");
+    let doc = parser.parse("<math>I &lt;3 math</math>");
     let math = doc.root().children()[0].element().unwrap();
     let text1 = math.children()[0].text().unwrap();
     let text2 = math.children()[1].text().unwrap();
@@ -862,7 +913,7 @@ fn parses_element_with_entity_reference() {
 #[test]
 fn parses_element_with_mixed_children() {
     let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><hello>to <a>the</a> world</hello>");
+    let doc = parser.parse("<hello>to <a>the</a> world</hello>");
     let hello = doc.root().children()[0].element().unwrap();
     let text1 = hello.children()[0].text().unwrap();
     let middle = hello.children()[1].element().unwrap();
