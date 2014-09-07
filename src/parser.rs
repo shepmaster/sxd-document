@@ -2,69 +2,55 @@ use std::ascii::AsciiExt;
 use std::num::from_str_radix;
 use std::char::from_u32;
 
-use super::{Document,Element,Text,Comment,ProcessingInstruction};
-
 pub struct Parser;
 
-struct ParsedElement<'a> {
+struct Element<'a> {
     name: &'a str,
-    attributes: Vec<ParsedAttribute<'a>>,
-    children: Vec<ParsedChild<'a>>,
+    attributes: Vec<Attribute<'a>>,
+    children: Vec<Child<'a>>,
 }
 
-enum ParsedAttributeValue<'a> {
-    ReferenceAttributeValue(ParsedReference<'a>),
+enum AttributeValue<'a> {
+    ReferenceAttributeValue(Reference<'a>),
     LiteralAttributeValue(&'a str),
 }
 
-struct ParsedAttribute<'a> {
+struct Attribute<'a> {
     name: &'a str,
-    values: Vec<ParsedAttributeValue<'a>>,
+    values: Vec<AttributeValue<'a>>,
 }
 
-struct ParsedText<'a> {
+struct Text<'a> {
     text: &'a str,
 }
 
-struct ParsedEntityRef<'a> {
+enum Reference<'a> {
+    EntityReference(&'a str),
+    DecimalCharReference(&'a str),
+    HexCharReference(&'a str),
+}
+
+struct Comment<'a> {
     text: &'a str,
 }
 
-struct ParsedDecimalCharRef<'a> {
-    text: &'a str,
-}
-
-struct ParsedHexCharRef<'a> {
-    text: &'a str,
-}
-
-enum ParsedReference<'a> {
-    EntityParsedReference(ParsedEntityRef<'a>),
-    DecimalCharParsedReference(ParsedDecimalCharRef<'a>),
-    HexCharParsedReference(ParsedHexCharRef<'a>),
-}
-
-struct ParsedComment<'a> {
-    text: &'a str,
-}
-
-struct ParsedProcessingInstruction<'a> {
+struct ProcessingInstruction<'a> {
     target: &'a str,
     value: Option<&'a str>,
 }
 
-enum ParsedRootChild<'a> {
-    CommentParsedRootChild(ParsedComment<'a>),
-    PIParsedRootChild(ParsedProcessingInstruction<'a>),
-    IgnoredParsedRootChild,
+enum RootChild<'a> {
+    CommentRootChild(Comment<'a>),
+    PIRootChild(ProcessingInstruction<'a>),
+    IgnoredRootChild,
 }
 
-enum ParsedChild<'a> {
-    ElementParsedChild(ParsedElement<'a>),
-    TextParsedChild(ParsedText<'a>),
-    ReferenceParsedChild(ParsedReference<'a>),
-    CommentParsedChild(ParsedComment<'a>),
-    PIParsedChild(ParsedProcessingInstruction<'a>),
+enum Child<'a> {
+    ElementChild(Element<'a>),
+    TextChild(Text<'a>),
+    ReferenceChild(Reference<'a>),
+    CommentChild(Comment<'a>),
+    PIChild(ProcessingInstruction<'a>),
 }
 
 macro_rules! try_parse(
@@ -161,19 +147,19 @@ impl Parser {
         xml.slice_space()
     }
 
-    fn parse_misc<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedRootChild<'a>> {
+    fn parse_misc<'a>(&self, xml: &'a str) -> ParseResult<'a, RootChild<'a>> {
         alternate_parse!(xml, {
-            [|xml| self.parse_comment(xml) -> |c| CommentParsedRootChild(c)],
-            [|xml| self.parse_pi(xml)      -> |p| PIParsedRootChild(p)],
-            [|xml| self.parse_space(xml)   -> |_| IgnoredParsedRootChild],
+            [|xml| self.parse_comment(xml) -> |c| CommentRootChild(c)],
+            [|xml| self.parse_pi(xml)      -> |p| PIRootChild(p)],
+            [|xml| self.parse_space(xml)   -> |_| IgnoredRootChild],
         })
     }
 
-    fn parse_miscs<'a>(&self, xml: &'a str) -> ParseResult<'a, Vec<ParsedRootChild<'a>>> {
+    fn parse_miscs<'a>(&self, xml: &'a str) -> ParseResult<'a, Vec<RootChild<'a>>> {
         parse_zero_or_more!(xml, |xml| self.parse_misc(xml))
     }
 
-    fn parse_prolog<'a>(&self, xml: &'a str) -> ParseResult<'a, Vec<ParsedRootChild<'a>>> {
+    fn parse_prolog<'a>(&self, xml: &'a str) -> ParseResult<'a, Vec<RootChild<'a>>> {
         let (_, xml) = optional_parse!(self.parse_xml_declaration(xml), xml);
         self.parse_miscs(xml)
     }
@@ -203,7 +189,7 @@ impl Parser {
     }
 
     fn parse_attribute_values<'a>(&self, xml: &'a str, quote: &str)
-                                 -> ParseResult<'a, Vec<ParsedAttributeValue<'a>>>
+                                 -> ParseResult<'a, Vec<AttributeValue<'a>>>
     {
         parse_zero_or_more!(xml, |xml|
             alternate_parse!(xml, {
@@ -212,7 +198,7 @@ impl Parser {
             }))
     }
 
-    fn parse_attribute<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedAttribute<'a>> {
+    fn parse_attribute<'a>(&self, xml: &'a str) -> ParseResult<'a, Attribute<'a>> {
         let (_, xml) = try_parse!(xml.slice_space());
 
         let (name, xml) = try_parse!(xml.slice_name());
@@ -223,31 +209,31 @@ impl Parser {
             self.parse_quoted_value(xml, |xml, quote| self.parse_attribute_values(xml, quote))
         );
 
-        Some((ParsedAttribute{name: name, values: values}, xml))
+        Some((Attribute{name: name, values: values}, xml))
     }
 
-    fn parse_attributes<'a>(&self, xml: &'a str) -> ParseResult<'a, Vec<ParsedAttribute<'a>>> {
+    fn parse_attributes<'a>(&self, xml: &'a str) -> ParseResult<'a, Vec<Attribute<'a>>> {
         parse_zero_or_more!(xml, |xml| self.parse_attribute(xml))
     }
 
-    fn parse_empty_element<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedElement<'a>> {
+    fn parse_empty_element<'a>(&self, xml: &'a str) -> ParseResult<'a, Element<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("<"));
         let (name, xml) = try_parse!(xml.slice_name());
         let (attrs, xml) = try_parse!(self.parse_attributes(xml));
         let (_, xml) = optional_parse!(xml.slice_space(), xml);
         let (_, xml) = try_parse!(xml.slice_literal("/>"));
 
-        Some((ParsedElement{name: name, attributes: attrs, children: Vec::new()}, xml))
+        Some((Element{name: name, attributes: attrs, children: Vec::new()}, xml))
     }
 
-    fn parse_element_start<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedElement<'a>> {
+    fn parse_element_start<'a>(&self, xml: &'a str) -> ParseResult<'a, Element<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("<"));
         let (name, xml) = try_parse!(xml.slice_name());
         let (attrs, xml) = try_parse!(self.parse_attributes(xml));
         let (_, xml) = optional_parse!(xml.slice_space(), xml);
         let (_, xml) = try_parse!(xml.slice_literal(">"));
 
-        Some((ParsedElement{name: name, attributes: attrs, children: Vec::new()}, xml))
+        Some((Element{name: name, attributes: attrs, children: Vec::new()}, xml))
     }
 
     fn parse_element_end<'a>(&self, xml: &'a str) -> ParseResult<'a, &'a str> {
@@ -258,58 +244,58 @@ impl Parser {
         Some((name, xml))
     }
 
-    fn parse_char_data<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedText<'a>> {
+    fn parse_char_data<'a>(&self, xml: &'a str) -> ParseResult<'a, Text<'a>> {
         let (text, xml) = try_parse!(xml.slice_char_data());
 
-        Some((ParsedText{text: text}, xml))
+        Some((Text{text: text}, xml))
     }
 
-    fn parse_cdata<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedText<'a>> {
+    fn parse_cdata<'a>(&self, xml: &'a str) -> ParseResult<'a, Text<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("<![CDATA["));
         let (text, xml) = try_parse!(xml.slice_cdata());
         let (_, xml) = try_parse!(xml.slice_literal("]]>"));
 
-        Some((ParsedText{text: text}, xml))
+        Some((Text{text: text}, xml))
     }
 
-    fn parse_entity_ref<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedEntityRef<'a>> {
+    fn parse_entity_ref<'a>(&self, xml: &'a str) -> ParseResult<'a, Reference<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("&"));
         let (name, xml) = try_parse!(xml.slice_name());
         let (_, xml) = try_parse!(xml.slice_literal(";"));
 
-        Some((ParsedEntityRef{text: name}, xml))
+        Some((EntityReference(name), xml))
     }
 
-    fn parse_decimal_char_ref<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedDecimalCharRef<'a>> {
+    fn parse_decimal_char_ref<'a>(&self, xml: &'a str) -> ParseResult<'a, Reference<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("&#"));
         let (dec, xml) = try_parse!(xml.slice_decimal_chars());
         let (_, xml) = try_parse!(xml.slice_literal(";"));
 
-        Some((ParsedDecimalCharRef{text: dec}, xml))
+        Some((DecimalCharReference(dec), xml))
     }
 
-    fn parse_hex_char_ref<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedHexCharRef<'a>> {
+    fn parse_hex_char_ref<'a>(&self, xml: &'a str) -> ParseResult<'a, Reference<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("&#x"));
         let (hex, xml) = try_parse!(xml.slice_hex_chars());
         let (_, xml) = try_parse!(xml.slice_literal(";"));
 
-        Some((ParsedHexCharRef{text: hex}, xml))
+        Some((HexCharReference(hex), xml))
     }
 
-    fn parse_reference<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedReference<'a>> {
+    fn parse_reference<'a>(&self, xml: &'a str) -> ParseResult<'a, Reference<'a>> {
         alternate_parse!(xml, {
-            [|xml| self.parse_entity_ref(xml)       -> |e| EntityParsedReference(e)],
-            [|xml| self.parse_decimal_char_ref(xml) -> |d| DecimalCharParsedReference(d)],
-            [|xml| self.parse_hex_char_ref(xml)     -> |h| HexCharParsedReference(h)],
+            [|xml| self.parse_entity_ref(xml)       -> |e| e],
+            [|xml| self.parse_decimal_char_ref(xml) -> |d| d],
+            [|xml| self.parse_hex_char_ref(xml)     -> |h| h],
         })
     }
 
-    fn parse_comment<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedComment<'a>> {
+    fn parse_comment<'a>(&self, xml: &'a str) -> ParseResult<'a, Comment<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("<!--"));
         let (text, xml) = try_parse!(xml.slice_comment());
         let (_, xml) = try_parse!(xml.slice_literal("-->"));
 
-        Some((ParsedComment{text: text}, xml))
+        Some((Comment{text: text}, xml))
     }
 
     fn parse_pi_value<'a>(&self, xml: &'a str) -> ParseResult<'a, &'a str> {
@@ -317,7 +303,7 @@ impl Parser {
         xml.slice_pi_value()
     }
 
-    fn parse_pi<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedProcessingInstruction<'a>> {
+    fn parse_pi<'a>(&self, xml: &'a str) -> ParseResult<'a, ProcessingInstruction<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("<?"));
         let (target, xml) = try_parse!(xml.slice_name());
         let (value, xml) = optional_parse!(self.parse_pi_value(xml), xml);
@@ -327,24 +313,24 @@ impl Parser {
             fail!("Can't use xml as a PI target");
         }
 
-        Some((ParsedProcessingInstruction{target: target, value: value}, xml))
+        Some((ProcessingInstruction{target: target, value: value}, xml))
     }
 
-    fn parse_content<'a>(&self, xml: &'a str) -> (Vec<ParsedChild<'a>>, &'a str) {
+    fn parse_content<'a>(&self, xml: &'a str) -> (Vec<Child<'a>>, &'a str) {
         let mut children = Vec::new();
 
         let (char_data, xml) = optional_parse!(self.parse_char_data(xml), xml);
-        char_data.map(|c| children.push(TextParsedChild(c)));
+        char_data.map(|c| children.push(TextChild(c)));
 
         // Pattern: zero-or-more
         let mut start = xml;
         loop {
             let xxx = alternate_parse!(start, {
-                [|xml| self.parse_element(xml)   -> |e| ElementParsedChild(e)],
-                [|xml| self.parse_cdata(xml)     -> |t| TextParsedChild(t)],
-                [|xml| self.parse_reference(xml) -> |r| ReferenceParsedChild(r)],
-                [|xml| self.parse_comment(xml)   -> |c| CommentParsedChild(c)],
-                [|xml| self.parse_pi(xml)        -> |p| PIParsedChild(p)],
+                [|xml| self.parse_element(xml)   -> |e| ElementChild(e)],
+                [|xml| self.parse_cdata(xml)     -> |t| TextChild(t)],
+                [|xml| self.parse_reference(xml) -> |r| ReferenceChild(r)],
+                [|xml| self.parse_comment(xml)   -> |c| CommentChild(c)],
+                [|xml| self.parse_pi(xml)        -> |p| PIChild(p)],
             });
 
             let (child, after) = match xxx {
@@ -355,13 +341,13 @@ impl Parser {
             let (char_data, xml) = optional_parse!(self.parse_char_data(after), after);
 
             children.push(child);
-            char_data.map(|c| children.push(TextParsedChild(c)));
+            char_data.map(|c| children.push(TextChild(c)));
 
             start = xml;
         }
     }
 
-    fn parse_non_empty_element<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedElement<'a>> {
+    fn parse_non_empty_element<'a>(&self, xml: &'a str) -> ParseResult<'a, Element<'a>> {
         let (mut element, xml) = try_parse!(self.parse_element_start(xml));
         let (children, xml) = self.parse_content(xml);
         let (name, xml) = try_parse!(self.parse_element_end(xml));
@@ -375,31 +361,31 @@ impl Parser {
         Some((element, xml))
     }
 
-    fn parse_element<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedElement<'a>> {
+    fn parse_element<'a>(&self, xml: &'a str) -> ParseResult<'a, Element<'a>> {
         alternate_parse!(xml, {
             [|xml| self.parse_empty_element(xml)     -> |e| e],
             [|xml| self.parse_non_empty_element(xml) -> |e| e],
         })
     }
 
-    fn hydrate_text(&self, doc: &Document, text_data: ParsedText) -> Text {
+    fn hydrate_text(&self, doc: &super::Document, text_data: Text) -> super::Text {
         doc.new_text(text_data.text.to_string())
     }
 
-    fn hydrate_reference_raw(&self, ref_data: ParsedReference) -> String {
+    fn hydrate_reference_raw(&self, ref_data: Reference) -> String {
         match ref_data {
-            DecimalCharParsedReference(d) => {
-                let code: u32 = from_str_radix(d.text, 10).expect("Not valid decimal");
+            DecimalCharReference(d) => {
+                let code: u32 = from_str_radix(d, 10).expect("Not valid decimal");
                 let c: char = from_u32(code).expect("Not a valid codepoint");
                 c.to_string()
             },
-            HexCharParsedReference(h) => {
-                let code: u32 = from_str_radix(h.text, 16).expect("Not valid hex");
+            HexCharReference(h) => {
+                let code: u32 = from_str_radix(h, 16).expect("Not valid hex");
                 let c: char = from_u32(code).expect("Not a valid codepoint");
                 c.to_string()
             },
-            EntityParsedReference(e) => {
-                match e.text {
+            EntityReference(e) => {
+                match e {
                     "amp"  => "&",
                     "lt"   => "<",
                     "gt"   => ">",
@@ -411,23 +397,23 @@ impl Parser {
         }
     }
 
-    fn hydrate_reference(&self, doc: &Document, ref_data: ParsedReference) -> Text {
+    fn hydrate_reference(&self, doc: &super::Document, ref_data: Reference) -> super::Text {
         doc.new_text(self.hydrate_reference_raw(ref_data))
     }
 
-    fn hydrate_comment(&self, doc: &Document, comment_data: ParsedComment) -> Comment {
+    fn hydrate_comment(&self, doc: &super::Document, comment_data: Comment) -> super::Comment {
         doc.new_comment(comment_data.text.to_string())
     }
 
-    fn hydrate_pi(&self, doc: &Document, pi_data: ParsedProcessingInstruction) -> ProcessingInstruction {
+    fn hydrate_pi(&self, doc: &super::Document, pi_data: ProcessingInstruction) -> super::ProcessingInstruction {
         doc.new_processing_instruction(pi_data.target.to_string(), pi_data.value.map(|v| v.to_string()))
     }
 
-    fn hydrate_element(&self, doc: &Document, element_data: ParsedElement) -> Element {
+    fn hydrate_element(&self, doc: &super::Document, element_data: Element) -> super::Element {
         let element = doc.new_element(element_data.name.to_string());
 
         for attr in element_data.attributes.move_iter() {
-            let to_v_str = |v: ParsedAttributeValue| match v {
+            let to_v_str = |v: AttributeValue| match v {
                 LiteralAttributeValue(v) => v.to_string(),
                 ReferenceAttributeValue(r) => self.hydrate_reference_raw(r),
             };
@@ -438,36 +424,34 @@ impl Parser {
 
         for child in element_data.children.move_iter() {
             match child {
-                ElementParsedChild(e)   => element.append_child(self.hydrate_element(doc, e)),
-                TextParsedChild(t)      => element.append_child(self.hydrate_text(doc, t)),
-                ReferenceParsedChild(r) => element.append_child(self.hydrate_reference(doc, r)),
-                CommentParsedChild(c)   => element.append_child(self.hydrate_comment(doc, c)),
-                PIParsedChild(pi)       => element.append_child(self.hydrate_pi(doc, pi)),
+                ElementChild(e)   => element.append_child(self.hydrate_element(doc, e)),
+                TextChild(t)      => element.append_child(self.hydrate_text(doc, t)),
+                ReferenceChild(r) => element.append_child(self.hydrate_reference(doc, r)),
+                CommentChild(c)   => element.append_child(self.hydrate_comment(doc, c)),
+                PIChild(pi)       => element.append_child(self.hydrate_pi(doc, pi)),
             }
         }
 
         element
     }
 
-    fn hydrate_misc(&self, doc: &Document, children: Vec<ParsedRootChild>) {
+    fn hydrate_misc(&self, doc: &super::Document, children: Vec<RootChild>) {
         for child in children.move_iter() {
             match child {
-                CommentParsedRootChild(c) =>
-                    doc.root().append_child(self.hydrate_comment(doc, c)),
-                PIParsedRootChild(p) =>
-                    doc.root().append_child(self.hydrate_pi(doc, p)),
-                IgnoredParsedRootChild => {},
+                CommentRootChild(c) => doc.root().append_child(self.hydrate_comment(doc, c)),
+                PIRootChild(p)      => doc.root().append_child(self.hydrate_pi(doc, p)),
+                IgnoredRootChild    => {},
             }
         }
     }
 
-    fn hydrate_parsed_data(&self,
-                           before_children: Vec<ParsedRootChild>,
-                           element_data: ParsedElement,
-                           after_children: Vec<ParsedRootChild>)
-                           -> Document
+    fn hydrate_document(&self,
+                        before_children: Vec<RootChild>,
+                        element_data: Element,
+                        after_children: Vec<RootChild>)
+                        -> super::Document
     {
-        let doc = Document::new();
+        let doc = super::Document::new();
         let root = doc.root();
 
         self.hydrate_misc(&doc, before_children);
@@ -479,14 +463,14 @@ impl Parser {
         doc
     }
 
-    pub fn parse(&self, xml: &str) -> Document {
+    pub fn parse(&self, xml: &str) -> super::Document {
         let (before_children, xml) = optional_parse!(self.parse_prolog(xml), xml);
         let (element, xml) = self.parse_element(xml).expect("no element");
         let (after_children, _xml) = optional_parse!(self.parse_miscs(xml), xml);
 
-        self.hydrate_parsed_data(before_children.unwrap_or(Vec::new()),
-                                 element,
-                                 after_children.unwrap_or(Vec::new()))
+        self.hydrate_document(before_children.unwrap_or(Vec::new()),
+                              element,
+                              after_children.unwrap_or(Vec::new()))
     }
 }
 
