@@ -109,12 +109,14 @@ macro_rules! parse_zero_or_more(
         loop {
             let (item, next_start) = match $parser(start) {
                 Some(x) => x,
-                None => return Some((items, start)),
+                None => break,
             };
 
             items.push(item);
             start = next_start;
         }
+
+        Some((items, start))
     }};
 )
 
