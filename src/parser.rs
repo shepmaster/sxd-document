@@ -216,11 +216,7 @@ impl Parser {
     }
 
     fn parse_attribute<'a>(&self, xml: &'a str) -> Option<(ParsedAttribute<'a>, &'a str)> {
-        let (name, xml) = match xml.slice_name() {
-            Some(x) => x,
-            None => return None,
-        };
-
+        let (name, xml) = try_parse!(xml.slice_name());
         let (_, xml) = try_parse!(self.parse_eq(xml));
 
         let (values, xml) = try_parse!(
