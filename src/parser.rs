@@ -78,8 +78,8 @@ macro_rules! try_parse(
 
 // Pattern: 0-or-1
 macro_rules! optional_parse(
-    ($f:expr, $start:expr) => ({
-        match $f {
+    ($parser:expr, $start:expr) => ({
+        match $parser {
             None => (None, $start),
             Some((value, next)) => (Some(value), next),
         }
@@ -90,12 +90,12 @@ macro_rules! optional_parse(
 macro_rules! alternate_parse(
     ($start:expr, {}) => ( None );
     ($start:expr, {
-        [$p:expr -> $t:expr],
-        $([$p_rest:expr -> $t_rest:expr],)*
+        [$parser:expr -> $transformer:expr],
+        $([$parser_rest:expr -> $transformer_rest:expr],)*
     }) => (
-        match $p($start) {
-            Some((val, next)) => Some(($t(val), next)),
-            None => alternate_parse!($start, {$([$p_rest -> $t_rest],)*}),
+        match $parser($start) {
+            Some((val, next)) => Some(($transformer(val), next)),
+            None => alternate_parse!($start, {$([$parser_rest -> $transformer_rest],)*}),
         }
     );
 )
