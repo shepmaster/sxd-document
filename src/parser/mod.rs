@@ -372,6 +372,22 @@ impl Parser {
         })
     }
 
+    pub fn parse(&self, xml: &str) -> super::Document {
+        let (before_children, xml) = optional_parse!(self.parse_prolog(xml), xml);
+        let (element, xml) = self.parse_element(xml).expect("no element");
+        let (after_children, _xml) = optional_parse!(self.parse_miscs(xml), xml);
+
+        let h = Hydrator;
+
+        h.hydrate_document(before_children.unwrap_or(Vec::new()),
+                           element,
+                           after_children.unwrap_or(Vec::new()))
+    }
+}
+
+struct Hydrator;
+
+impl Hydrator {
     fn hydrate_text(&self, doc: &super::Document, text_data: Text) -> super::Text {
         doc.new_text(text_data.text.to_string())
     }
@@ -449,7 +465,7 @@ impl Parser {
         }
     }
 
-    fn hydrate_document(&self,
+    pub fn hydrate_document(&self,
                         before_children: Vec<RootChild>,
                         element_data: Element,
                         after_children: Vec<RootChild>)
@@ -465,16 +481,6 @@ impl Parser {
         self.hydrate_misc(&doc, after_children);
 
         doc
-    }
-
-    pub fn parse(&self, xml: &str) -> super::Document {
-        let (before_children, xml) = optional_parse!(self.parse_prolog(xml), xml);
-        let (element, xml) = self.parse_element(xml).expect("no element");
-        let (after_children, _xml) = optional_parse!(self.parse_miscs(xml), xml);
-
-        self.hydrate_document(before_children.unwrap_or(Vec::new()),
-                              element,
-                              after_children.unwrap_or(Vec::new()))
     }
 }
 
