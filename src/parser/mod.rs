@@ -66,8 +66,8 @@ macro_rules! try_parse(
     })
 )
 
-// Pattern: 0-or-1
-macro_rules! optional_parse(
+// Pattern: zero-or-one
+macro_rules! parse_optional(
     ($parser:expr, $start:expr) => ({
         match $parser {
             None => (None, $start),
@@ -77,7 +77,7 @@ macro_rules! optional_parse(
 )
 
 // Pattern: alternate
-macro_rules! alternate_parse(
+macro_rules! parse_alternate(
     ($start:expr, {}) => ( None );
     ($start:expr, {
         [$parser:expr -> $transformer:expr],
@@ -85,7 +85,7 @@ macro_rules! alternate_parse(
     }) => (
         match $parser($start) {
             Some((val, next)) => Some(($transformer(val), next)),
-            None => alternate_parse!($start, {$([$parser_rest -> $transformer_rest],)*}),
+            None => parse_alternate!($start, {$([$parser_rest -> $transformer_rest],)*}),
         }
     );
 )
@@ -118,9 +118,9 @@ impl Parser {
     }
 
     fn parse_eq<'a>(&self, xml: &'a str) -> ParseResult<'a, ()> {
-        let (_, xml) = optional_parse!(xml.slice_space(), xml);
+        let (_, xml) = parse_optional!(xml.slice_space(), xml);
         let (_, xml) = try_parse!(xml.slice_literal("="));
-        let (_, xml) = optional_parse!(xml.slice_space(), xml);
+        let (_, xml) = parse_optional!(xml.slice_space(), xml);
 
         Some(((), xml))
     }
@@ -139,9 +139,9 @@ impl Parser {
     fn parse_xml_declaration<'a>(&self, xml: &'a str) -> ParseResult<'a, ()> {
         let (_, xml) = try_parse!(xml.slice_literal("<?xml"));
         let (_version, xml) = try_parse!(self.parse_version_info(xml));
-        // let (encoding, xml) = optional_parse!(self.parse_encoding_declaration(xml));
-        // let (standalone, xml) = optional_parse!(self.parse_standalone_declaration(xml));
-        let (_, xml) = optional_parse!(xml.slice_space(), xml);
+        // let (encoding, xml) = parse_optional!(self.parse_encoding_declaration(xml));
+        // let (standalone, xml) = parse_optional!(self.parse_standalone_declaration(xml));
+        let (_, xml) = parse_optional!(xml.slice_space(), xml);
         let (_, xml) = try_parse!(xml.slice_literal("?>"));
 
         Some(((), xml))
@@ -152,7 +152,7 @@ impl Parser {
     }
 
     fn parse_misc<'a>(&self, xml: &'a str) -> ParseResult<'a, RootChild<'a>> {
-        alternate_parse!(xml, {
+        parse_alternate!(xml, {
             [|xml| self.parse_comment(xml) -> |c| CommentRootChild(c)],
             [|xml| self.parse_pi(xml)      -> |p| PIRootChild(p)],
             [|xml| self.parse_space(xml)   -> |_| IgnoredRootChild],
@@ -164,7 +164,7 @@ impl Parser {
     }
 
     fn parse_prolog<'a>(&self, xml: &'a str) -> ParseResult<'a, Vec<RootChild<'a>>> {
-        let (_, xml) = optional_parse!(self.parse_xml_declaration(xml), xml);
+        let (_, xml) = parse_optional!(self.parse_xml_declaration(xml), xml);
         self.parse_miscs(xml)
     }
 
@@ -186,7 +186,7 @@ impl Parser {
                                  f: |&'a str, &str| -> ParseResult<'a, T>)
                                  -> ParseResult<'a, T>
     {
-        alternate_parse!(xml, {
+        parse_alternate!(xml, {
             [|xml| self.parse_one_quoted_value(xml, "'",  |xml| f(xml, "'"))  -> |v| v],
             [|xml| self.parse_one_quoted_value(xml, "\"", |xml| f(xml, "\"")) -> |v| v],
         })
@@ -196,7 +196,7 @@ impl Parser {
                                   -> ParseResult<'a, Vec<AttributeValue<'a>>>
     {
         parse_zero_or_more!(xml, |xml|
-            alternate_parse!(xml, {
+            parse_alternate!(xml, {
                 [|xml: &'a str| xml.slice_attribute(quote) -> |v| LiteralAttributeValue(v)],
                 [|xml: &'a str| self.parse_reference(xml)  -> |e| ReferenceAttributeValue(e)],
             }))
@@ -224,7 +224,7 @@ impl Parser {
         let (_, xml) = try_parse!(xml.slice_literal("<"));
         let (name, xml) = try_parse!(xml.slice_name());
         let (attrs, xml) = try_parse!(self.parse_attributes(xml));
-        let (_, xml) = optional_parse!(xml.slice_space(), xml);
+        let (_, xml) = parse_optional!(xml.slice_space(), xml);
         let (_, xml) = try_parse!(xml.slice_literal("/>"));
 
         Some((Element{name: name, attributes: attrs, children: Vec::new()}, xml))
@@ -234,7 +234,7 @@ impl Parser {
         let (_, xml) = try_parse!(xml.slice_literal("<"));
         let (name, xml) = try_parse!(xml.slice_name());
         let (attrs, xml) = try_parse!(self.parse_attributes(xml));
-        let (_, xml) = optional_parse!(xml.slice_space(), xml);
+        let (_, xml) = parse_optional!(xml.slice_space(), xml);
         let (_, xml) = try_parse!(xml.slice_literal(">"));
 
         Some((Element{name: name, attributes: attrs, children: Vec::new()}, xml))
@@ -243,7 +243,7 @@ impl Parser {
     fn parse_element_end<'a>(&self, xml: &'a str) -> ParseResult<'a, &'a str> {
         let (_, xml) = try_parse!(xml.slice_literal("</"));
         let (name, xml) = try_parse!(xml.slice_name());
-        let (_, xml) = optional_parse!(xml.slice_space(), xml);
+        let (_, xml) = parse_optional!(xml.slice_space(), xml);
         let (_, xml) = try_parse!(xml.slice_literal(">"));
         Some((name, xml))
     }
@@ -287,7 +287,7 @@ impl Parser {
     }
 
     fn parse_reference<'a>(&self, xml: &'a str) -> ParseResult<'a, Reference<'a>> {
-        alternate_parse!(xml, {
+        parse_alternate!(xml, {
             [|xml| self.parse_entity_ref(xml)       -> |e| e],
             [|xml| self.parse_decimal_char_ref(xml) -> |d| d],
             [|xml| self.parse_hex_char_ref(xml)     -> |h| h],
@@ -310,7 +310,7 @@ impl Parser {
     fn parse_pi<'a>(&self, xml: &'a str) -> ParseResult<'a, ProcessingInstruction<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("<?"));
         let (target, xml) = try_parse!(xml.slice_name());
-        let (value, xml) = optional_parse!(self.parse_pi_value(xml), xml);
+        let (value, xml) = parse_optional!(self.parse_pi_value(xml), xml);
         let (_, xml) = try_parse!(xml.slice_literal("?>"));
 
         if target.eq_ignore_ascii_case("xml") {
@@ -323,13 +323,13 @@ impl Parser {
     fn parse_content<'a>(&self, xml: &'a str) -> (Vec<Child<'a>>, &'a str) {
         let mut children = Vec::new();
 
-        let (char_data, xml) = optional_parse!(self.parse_char_data(xml), xml);
+        let (char_data, xml) = parse_optional!(self.parse_char_data(xml), xml);
         char_data.map(|c| children.push(TextChild(c)));
 
         // Pattern: zero-or-more
         let mut start = xml;
         loop {
-            let xxx = alternate_parse!(start, {
+            let xxx = parse_alternate!(start, {
                 [|xml| self.parse_element(xml)   -> |e| ElementChild(e)],
                 [|xml| self.parse_cdata(xml)     -> |t| TextChild(t)],
                 [|xml| self.parse_reference(xml) -> |r| ReferenceChild(r)],
@@ -342,7 +342,7 @@ impl Parser {
                 None => return (children, start),
             };
 
-            let (char_data, xml) = optional_parse!(self.parse_char_data(after), after);
+            let (char_data, xml) = parse_optional!(self.parse_char_data(after), after);
 
             children.push(child);
             char_data.map(|c| children.push(TextChild(c)));
@@ -366,16 +366,16 @@ impl Parser {
     }
 
     fn parse_element<'a>(&self, xml: &'a str) -> ParseResult<'a, Element<'a>> {
-        alternate_parse!(xml, {
+        parse_alternate!(xml, {
             [|xml| self.parse_empty_element(xml)     -> |e| e],
             [|xml| self.parse_non_empty_element(xml) -> |e| e],
         })
     }
 
     pub fn parse(&self, xml: &str) -> super::Document {
-        let (before_children, xml) = optional_parse!(self.parse_prolog(xml), xml);
+        let (before_children, xml) = parse_optional!(self.parse_prolog(xml), xml);
         let (element, xml) = self.parse_element(xml).expect("no element");
-        let (after_children, _xml) = optional_parse!(self.parse_miscs(xml), xml);
+        let (after_children, _xml) = parse_optional!(self.parse_miscs(xml), xml);
 
         let h = Hydrator;
 
