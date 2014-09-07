@@ -21,11 +21,16 @@ struct ParsedText<'a> {
     text: &'a str,
 }
 
+struct ParsedDecimalChar<'a> {
+    text: &'a str,
+}
+
 struct ParsedHexChar<'a> {
     text: &'a str,
 }
 
 enum ParsedReference<'a> {
+    DecimalCharParsedReference(ParsedDecimalChar<'a>),
     HexCharParsedReference(ParsedHexChar<'a>),
 }
 
@@ -217,13 +222,31 @@ impl Parser {
         Some((ParsedText{text: text}, xml))
     }
 
-    fn parse_reference<'a>(&self, xml: &'a str) -> Option<(ParsedReference<'a>, &'a str)> {
+    fn parse_decimal_char_ref<'a>(&self, xml: &'a str) -> Option<(ParsedDecimalChar<'a>, &'a str)> {
+        let (_, xml) = try_parse!(xml.slice_literal("&#"));
+        let (dec, xml) = try_parse!(xml.slice_decimal_chars());
+        let (_, xml) = try_parse!(xml.slice_literal(";"));
+
+        Some((ParsedDecimalChar{text: dec}, xml))
+    }
+
+    fn parse_hex_char_ref<'a>(&self, xml: &'a str) -> Option<(ParsedHexChar<'a>, &'a str)> {
         let (_, xml) = try_parse!(xml.slice_literal("&#x"));
         let (hex, xml) = try_parse!(xml.slice_hex_chars());
         let (_, xml) = try_parse!(xml.slice_literal(";"));
 
-        let hexchar = ParsedHexChar{text: hex};
-        Some((HexCharParsedReference(hexchar), xml))
+        Some((ParsedHexChar{text: hex}, xml))
+    }
+
+    fn parse_reference<'a>(&self, xml: &'a str) -> Option<(ParsedReference<'a>, &'a str)> {
+        // Pattern: alternate
+        match self.parse_decimal_char_ref(xml) {
+            Some((d, x)) => Some((DecimalCharParsedReference(d), x)),
+            None => match self.parse_hex_char_ref(xml) {
+                Some((h, x)) => Some((HexCharParsedReference(h), x)),
+                None => None,
+            },
+        }
     }
 
     fn parse_comment<'a>(&self, xml: &'a str) -> Option<(ParsedComment<'a>, &'a str)> {
@@ -319,11 +342,16 @@ impl Parser {
 
     fn hydrate_reference(&self, doc: &Document, ref_data: ParsedReference) -> Text {
         let val = match ref_data {
+            DecimalCharParsedReference(d) => {
+                let code: u32 = from_str_radix(d.text, 10).expect("Not valid decimal");
+                let c: char = from_u32(code).expect("Not a valid codepoint");
+                c.to_string()
+            },
             HexCharParsedReference(h) => {
                 let code: u32 = from_str_radix(h.text, 16).expect("Not valid hex");
                 let c: char = from_u32(code).expect("Not a valid codepoint");
                 c.to_string()
-            }
+            },
         };
         doc.new_text(val)
     }
@@ -398,6 +426,7 @@ trait XmlStr<'a> {
     fn slice_literal(&self, expected: &str) -> Option<(&'a str, &'a str)>;
     fn slice_char_data(&self) -> Option<(&'a str, &'a str)>;
     fn slice_cdata(&self) -> Option<(&'a str, &'a str)>;
+    fn slice_decimal_chars(&self) -> Option<(&'a str, &'a str)>;
     fn slice_hex_chars(&self) -> Option<(&'a str, &'a str)>;
     fn slice_comment(&self) -> Option<(&'a str, &'a str)>;
     fn slice_pi_value(&self) -> Option<(&'a str, &'a str)>;
@@ -462,6 +491,11 @@ impl<'a> XmlStr<'a> for &'a str {
         }
     }
 
+    fn slice_decimal_chars(&self) -> Option<(&'a str, &'a str)> {
+        self.slice_start_rest(|c| c.is_decimal_char(),
+                              |c| c.is_decimal_char())
+    }
+
     fn slice_hex_chars(&self) -> Option<(&'a str, &'a str)> {
         self.slice_start_rest(|c| c.is_hex_char(),
                               |c| c.is_hex_char())
@@ -517,6 +551,7 @@ trait XmlChar {
     fn is_name_start_char(&self) -> bool;
     fn is_name_char(&self) -> bool;
     fn is_space_char(&self) -> bool;
+    fn is_decimal_char(&self) -> bool;
     fn is_hex_char(&self) -> bool;
 }
 
@@ -562,6 +597,13 @@ impl XmlChar for char {
             '\x09' |
             '\x0D' |
             '\x0A' => true,
+            _ => false,
+        }
+    }
+
+    fn is_decimal_char(&self) -> bool {
+        match *self {
+            '0'..'9' => true,
             _ => false,
         }
     }
@@ -755,7 +797,21 @@ fn parses_top_level_processing_instructions() {
 }
 
 #[test]
-fn parses_element_with_char_reference() {
+fn parses_element_with_decimal_char_reference() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version='1.0' ?><math>2 &#62; 1</math>");
+    let math = doc.root().children()[0].element().unwrap();
+    let text1 = math.children()[0].text().unwrap();
+    let text2 = math.children()[1].text().unwrap();
+    let text3 = math.children()[2].text().unwrap();
+
+    assert_eq!(text1.text().as_slice(), "2 ");
+    assert_eq!(text2.text().as_slice(), ">");
+    assert_eq!(text3.text().as_slice(), " 1");
+}
+
+#[test]
+fn parses_element_with_hexidecimal_char_reference() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><math>1 &#x3c; 2</math>");
     let math = doc.root().children()[0].element().unwrap();
