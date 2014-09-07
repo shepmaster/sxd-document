@@ -488,138 +488,146 @@ impl Hydrator {
 mod test {
 
 use super::Parser;
+use super::super::{Document,Element};
+
+macro_rules! assert_str_eq(
+    ($l:expr, $r:expr) => (assert_eq!($l.as_slice(), $r.as_slice()));
+)
+
+fn top(doc: &Document) -> Element { doc.root().children()[0].element().unwrap() }
 
 #[test]
 fn a_document_with_a_prolog() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello />");
-    let top = doc.root().children()[0].element().unwrap();
+    let top = top(&doc);
 
-    assert_eq!(top.name().as_slice(), "hello");
+    assert_str_eq!(top.name(), "hello");
 }
 
 #[test]
 fn a_document_with_a_prolog_with_double_quotes() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version=\"1.0\" ?><hello />");
-    let top = doc.root().children()[0].element().unwrap();
+    let top = top(&doc);
 
-    assert_eq!(top.name().as_slice(), "hello");
+    assert_str_eq!(top.name(), "hello");
 }
 
 #[test]
 fn a_document_with_a_single_element() {
     let parser = Parser::new();
     let doc = parser.parse("<hello />");
-    let top = doc.root().children()[0].element().unwrap();
+    let top = top(&doc);
 
-    assert_eq!(top.name().as_slice(), "hello");
+    assert_str_eq!(top.name(), "hello");
 }
 
 #[test]
 fn an_element_with_an_attribute() {
     let parser = Parser::new();
     let doc = parser.parse("<hello scope='world'/>");
-    let top = doc.root().children()[0].element().unwrap();
+    let top = top(&doc);
 
-    assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
+    assert_str_eq!(top.get_attribute("scope").unwrap(), "world");
 }
 
 #[test]
 fn an_element_with_an_attribute_using_double_quotes() {
     let parser = Parser::new();
     let doc = parser.parse("<hello scope=\"world\"/>");
-    let top = doc.root().children()[0].element().unwrap();
+    let top = top(&doc);
 
-    assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
+    assert_str_eq!(top.get_attribute("scope").unwrap(), "world");
 }
 
 #[test]
 fn an_element_with_multiple_attributes() {
     let parser = Parser::new();
     let doc = parser.parse("<hello scope=\"world\" happy='true'/>");
-    let top = doc.root().children()[0].element().unwrap();
+    let top = top(&doc);
 
-    assert_eq!(top.get_attribute("scope").unwrap().as_slice(), "world");
-    assert_eq!(top.get_attribute("happy").unwrap().as_slice(), "true");
+    assert_str_eq!(top.get_attribute("scope").unwrap(), "world");
+    assert_str_eq!(top.get_attribute("happy").unwrap(), "true");
 }
 
 #[test]
 fn an_attribute_with_references() {
     let parser = Parser::new();
     let doc = parser.parse("<log msg='I &lt;3 math' />");
-    let top = doc.root().children()[0].element().unwrap();
+    let top = top(&doc);
 
-    assert_eq!(top.get_attribute("msg").unwrap().as_slice(), "I <3 math");
+    assert_str_eq!(top.get_attribute("msg").unwrap(), "I <3 math");
 }
 
 #[test]
 fn an_element_that_is_not_self_closing() {
     let parser = Parser::new();
     let doc = parser.parse("<hello></hello>");
-    let top = doc.root().children()[0].element().unwrap();
+    let top = top(&doc);
 
-    assert_eq!(top.name().as_slice(), "hello");
+    assert_str_eq!(top.name(), "hello");
 }
 
 #[test]
 fn nested_elements() {
     let parser = Parser::new();
     let doc = parser.parse("<hello><world/></hello>");
-    let nested = doc.root().children()[0].element().unwrap().children()[0].element().unwrap();
+    let hello = top(&doc);
+    let world = hello.children()[0].element().unwrap();
 
-    assert_eq!(nested.name().as_slice(), "world");
+    assert_str_eq!(world.name(), "world");
 }
 
 #[test]
 fn multiply_nested_elements() {
     let parser = Parser::new();
     let doc = parser.parse("<hello><awesome><world/></awesome></hello>");
-    let hello = doc.root().children()[0].element().unwrap();
+    let hello = top(&doc);
     let awesome = hello.children()[0].element().unwrap();
     let world = awesome.children()[0].element().unwrap();
 
-    assert_eq!(world.name().as_slice(), "world");
+    assert_str_eq!(world.name(), "world");
 }
 
 #[test]
 fn nested_elements_with_attributes() {
     let parser = Parser::new();
     let doc = parser.parse("<hello><world name='Earth'/></hello>");
-    let hello = doc.root().children()[0].element().unwrap();
+    let hello = top(&doc);
     let world = hello.children()[0].element().unwrap();
 
-    assert_eq!(world.get_attribute("name").unwrap().as_slice(), "Earth");
+    assert_str_eq!(world.get_attribute("name").unwrap(), "Earth");
 }
 
 #[test]
 fn element_with_text() {
     let parser = Parser::new();
     let doc = parser.parse("<hello>world</hello>");
-    let hello = doc.root().children()[0].element().unwrap();
+    let hello = top(&doc);
     let text = hello.children()[0].text().unwrap();
 
-    assert_eq!(text.text().as_slice(), "world");
+    assert_str_eq!(text.text(), "world");
 }
 
 #[test]
 fn element_with_cdata() {
     let parser = Parser::new();
     let doc = parser.parse("<words><![CDATA[I have & and < !]]></words>");
-    let words = doc.root().children()[0].element().unwrap();
+    let words = top(&doc);
     let text = words.children()[0].text().unwrap();
 
-    assert_eq!(text.text().as_slice(), "I have & and < !");
+    assert_str_eq!(text.text(), "I have & and < !");
 }
 
 #[test]
 fn element_with_comment() {
     let parser = Parser::new();
     let doc = parser.parse("<hello><!-- A comment --></hello>");
-    let words = doc.root().children()[0].element().unwrap();
+    let words = top(&doc);
     let comment = words.children()[0].comment().unwrap();
 
-    assert_eq!(comment.text().as_slice(), " A comment ");
+    assert_str_eq!(comment.text(), " A comment ");
 }
 
 #[test]
@@ -628,7 +636,7 @@ fn comment_before_top_element() {
     let doc = parser.parse("<!-- A comment --><hello />");
     let comment = doc.root().children()[0].comment().unwrap();
 
-    assert_eq!(comment.text().as_slice(), " A comment ");
+    assert_str_eq!(comment.text(), " A comment ");
 }
 
 #[test]
@@ -642,8 +650,8 @@ fn multiple_comments_before_top_element() {
     let comment1 = doc.root().children()[0].comment().unwrap();
     let comment2 = doc.root().children()[1].comment().unwrap();
 
-    assert_eq!(comment1.text().as_slice(), "Comment 1");
-    assert_eq!(comment2.text().as_slice(), "Comment 2");
+    assert_str_eq!(comment1.text(), "Comment 1");
+    assert_str_eq!(comment2.text(), "Comment 2");
 }
 
 #[test]
@@ -657,18 +665,18 @@ fn multiple_comments_after_top_element() {
     let comment1 = doc.root().children()[1].comment().unwrap();
     let comment2 = doc.root().children()[2].comment().unwrap();
 
-    assert_eq!(comment1.text().as_slice(), "Comment 1");
-    assert_eq!(comment2.text().as_slice(), "Comment 2");
+    assert_str_eq!(comment1.text(), "Comment 1");
+    assert_str_eq!(comment2.text(), "Comment 2");
 }
 
 #[test]
 fn element_with_processing_instruction() {
     let parser = Parser::new();
     let doc = parser.parse("<hello><?device?></hello>");
-    let hello = doc.root().children()[0].element().unwrap();
+    let hello = top(&doc);
     let pi = hello.children()[0].processing_instruction().unwrap();
 
-    assert_eq!(pi.target().as_slice(), "device");
+    assert_str_eq!(pi.target(), "device");
     assert_eq!(pi.value(), None);
 }
 
@@ -684,10 +692,10 @@ fn top_level_processing_instructions() {
     let pi1 = doc.root().children()[0].processing_instruction().unwrap();
     let pi2 = doc.root().children()[2].processing_instruction().unwrap();
 
-    assert_eq!(pi1.target().as_slice(), "output");
-    assert_eq!(pi1.value().unwrap().as_slice(), "printer");
+    assert_str_eq!(pi1.target(), "output");
+    assert_str_eq!(pi1.value().unwrap(), "printer");
 
-    assert_eq!(pi2.target().as_slice(), "validated");
+    assert_str_eq!(pi2.target(), "validated");
     assert_eq!(pi2.value(), None);
 }
 
@@ -695,56 +703,56 @@ fn top_level_processing_instructions() {
 fn element_with_decimal_char_reference() {
     let parser = Parser::new();
     let doc = parser.parse("<math>2 &#62; 1</math>");
-    let math = doc.root().children()[0].element().unwrap();
+    let math = top(&doc);
     let text1 = math.children()[0].text().unwrap();
     let text2 = math.children()[1].text().unwrap();
     let text3 = math.children()[2].text().unwrap();
 
-    assert_eq!(text1.text().as_slice(), "2 ");
-    assert_eq!(text2.text().as_slice(), ">");
-    assert_eq!(text3.text().as_slice(), " 1");
+    assert_str_eq!(text1.text(), "2 ");
+    assert_str_eq!(text2.text(), ">");
+    assert_str_eq!(text3.text(), " 1");
 }
 
 #[test]
 fn element_with_hexidecimal_char_reference() {
     let parser = Parser::new();
     let doc = parser.parse("<math>1 &#x3c; 2</math>");
-    let math = doc.root().children()[0].element().unwrap();
+    let math = top(&doc);
     let text1 = math.children()[0].text().unwrap();
     let text2 = math.children()[1].text().unwrap();
     let text3 = math.children()[2].text().unwrap();
 
-    assert_eq!(text1.text().as_slice(), "1 ");
-    assert_eq!(text2.text().as_slice(), "<");
-    assert_eq!(text3.text().as_slice(), " 2");
+    assert_str_eq!(text1.text(), "1 ");
+    assert_str_eq!(text2.text(), "<");
+    assert_str_eq!(text3.text(), " 2");
 }
 
 #[test]
 fn element_with_entity_reference() {
     let parser = Parser::new();
     let doc = parser.parse("<math>I &lt;3 math</math>");
-    let math = doc.root().children()[0].element().unwrap();
+    let math = top(&doc);
     let text1 = math.children()[0].text().unwrap();
     let text2 = math.children()[1].text().unwrap();
     let text3 = math.children()[2].text().unwrap();
 
-    assert_eq!(text1.text().as_slice(), "I ");
-    assert_eq!(text2.text().as_slice(), "<");
-    assert_eq!(text3.text().as_slice(), "3 math");
+    assert_str_eq!(text1.text(), "I ");
+    assert_str_eq!(text2.text(), "<");
+    assert_str_eq!(text3.text(), "3 math");
 }
 
 #[test]
 fn element_with_mixed_children() {
     let parser = Parser::new();
     let doc = parser.parse("<hello>to <a>the</a> world</hello>");
-    let hello = doc.root().children()[0].element().unwrap();
+    let hello = top(&doc);
     let text1 = hello.children()[0].text().unwrap();
     let middle = hello.children()[1].element().unwrap();
     let text2 = hello.children()[2].text().unwrap();
 
-    assert_eq!(text1.text().as_slice(), "to ");
-    assert_eq!(middle.name().as_slice(), "a");
-    assert_eq!(text2.text().as_slice(), " world");
+    assert_str_eq!(text1.text(), "to ");
+    assert_str_eq!(middle.name(), "a");
+    assert_str_eq!(text2.text(), " world");
 }
 
 }
