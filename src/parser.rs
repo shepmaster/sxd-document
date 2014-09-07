@@ -81,6 +81,20 @@ macro_rules! optional_parse(
     })
 )
 
+// Pattern: alternate
+macro_rules! alternate_parse(
+    ($start:expr, {}) => ( None );
+    ($start:expr, {
+        [$p:expr -> $t:expr],
+        $([$p_rest:expr -> $t_rest:expr],)*
+    }) => (
+        match $p($start) {
+            Some((val, next)) => Some(($t(val), next)),
+            None => alternate_parse!($start, {$([$p_rest -> $t_rest],)*}),
+        }
+    );
+)
+
 impl Parser {
     pub fn new() -> Parser {
         Parser
@@ -92,18 +106,16 @@ impl Parser {
         xml.slice_from(end_of_preamble)
     }
 
+    fn parse_space<'a>(&self, xml: &'a str) -> Option<(&'a str, &'a str)> {
+        xml.slice_space()
+    }
+
     fn parse_misc<'a>(&self, xml: &'a str) -> Option<(ParsedRootChild<'a>, &'a str)> {
-        // Pattern: alternate
-        match self.parse_comment(xml) {
-            Some((c, x)) => Some((CommentParsedRootChild(c), x)),
-            None => match self.parse_pi(xml) {
-                Some((p, x)) => Some((PIParsedRootChild(p), x)),
-                None => match xml.slice_space() {
-                    Some((_, x)) => Some((IgnoredParsedRootChild, x)),
-                    None => None,
-                },
-            },
-        }
+        alternate_parse!(xml, {
+            [|xml| self.parse_comment(xml) -> |c| CommentParsedRootChild(c)],
+            [|xml| self.parse_pi(xml)      -> |p| PIParsedRootChild(p)],
+            [|xml| self.parse_space(xml)   -> |_| IgnoredParsedRootChild],
+        })
     }
 
     fn parse_miscs<'a>(&self, xml: &'a str) -> (Vec<ParsedRootChild<'a>>, &'a str) {
@@ -151,14 +163,12 @@ impl Parser {
         let (_, xml) = xml.slice_literal("=").expect("No equal sign");
         let (_, xml) = optional_parse!(xml.slice_space(), xml);
 
-        // Pattern: alternate
-        let (value, xml) = match self.parse_attribute_value_quote(xml, "'") {
-            Some(x) => x,
-            None => match self.parse_attribute_value_quote(xml, "\"") {
-                Some(x) => x,
-                None => fail!("No attribute value"),
-            },
-        };
+        let xxx = alternate_parse!(xml, {
+            [|xml| self.parse_attribute_value_quote(xml, "'")  -> |v| v],
+            [|xml| self.parse_attribute_value_quote(xml, "\"") -> |v| v],
+        });
+
+        let (value, xml) = xxx.expect("No attribute value");
 
         Some((ParsedAttribute{name: name, value: value}, xml))
     }
@@ -252,17 +262,11 @@ impl Parser {
     }
 
     fn parse_reference<'a>(&self, xml: &'a str) -> Option<(ParsedReference<'a>, &'a str)> {
-        // Pattern: alternate
-        match self.parse_entity_ref(xml) {
-            Some((e, x)) => Some((EntityParsedReference(e), x)),
-            None => match self.parse_decimal_char_ref(xml) {
-                Some((d, x)) => Some((DecimalCharParsedReference(d), x)),
-                None => match self.parse_hex_char_ref(xml) {
-                    Some((h, x)) => Some((HexCharParsedReference(h), x)),
-                    None => None,
-                },
-            },
-        }
+        alternate_parse!(xml, {
+            [|xml| self.parse_entity_ref(xml)       -> |e| EntityParsedReference(e)],
+            [|xml| self.parse_decimal_char_ref(xml) -> |d| DecimalCharParsedReference(d)],
+            [|xml| self.parse_hex_char_ref(xml)     -> |h| HexCharParsedReference(h)],
+        })
     }
 
     fn parse_comment<'a>(&self, xml: &'a str) -> Option<(ParsedComment<'a>, &'a str)> {
@@ -300,22 +304,17 @@ impl Parser {
         // Pattern: zero-or-more
         let mut start = xml;
         loop {
-            // Pattern: alternate
-            let (child, after) = match self.parse_element(start) {
-                Some((e, x)) => (ElementParsedChild(e), x),
-                None => match self.parse_cdata(start) {
-                    Some((t, x)) => (TextParsedChild(t), x),
-                    None => match self.parse_reference(start) {
-                        Some((e, x)) => (ReferenceParsedChild(e), x),
-                        None => match self.parse_comment(start) {
-                            Some((c, x)) => (CommentParsedChild(c), x),
-                            None => match self.parse_pi(start) {
-                                Some((p, x)) => (PIParsedChild(p), x),
-                                None => return (children, start),
-                            },
-                        },
-                    },
-                },
+            let xxx = alternate_parse!(start, {
+                [|xml| self.parse_element(xml)   -> |e| ElementParsedChild(e)],
+                [|xml| self.parse_cdata(xml)     -> |t| TextParsedChild(t)],
+                [|xml| self.parse_reference(xml) -> |r| ReferenceParsedChild(r)],
+                [|xml| self.parse_comment(xml)   -> |c| CommentParsedChild(c)],
+                [|xml| self.parse_pi(xml)        -> |p| PIParsedChild(p)],
+            });
+
+            let (child, after) = match xxx {
+                Some(x) => x,
+                None => return (children, start),
             };
 
             let (char_data, xml) = optional_parse!(self.parse_char_data(after), after);
@@ -342,14 +341,10 @@ impl Parser {
     }
 
     fn parse_element<'a>(&self, xml: &'a str) -> Option<(ParsedElement<'a>, &'a str)> {
-        // Pattern: alternate
-        match self.parse_empty_element(xml) {
-            Some(x) => Some(x),
-            None => match self.parse_non_empty_element(xml) {
-                Some(x) => Some(x),
-                None => None,
-            },
-        }
+        alternate_parse!(xml, {
+            [|xml| self.parse_empty_element(xml)     -> |e| e],
+            [|xml| self.parse_non_empty_element(xml) -> |e| e],
+        })
     }
 
     fn hydrate_text(&self, doc: &Document, text_data: ParsedText) -> Text {
