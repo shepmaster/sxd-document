@@ -120,12 +120,14 @@ macro_rules! parse_zero_or_more(
     }};
 )
 
+type ParseResult<'a, T> = Option<(T, &'a str)>;
+
 impl Parser {
     pub fn new() -> Parser {
         Parser
     }
 
-    fn parse_eq<'a>(&self, xml: &'a str) -> Option<((), &'a str)> {
+    fn parse_eq<'a>(&self, xml: &'a str) -> ParseResult<'a, ()> {
         let (_, xml) = optional_parse!(xml.slice_space(), xml);
         let (_, xml) = try_parse!(xml.slice_literal("="));
         let (_, xml) = optional_parse!(xml.slice_space(), xml);
@@ -133,7 +135,7 @@ impl Parser {
         Some(((), xml))
     }
 
-    fn parse_version_info<'a>(&self, xml: &'a str) -> Option<(&'a str, &'a str)> {
+    fn parse_version_info<'a>(&self, xml: &'a str) -> ParseResult<'a, &'a str> {
         let (_, xml) = try_parse!(xml.slice_space());
         let (_, xml) = try_parse!(xml.slice_literal("version"));
         let (_, xml) = try_parse!(self.parse_eq(xml));
@@ -144,7 +146,7 @@ impl Parser {
         Some((version, xml))
     }
 
-    fn parse_xml_declaration<'a>(&self, xml: &'a str) -> Option<((), &'a str)> {
+    fn parse_xml_declaration<'a>(&self, xml: &'a str) -> ParseResult<'a, ()> {
         let (_, xml) = try_parse!(xml.slice_literal("<?xml"));
         let (_version, xml) = try_parse!(self.parse_version_info(xml));
         // let (encoding, xml) = optional_parse!(self.parse_encoding_declaration(xml));
@@ -155,11 +157,11 @@ impl Parser {
         Some(((), xml))
     }
 
-    fn parse_space<'a>(&self, xml: &'a str) -> Option<(&'a str, &'a str)> {
+    fn parse_space<'a>(&self, xml: &'a str) -> ParseResult<'a, &'a str> {
         xml.slice_space()
     }
 
-    fn parse_misc<'a>(&self, xml: &'a str) -> Option<(ParsedRootChild<'a>, &'a str)> {
+    fn parse_misc<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedRootChild<'a>> {
         alternate_parse!(xml, {
             [|xml| self.parse_comment(xml) -> |c| CommentParsedRootChild(c)],
             [|xml| self.parse_pi(xml)      -> |p| PIParsedRootChild(p)],
@@ -167,11 +169,11 @@ impl Parser {
         })
     }
 
-    fn parse_miscs<'a>(&self, xml: &'a str) -> Option<(Vec<ParsedRootChild<'a>>, &'a str)> {
+    fn parse_miscs<'a>(&self, xml: &'a str) -> ParseResult<'a, Vec<ParsedRootChild<'a>>> {
         parse_zero_or_more!(xml, |xml| self.parse_misc(xml))
     }
 
-    fn parse_prolog<'a>(&self, xml: &'a str) -> Option<(Vec<ParsedRootChild<'a>>, &'a str)> {
+    fn parse_prolog<'a>(&self, xml: &'a str) -> ParseResult<'a, Vec<ParsedRootChild<'a>>> {
         let (_, xml) = optional_parse!(self.parse_xml_declaration(xml), xml);
         self.parse_miscs(xml)
     }
@@ -179,8 +181,8 @@ impl Parser {
     fn parse_one_quoted_value<'a, T>(&self,
                    xml: &'a str,
                    quote: &str,
-                   f: |&'a str| -> Option<(T, &'a str)>)
-                   -> Option<(T, &'a str)>
+                   f: |&'a str| -> ParseResult<'a, T>)
+                   -> ParseResult<'a, T>
     {
         let (_, xml) = try_parse!(xml.slice_literal(quote));
         let (value, xml) = try_parse!(f(xml));
@@ -191,8 +193,8 @@ impl Parser {
 
     fn parse_quoted_value<'a, T>(&self,
                   xml: &'a str,
-                  f: |&'a str, &str| -> Option<(T, &'a str)>)
-                  -> Option<(T, &'a str)>
+                  f: |&'a str, &str| -> ParseResult<'a, T>)
+                  -> ParseResult<'a, T>
     {
         alternate_parse!(xml, {
             [|xml| self.parse_one_quoted_value(xml, "'",  |xml| f(xml, "'"))  -> |v| v],
@@ -201,7 +203,7 @@ impl Parser {
     }
 
     fn parse_attribute_values<'a>(&self, xml: &'a str, quote: &str)
-                                 -> Option<(Vec<ParsedAttributeValue<'a>>, &'a str)>
+                                 -> ParseResult<'a, Vec<ParsedAttributeValue<'a>>>
     {
         parse_zero_or_more!(xml, |xml|
             alternate_parse!(xml, {
@@ -210,7 +212,7 @@ impl Parser {
             }))
     }
 
-    fn parse_attribute<'a>(&self, xml: &'a str) -> Option<(ParsedAttribute<'a>, &'a str)> {
+    fn parse_attribute<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedAttribute<'a>> {
         let (_, xml) = try_parse!(xml.slice_space());
 
         let (name, xml) = try_parse!(xml.slice_name());
@@ -224,11 +226,11 @@ impl Parser {
         Some((ParsedAttribute{name: name, values: values}, xml))
     }
 
-    fn parse_attributes<'a>(&self, xml: &'a str) -> Option<(Vec<ParsedAttribute<'a>>, &'a str)> {
+    fn parse_attributes<'a>(&self, xml: &'a str) -> ParseResult<'a, Vec<ParsedAttribute<'a>>> {
         parse_zero_or_more!(xml, |xml| self.parse_attribute(xml))
     }
 
-    fn parse_empty_element<'a>(&self, xml: &'a str) -> Option<(ParsedElement<'a>, &'a str)> {
+    fn parse_empty_element<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedElement<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("<"));
         let (name, xml) = try_parse!(xml.slice_name());
         let (attrs, xml) = try_parse!(self.parse_attributes(xml));
@@ -238,7 +240,7 @@ impl Parser {
         Some((ParsedElement{name: name, attributes: attrs, children: Vec::new()}, xml))
     }
 
-    fn parse_element_start<'a>(&self, xml: &'a str) -> Option<(ParsedElement<'a>, &'a str)> {
+    fn parse_element_start<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedElement<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("<"));
         let (name, xml) = try_parse!(xml.slice_name());
         let (attrs, xml) = try_parse!(self.parse_attributes(xml));
@@ -248,7 +250,7 @@ impl Parser {
         Some((ParsedElement{name: name, attributes: attrs, children: Vec::new()}, xml))
     }
 
-    fn parse_element_end<'a>(&self, xml: &'a str) -> Option<(&'a str, &'a str)> {
+    fn parse_element_end<'a>(&self, xml: &'a str) -> ParseResult<'a, &'a str> {
         let (_, xml) = try_parse!(xml.slice_literal("</"));
         let (name, xml) = try_parse!(xml.slice_name());
         let (_, xml) = optional_parse!(xml.slice_space(), xml);
@@ -256,13 +258,13 @@ impl Parser {
         Some((name, xml))
     }
 
-    fn parse_char_data<'a>(&self, xml: &'a str) -> Option<(ParsedText<'a>, &'a str)> {
+    fn parse_char_data<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedText<'a>> {
         let (text, xml) = try_parse!(xml.slice_char_data());
 
         Some((ParsedText{text: text}, xml))
     }
 
-    fn parse_cdata<'a>(&self, xml: &'a str) -> Option<(ParsedText<'a>, &'a str)> {
+    fn parse_cdata<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedText<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("<![CDATA["));
         let (text, xml) = try_parse!(xml.slice_cdata());
         let (_, xml) = try_parse!(xml.slice_literal("]]>"));
@@ -270,7 +272,7 @@ impl Parser {
         Some((ParsedText{text: text}, xml))
     }
 
-    fn parse_entity_ref<'a>(&self, xml: &'a str) -> Option<(ParsedEntityRef<'a>, &'a str)> {
+    fn parse_entity_ref<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedEntityRef<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("&"));
         let (name, xml) = try_parse!(xml.slice_name());
         let (_, xml) = try_parse!(xml.slice_literal(";"));
@@ -278,7 +280,7 @@ impl Parser {
         Some((ParsedEntityRef{text: name}, xml))
     }
 
-    fn parse_decimal_char_ref<'a>(&self, xml: &'a str) -> Option<(ParsedDecimalCharRef<'a>, &'a str)> {
+    fn parse_decimal_char_ref<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedDecimalCharRef<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("&#"));
         let (dec, xml) = try_parse!(xml.slice_decimal_chars());
         let (_, xml) = try_parse!(xml.slice_literal(";"));
@@ -286,7 +288,7 @@ impl Parser {
         Some((ParsedDecimalCharRef{text: dec}, xml))
     }
 
-    fn parse_hex_char_ref<'a>(&self, xml: &'a str) -> Option<(ParsedHexCharRef<'a>, &'a str)> {
+    fn parse_hex_char_ref<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedHexCharRef<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("&#x"));
         let (hex, xml) = try_parse!(xml.slice_hex_chars());
         let (_, xml) = try_parse!(xml.slice_literal(";"));
@@ -294,7 +296,7 @@ impl Parser {
         Some((ParsedHexCharRef{text: hex}, xml))
     }
 
-    fn parse_reference<'a>(&self, xml: &'a str) -> Option<(ParsedReference<'a>, &'a str)> {
+    fn parse_reference<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedReference<'a>> {
         alternate_parse!(xml, {
             [|xml| self.parse_entity_ref(xml)       -> |e| EntityParsedReference(e)],
             [|xml| self.parse_decimal_char_ref(xml) -> |d| DecimalCharParsedReference(d)],
@@ -302,7 +304,7 @@ impl Parser {
         })
     }
 
-    fn parse_comment<'a>(&self, xml: &'a str) -> Option<(ParsedComment<'a>, &'a str)> {
+    fn parse_comment<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedComment<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("<!--"));
         let (text, xml) = try_parse!(xml.slice_comment());
         let (_, xml) = try_parse!(xml.slice_literal("-->"));
@@ -310,12 +312,12 @@ impl Parser {
         Some((ParsedComment{text: text}, xml))
     }
 
-    fn parse_pi_value<'a>(&self, xml: &'a str) -> Option<(&'a str, &'a str)> {
+    fn parse_pi_value<'a>(&self, xml: &'a str) -> ParseResult<'a, &'a str> {
         let (_, xml) = try_parse!(xml.slice_space());
         xml.slice_pi_value()
     }
 
-    fn parse_pi<'a>(&self, xml: &'a str) -> Option<(ParsedProcessingInstruction<'a>, &'a str)> {
+    fn parse_pi<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedProcessingInstruction<'a>> {
         let (_, xml) = try_parse!(xml.slice_literal("<?"));
         let (target, xml) = try_parse!(xml.slice_name());
         let (value, xml) = optional_parse!(self.parse_pi_value(xml), xml);
@@ -359,7 +361,7 @@ impl Parser {
         }
     }
 
-    fn parse_non_empty_element<'a>(&self, xml: &'a str) -> Option<(ParsedElement<'a>, &'a str)> {
+    fn parse_non_empty_element<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedElement<'a>> {
         let (mut element, xml) = try_parse!(self.parse_element_start(xml));
         let (children, xml) = self.parse_content(xml);
         let (name, xml) = try_parse!(self.parse_element_end(xml));
@@ -373,7 +375,7 @@ impl Parser {
         Some((element, xml))
     }
 
-    fn parse_element<'a>(&self, xml: &'a str) -> Option<(ParsedElement<'a>, &'a str)> {
+    fn parse_element<'a>(&self, xml: &'a str) -> ParseResult<'a, ParsedElement<'a>> {
         alternate_parse!(xml, {
             [|xml| self.parse_empty_element(xml)     -> |e| e],
             [|xml| self.parse_non_empty_element(xml) -> |e| e],
@@ -490,18 +492,18 @@ impl Parser {
 
 trait XmlStr<'a> {
     fn slice_at(&self, position: uint) -> (&'a str, &'a str);
-    fn slice_attribute(&self, quote: &str) -> Option<(&'a str, &'a str)>;
-    fn slice_literal(&self, expected: &str) -> Option<(&'a str, &'a str)>;
-    fn slice_version_num(&self) -> Option<(&'a str, &'a str)>;
-    fn slice_char_data(&self) -> Option<(&'a str, &'a str)>;
-    fn slice_cdata(&self) -> Option<(&'a str, &'a str)>;
-    fn slice_decimal_chars(&self) -> Option<(&'a str, &'a str)>;
-    fn slice_hex_chars(&self) -> Option<(&'a str, &'a str)>;
-    fn slice_comment(&self) -> Option<(&'a str, &'a str)>;
-    fn slice_pi_value(&self) -> Option<(&'a str, &'a str)>;
-    fn slice_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> Option<(&'a str, &'a str)>;
-    fn slice_name(&self) -> Option<(&'a str, &'a str)>;
-    fn slice_space(&self) -> Option<(&'a str, &'a str)>;
+    fn slice_attribute(&self, quote: &str) -> ParseResult<'a, &'a str>;
+    fn slice_literal(&self, expected: &str) -> ParseResult<'a, &'a str>;
+    fn slice_version_num(&self) -> ParseResult<'a, &'a str>;
+    fn slice_char_data(&self) -> ParseResult<'a, &'a str>;
+    fn slice_cdata(&self) -> ParseResult<'a, &'a str>;
+    fn slice_decimal_chars(&self) -> ParseResult<'a, &'a str>;
+    fn slice_hex_chars(&self) -> ParseResult<'a, &'a str>;
+    fn slice_comment(&self) -> ParseResult<'a, &'a str>;
+    fn slice_pi_value(&self) -> ParseResult<'a, &'a str>;
+    fn slice_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> ParseResult<'a, &'a str>;
+    fn slice_name(&self) -> ParseResult<'a, &'a str>;
+    fn slice_space(&self) -> ParseResult<'a, &'a str>;
 }
 
 impl<'a> XmlStr<'a> for &'a str {
@@ -509,7 +511,7 @@ impl<'a> XmlStr<'a> for &'a str {
         (self.slice_to(position), self.slice_from(position))
     }
 
-    fn slice_attribute(&self, quote: &str) -> Option<(&'a str, &'a str)> {
+    fn slice_attribute(&self, quote: &str) -> ParseResult<'a, &'a str> {
         if self.starts_with("&") ||
            self.starts_with("<") ||
            self.starts_with(quote)
@@ -528,7 +530,7 @@ impl<'a> XmlStr<'a> for &'a str {
         }
     }
 
-    fn slice_literal(&self, expected: &str) -> Option<(&'a str, &'a str)> {
+    fn slice_literal(&self, expected: &str) -> ParseResult<'a, &'a str> {
         if self.starts_with(expected) {
             Some(self.slice_at(expected.len()))
         } else {
@@ -536,7 +538,7 @@ impl<'a> XmlStr<'a> for &'a str {
         }
     }
 
-    fn slice_version_num(&self) -> Option<(&'a str, &'a str)> {
+    fn slice_version_num(&self) -> ParseResult<'a, &'a str> {
         if self.starts_with("1.") {
             let mut positions = self.char_indices().peekable();
             positions.next();
@@ -559,7 +561,7 @@ impl<'a> XmlStr<'a> for &'a str {
     }
 
 
-    fn slice_char_data(&self) -> Option<(&'a str, &'a str)> {
+    fn slice_char_data(&self) -> ParseResult<'a, &'a str> {
         if self.starts_with("<") ||
            self.starts_with("&") ||
            self.starts_with("]]>")
@@ -588,24 +590,24 @@ impl<'a> XmlStr<'a> for &'a str {
         }
     }
 
-    fn slice_cdata(&self) -> Option<(&'a str, &'a str)> {
+    fn slice_cdata(&self) -> ParseResult<'a, &'a str> {
         match self.find_str("]]>") {
             None => None,
             Some(offset) => Some(self.slice_at(offset)),
         }
     }
 
-    fn slice_decimal_chars(&self) -> Option<(&'a str, &'a str)> {
+    fn slice_decimal_chars(&self) -> ParseResult<'a, &'a str> {
         self.slice_start_rest(|c| c.is_decimal_char(),
                               |c| c.is_decimal_char())
     }
 
-    fn slice_hex_chars(&self) -> Option<(&'a str, &'a str)> {
+    fn slice_hex_chars(&self) -> ParseResult<'a, &'a str> {
         self.slice_start_rest(|c| c.is_hex_char(),
                               |c| c.is_hex_char())
     }
 
-    fn slice_comment(&self) -> Option<(&'a str, &'a str)> {
+    fn slice_comment(&self) -> ParseResult<'a, &'a str> {
         // This deliberately does not include the >. -- is not allowed
         // in a comment, so we can just test the end if it matches the
         // complete close delimiter.
@@ -615,7 +617,7 @@ impl<'a> XmlStr<'a> for &'a str {
         }
     }
 
-    fn slice_pi_value(&self) -> Option<(&'a str, &'a str)> {
+    fn slice_pi_value(&self) -> ParseResult<'a, &'a str> {
         match self.find_str("?>") {
             None => None,
             Some(offset) => Some(self.slice_at(offset)),
@@ -625,7 +627,7 @@ impl<'a> XmlStr<'a> for &'a str {
     fn slice_start_rest(&self,
                         is_first: |char| -> bool,
                         is_rest: |char| -> bool)
-                        -> Option<(&'a str, &'a str)>
+                        -> ParseResult<'a, &'a str>
     {
         let mut positions = self.char_indices();
 
@@ -642,11 +644,11 @@ impl<'a> XmlStr<'a> for &'a str {
         }
     }
 
-    fn slice_name(&self) -> Option<(&'a str, &'a str)> {
+    fn slice_name(&self) -> ParseResult<'a, &'a str> {
         self.slice_start_rest(|c| c.is_name_start_char(), |c| c.is_name_char())
     }
 
-    fn slice_space(&self) -> Option<(&'a str, &'a str)> {
+    fn slice_space(&self) -> ParseResult<'a, &'a str> {
         self.slice_start_rest(|c| c.is_space_char(), |c| c.is_space_char())
     }
 }
