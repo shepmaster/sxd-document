@@ -744,15 +744,18 @@ fn element_with_entity_reference() {
 #[test]
 fn element_with_mixed_children() {
     let parser = Parser::new();
-    let doc = parser.parse("<hello>to <a>the</a> world</hello>");
+    let doc = parser.parse("<hello>to <!--fixme--><a><![CDATA[the]]></a><?world?></hello>");
     let hello = top(&doc);
-    let text1 = hello.children()[0].text().unwrap();
-    let middle = hello.children()[1].element().unwrap();
-    let text2 = hello.children()[2].text().unwrap();
 
-    assert_str_eq!(text1.text(), "to ");
-    assert_str_eq!(middle.name(), "a");
-    assert_str_eq!(text2.text(), " world");
+    let text    = hello.children()[0].text().unwrap();
+    let comment = hello.children()[1].comment().unwrap();
+    let element = hello.children()[2].element().unwrap();
+    let pi      = hello.children()[3].processing_instruction().unwrap();
+
+    assert_str_eq!(text.text(),    "to ");
+    assert_str_eq!(comment.text(), "fixme");
+    assert_str_eq!(element.name(), "a");
+    assert_str_eq!(pi.target(),    "world");
 }
 
 }
