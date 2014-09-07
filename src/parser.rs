@@ -112,9 +112,9 @@ impl Parser {
         let (_, xml) = try_parse!(xml.slice_space());
         let (_, xml) = try_parse!(xml.slice_literal("version"));
         let (_, xml) = try_parse!(self.parse_eq(xml));
-        let (_, xml) = try_parse!(xml.slice_literal("'"));
-        let (version, xml) = try_parse!(xml.slice_version_num());
-        let (_, xml) = try_parse!(xml.slice_literal("'"));
+        let (version, xml) = try_parse!(
+            self.parse_quoted_value(xml, |xml, _| xml.slice_version_num())
+        );
 
         Some((version, xml))
     }
@@ -163,17 +163,28 @@ impl Parser {
         self.parse_miscs(xml)
     }
 
-    fn parse_attribute_value_quote<'a>(&self, xml: &'a str, quote: &str) -> Option<(&'a str, &'a str)> {
-        let (_, xml) = match xml.slice_literal(quote) {
-            None => return None,
-            Some(x) => x,
-        };
-        // TODO: don't consume & or <
-        // TODO: support references
-        let (value, xml) = xml.slice_until(quote).expect("No value");
-        let (_, xml) = xml.slice_literal(quote).expect("No quote");
+    fn parse_one_quoted_value<'a, T>(&self,
+                   xml: &'a str,
+                   quote: &str,
+                   f: |&'a str| -> Option<(T, &'a str)>)
+                   -> Option<(T, &'a str)>
+    {
+        let (_, xml) = try_parse!(xml.slice_literal(quote));
+        let (value, xml) = try_parse!(f(xml));
+        let (_, xml) = try_parse!(xml.slice_literal(quote));
 
         Some((value, xml))
+    }
+
+    fn parse_quoted_value<'a, T>(&self,
+                  xml: &'a str,
+                  f: |&'a str, &str| -> Option<(T, &'a str)>)
+                  -> Option<(T, &'a str)>
+    {
+        alternate_parse!(xml, {
+            [|xml| self.parse_one_quoted_value(xml, "'",  |xml| f(xml, "'"))  -> |v| v],
+            [|xml| self.parse_one_quoted_value(xml, "\"", |xml| f(xml, "\"")) -> |v| v],
+        })
     }
 
     fn parse_attribute<'a>(&self, xml: &'a str) -> Option<(ParsedAttribute<'a>, &'a str)> {
@@ -184,12 +195,11 @@ impl Parser {
 
         let (_, xml) = try_parse!(self.parse_eq(xml));
 
-        let xxx = alternate_parse!(xml, {
-            [|xml| self.parse_attribute_value_quote(xml, "'")  -> |v| v],
-            [|xml| self.parse_attribute_value_quote(xml, "\"") -> |v| v],
-        });
-
-        let (value, xml) = xxx.expect("No attribute value");
+        // TODO: don't consume & or <
+        // TODO: support references
+        let (value, xml) = try_parse!(
+            self.parse_quoted_value(xml, |xml, quote| xml.slice_until(quote))
+        );
 
         Some((ParsedAttribute{name: name, value: value}, xml))
     }
@@ -688,6 +698,15 @@ impl XmlChar for char {
 fn parses_a_document_with_a_prolog() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello />");
+    let top = doc.root().children()[0].element().unwrap();
+
+    assert_eq!(top.name().as_slice(), "hello");
+}
+
+#[test]
+fn parses_a_document_with_a_prolog_with_double_quotes() {
+    let parser = Parser::new();
+    let doc = parser.parse("<?xml version=\"1.0\" ?><hello />");
     let top = doc.root().children()[0].element().unwrap();
 
     assert_eq!(top.name().as_slice(), "hello");
