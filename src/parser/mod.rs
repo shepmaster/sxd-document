@@ -147,15 +147,11 @@ impl Parser {
         Some(((), xml))
     }
 
-    fn parse_space<'a>(&self, xml: &'a str) -> ParseResult<'a, &'a str> {
-        xml.slice_space()
-    }
-
     fn parse_misc<'a>(&self, xml: &'a str) -> ParseResult<'a, RootChild<'a>> {
         parse_alternate!(xml, {
-            [|xml| self.parse_comment(xml) -> |c| CommentRootChild(c)],
-            [|xml| self.parse_pi(xml)      -> |p| PIRootChild(p)],
-            [|xml| self.parse_space(xml)   -> |_| IgnoredRootChild],
+            [|xml: &'a str| self.parse_comment(xml) -> |c| CommentRootChild(c)],
+            [|xml: &'a str| self.parse_pi(xml)      -> |p| PIRootChild(p)],
+            [|xml: &'a str| xml.slice_space()       -> |_| IgnoredRootChild],
         })
     }
 
