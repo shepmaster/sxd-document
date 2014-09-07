@@ -694,8 +694,13 @@ impl XmlChar for char {
     }
 }
 
+#[cfg(test)]
+mod test {
+
+use super::Parser;
+
 #[test]
-fn parses_a_document_with_a_prolog() {
+fn a_document_with_a_prolog() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version='1.0' ?><hello />");
     let top = doc.root().children()[0].element().unwrap();
@@ -704,7 +709,7 @@ fn parses_a_document_with_a_prolog() {
 }
 
 #[test]
-fn parses_a_document_with_a_prolog_with_double_quotes() {
+fn a_document_with_a_prolog_with_double_quotes() {
     let parser = Parser::new();
     let doc = parser.parse("<?xml version=\"1.0\" ?><hello />");
     let top = doc.root().children()[0].element().unwrap();
@@ -713,7 +718,7 @@ fn parses_a_document_with_a_prolog_with_double_quotes() {
 }
 
 #[test]
-fn parses_a_document_with_a_single_element() {
+fn a_document_with_a_single_element() {
     let parser = Parser::new();
     let doc = parser.parse("<hello />");
     let top = doc.root().children()[0].element().unwrap();
@@ -722,7 +727,7 @@ fn parses_a_document_with_a_single_element() {
 }
 
 #[test]
-fn parses_an_element_with_an_attribute() {
+fn an_element_with_an_attribute() {
     let parser = Parser::new();
     let doc = parser.parse("<hello scope='world'/>");
     let top = doc.root().children()[0].element().unwrap();
@@ -731,7 +736,7 @@ fn parses_an_element_with_an_attribute() {
 }
 
 #[test]
-fn parses_an_element_with_an_attribute_using_double_quotes() {
+fn an_element_with_an_attribute_using_double_quotes() {
     let parser = Parser::new();
     let doc = parser.parse("<hello scope=\"world\"/>");
     let top = doc.root().children()[0].element().unwrap();
@@ -740,7 +745,7 @@ fn parses_an_element_with_an_attribute_using_double_quotes() {
 }
 
 #[test]
-fn parses_an_element_with_multiple_attributes() {
+fn an_element_with_multiple_attributes() {
     let parser = Parser::new();
     let doc = parser.parse("<hello scope=\"world\" happy='true'/>");
     let top = doc.root().children()[0].element().unwrap();
@@ -750,7 +755,7 @@ fn parses_an_element_with_multiple_attributes() {
 }
 
 #[test]
-fn parses_an_element_that_is_not_self_closing() {
+fn an_element_that_is_not_self_closing() {
     let parser = Parser::new();
     let doc = parser.parse("<hello></hello>");
     let top = doc.root().children()[0].element().unwrap();
@@ -759,7 +764,7 @@ fn parses_an_element_that_is_not_self_closing() {
 }
 
 #[test]
-fn parses_nested_elements() {
+fn nested_elements() {
     let parser = Parser::new();
     let doc = parser.parse("<hello><world/></hello>");
     let nested = doc.root().children()[0].element().unwrap().children()[0].element().unwrap();
@@ -768,7 +773,7 @@ fn parses_nested_elements() {
 }
 
 #[test]
-fn parses_multiply_nested_elements() {
+fn multiply_nested_elements() {
     let parser = Parser::new();
     let doc = parser.parse("<hello><awesome><world/></awesome></hello>");
     let hello = doc.root().children()[0].element().unwrap();
@@ -779,7 +784,7 @@ fn parses_multiply_nested_elements() {
 }
 
 #[test]
-fn parses_nested_elements_with_attributes() {
+fn nested_elements_with_attributes() {
     let parser = Parser::new();
     let doc = parser.parse("<hello><world name='Earth'/></hello>");
     let hello = doc.root().children()[0].element().unwrap();
@@ -789,7 +794,7 @@ fn parses_nested_elements_with_attributes() {
 }
 
 #[test]
-fn parses_element_with_text() {
+fn element_with_text() {
     let parser = Parser::new();
     let doc = parser.parse("<hello>world</hello>");
     let hello = doc.root().children()[0].element().unwrap();
@@ -799,7 +804,7 @@ fn parses_element_with_text() {
 }
 
 #[test]
-fn parses_element_with_cdata() {
+fn element_with_cdata() {
     let parser = Parser::new();
     let doc = parser.parse("<words><![CDATA[I have & and < !]]></words>");
     let words = doc.root().children()[0].element().unwrap();
@@ -809,7 +814,7 @@ fn parses_element_with_cdata() {
 }
 
 #[test]
-fn parses_element_with_comment() {
+fn element_with_comment() {
     let parser = Parser::new();
     let doc = parser.parse("<hello><!-- A comment --></hello>");
     let words = doc.root().children()[0].element().unwrap();
@@ -819,7 +824,7 @@ fn parses_element_with_comment() {
 }
 
 #[test]
-fn parses_comment_before_top_element() {
+fn comment_before_top_element() {
     let parser = Parser::new();
     let doc = parser.parse("<!-- A comment --><hello />");
     let comment = doc.root().children()[0].comment().unwrap();
@@ -828,7 +833,7 @@ fn parses_comment_before_top_element() {
 }
 
 #[test]
-fn parses_multiple_comments_before_top_element() {
+fn multiple_comments_before_top_element() {
     let parser = Parser::new();
     let xml = r"
 <!--Comment 1-->
@@ -843,7 +848,7 @@ fn parses_multiple_comments_before_top_element() {
 }
 
 #[test]
-fn parses_multiple_comments_after_top_element() {
+fn multiple_comments_after_top_element() {
     let parser = Parser::new();
     let xml = r"
 <hello />
@@ -858,7 +863,7 @@ fn parses_multiple_comments_after_top_element() {
 }
 
 #[test]
-fn parses_element_with_processing_instruction() {
+fn element_with_processing_instruction() {
     let parser = Parser::new();
     let doc = parser.parse("<hello><?device?></hello>");
     let hello = doc.root().children()[0].element().unwrap();
@@ -869,7 +874,7 @@ fn parses_element_with_processing_instruction() {
 }
 
 #[test]
-fn parses_top_level_processing_instructions() {
+fn top_level_processing_instructions() {
     let parser = Parser::new();
     let xml = r"
 <?output printer?>
@@ -888,7 +893,7 @@ fn parses_top_level_processing_instructions() {
 }
 
 #[test]
-fn parses_element_with_decimal_char_reference() {
+fn element_with_decimal_char_reference() {
     let parser = Parser::new();
     let doc = parser.parse("<math>2 &#62; 1</math>");
     let math = doc.root().children()[0].element().unwrap();
@@ -902,7 +907,7 @@ fn parses_element_with_decimal_char_reference() {
 }
 
 #[test]
-fn parses_element_with_hexidecimal_char_reference() {
+fn element_with_hexidecimal_char_reference() {
     let parser = Parser::new();
     let doc = parser.parse("<math>1 &#x3c; 2</math>");
     let math = doc.root().children()[0].element().unwrap();
@@ -916,7 +921,7 @@ fn parses_element_with_hexidecimal_char_reference() {
 }
 
 #[test]
-fn parses_element_with_entity_reference() {
+fn element_with_entity_reference() {
     let parser = Parser::new();
     let doc = parser.parse("<math>I &lt;3 math</math>");
     let math = doc.root().children()[0].element().unwrap();
@@ -930,7 +935,7 @@ fn parses_element_with_entity_reference() {
 }
 
 #[test]
-fn parses_element_with_mixed_children() {
+fn element_with_mixed_children() {
     let parser = Parser::new();
     let doc = parser.parse("<hello>to <a>the</a> world</hello>");
     let hello = doc.root().children()[0].element().unwrap();
@@ -942,6 +947,10 @@ fn parses_element_with_mixed_children() {
     assert_eq!(middle.name().as_slice(), "a");
     assert_eq!(text2.text().as_slice(), " world");
 }
+
+mod xmlstr {
+
+use super::super::XmlStr;
 
 #[test]
 fn slice_char_data_leading_ampersand() {
@@ -976,4 +985,7 @@ fn slice_char_data_until_cdata_end() {
 #[test]
 fn slice_char_data_includes_right_square() {
     assert_eq!("hello]world".slice_char_data(), Some(("hello]world", "")));
+}
+
+}
 }
