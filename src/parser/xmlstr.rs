@@ -1,27 +1,20 @@
-use super::ParseResult;
-
-pub trait XmlStr<'a> {
-    fn slice_at(&self, position: uint) -> (&'a str, &'a str);
-    fn slice_attribute(&self, quote: &str) -> ParseResult<'a, &'a str>;
-    fn slice_literal(&self, expected: &str) -> ParseResult<'a, &'a str>;
-    fn slice_version_num(&self) -> ParseResult<'a, &'a str>;
-    fn slice_char_data(&self) -> ParseResult<'a, &'a str>;
-    fn slice_cdata(&self) -> ParseResult<'a, &'a str>;
-    fn slice_decimal_chars(&self) -> ParseResult<'a, &'a str>;
-    fn slice_hex_chars(&self) -> ParseResult<'a, &'a str>;
-    fn slice_comment(&self) -> ParseResult<'a, &'a str>;
-    fn slice_pi_value(&self) -> ParseResult<'a, &'a str>;
-    fn slice_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> ParseResult<'a, &'a str>;
-    fn slice_name(&self) -> ParseResult<'a, &'a str>;
-    fn slice_space(&self) -> ParseResult<'a, &'a str>;
+pub trait XmlStr {
+    fn end_of_attribute(&self, quote: &str) -> Option<uint>;
+    fn end_of_literal(&self, expected: &str) -> Option<uint>;
+    fn end_of_version_num(&self) -> Option<uint>;
+    fn end_of_char_data(&self) -> Option<uint>;
+    fn end_of_cdata(&self) -> Option<uint>;
+    fn end_of_decimal_chars(&self) -> Option<uint>;
+    fn end_of_hex_chars(&self) -> Option<uint>;
+    fn end_of_comment(&self) -> Option<uint>;
+    fn end_of_pi_value(&self) -> Option<uint>;
+    fn end_of_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> Option<uint>;
+    fn end_of_name(&self) -> Option<uint>;
+    fn end_of_space(&self) -> Option<uint>;
 }
 
-impl<'a> XmlStr<'a> for &'a str {
-    fn slice_at(&self, position: uint) -> (&'a str, &'a str) {
-        (self.slice_to(position), self.slice_from(position))
-    }
-
-    fn slice_attribute(&self, quote: &str) -> ParseResult<'a, &'a str> {
+impl<'a> XmlStr for &'a str {
+    fn end_of_attribute(&self, quote: &str) -> Option<uint> {
         if self.starts_with("&") ||
            self.starts_with("<") ||
            self.starts_with(quote)
@@ -35,20 +28,20 @@ impl<'a> XmlStr<'a> for &'a str {
         let mut positions = self.char_indices().skip_while(|&(_, c)| c != '&' && c != '<' && c != quote_char);
 
         match positions.next() {
-            Some((offset, _)) => Some(self.slice_at(offset)),
-            None => Some((self.clone(), ""))
+            Some((offset, _)) => Some(offset),
+            None => Some(self.len())
         }
     }
 
-    fn slice_literal(&self, expected: &str) -> ParseResult<'a, &'a str> {
+    fn end_of_literal(&self, expected: &str) -> Option<uint> {
         if self.starts_with(expected) {
-            Some(self.slice_at(expected.len()))
+            Some(expected.len())
         } else {
             None
         }
     }
 
-    fn slice_version_num(&self) -> ParseResult<'a, &'a str> {
+    fn end_of_version_num(&self) -> Option<uint> {
         if self.starts_with("1.") {
             let mut positions = self.char_indices().peekable();
             positions.next();
@@ -62,8 +55,8 @@ impl<'a> XmlStr<'a> for &'a str {
 
             let mut positions = positions.skip_while(|&(_, c)| c.is_decimal_char());
             match positions.next() {
-                Some((offset, _)) => Some(self.slice_at(offset)),
-                None => Some((self.clone(), "")),
+                Some((offset, _)) => Some(offset),
+                None => Some(self.len()),
             }
         } else {
             None
@@ -71,7 +64,7 @@ impl<'a> XmlStr<'a> for &'a str {
     }
 
 
-    fn slice_char_data(&self) -> ParseResult<'a, &'a str> {
+    fn end_of_char_data(&self) -> Option<uint> {
         if self.starts_with("<") ||
            self.starts_with("&") ||
            self.starts_with("]]>")
@@ -85,12 +78,12 @@ impl<'a> XmlStr<'a> for &'a str {
 
         loop {
             match positions.next() {
-                None => return Some((self.clone(), "")),
-                Some((offset, c)) if c == '<' || c == '&' => return Some(self.slice_at(offset)),
+                None => return Some(self.len()),
+                Some((offset, c)) if c == '<' || c == '&' => return Some(offset),
                 Some((offset, _)) => {
-                    let (head, tail) = self.slice_at(offset);
+                    let tail = self.slice_from(offset);
                     if tail.starts_with("]]>") {
-                        return Some((head, tail))
+                        return Some(offset)
                     } else {
                         // False alarm, resume scanning
                         continue;
@@ -100,44 +93,44 @@ impl<'a> XmlStr<'a> for &'a str {
         }
     }
 
-    fn slice_cdata(&self) -> ParseResult<'a, &'a str> {
+    fn end_of_cdata(&self) -> Option<uint> {
         match self.find_str("]]>") {
             None => None,
-            Some(offset) => Some(self.slice_at(offset)),
+            Some(offset) => Some(offset),
         }
     }
 
-    fn slice_decimal_chars(&self) -> ParseResult<'a, &'a str> {
-        self.slice_start_rest(|c| c.is_decimal_char(),
-                              |c| c.is_decimal_char())
+    fn end_of_decimal_chars(&self) -> Option<uint> {
+        self.end_of_start_rest(|c| c.is_decimal_char(),
+                               |c| c.is_decimal_char())
     }
 
-    fn slice_hex_chars(&self) -> ParseResult<'a, &'a str> {
-        self.slice_start_rest(|c| c.is_hex_char(),
-                              |c| c.is_hex_char())
+    fn end_of_hex_chars(&self) -> Option<uint> {
+        self.end_of_start_rest(|c| c.is_hex_char(),
+                               |c| c.is_hex_char())
     }
 
-    fn slice_comment(&self) -> ParseResult<'a, &'a str> {
+    fn end_of_comment(&self) -> Option<uint> {
         // This deliberately does not include the >. -- is not allowed
         // in a comment, so we can just test the end if it matches the
         // complete close delimiter.
         match self.find_str("--") {
             None => None,
-            Some(offset) => Some(self.slice_at(offset)),
+            Some(offset) => Some(offset),
         }
     }
 
-    fn slice_pi_value(&self) -> ParseResult<'a, &'a str> {
+    fn end_of_pi_value(&self) -> Option<uint> {
         match self.find_str("?>") {
             None => None,
-            Some(offset) => Some(self.slice_at(offset)),
+            Some(offset) => Some(offset),
         }
     }
 
-    fn slice_start_rest(&self,
-                        is_first: |char| -> bool,
-                        is_rest: |char| -> bool)
-                        -> ParseResult<'a, &'a str>
+    fn end_of_start_rest(&self,
+                         is_first: |char| -> bool,
+                         is_rest: |char| -> bool)
+                         -> Option<uint>
     {
         let mut positions = self.char_indices();
 
@@ -149,17 +142,17 @@ impl<'a> XmlStr<'a> for &'a str {
 
         let mut positions = positions.skip_while(|&(_, c)| is_rest(c));
         match positions.next() {
-            Some((offset, _)) => Some(self.slice_at(offset)),
-            None => Some((self.clone(), "")),
+            Some((offset, _)) => Some(offset),
+            None => Some(self.len()),
         }
     }
 
-    fn slice_name(&self) -> ParseResult<'a, &'a str> {
-        self.slice_start_rest(|c| c.is_name_start_char(), |c| c.is_name_char())
+    fn end_of_name(&self) -> Option<uint> {
+        self.end_of_start_rest(|c| c.is_name_start_char(), |c| c.is_name_char())
     }
 
-    fn slice_space(&self) -> ParseResult<'a, &'a str> {
-        self.slice_start_rest(|c| c.is_space_char(), |c| c.is_space_char())
+    fn end_of_space(&self) -> Option<uint> {
+        self.end_of_start_rest(|c| c.is_space_char(), |c| c.is_space_char())
     }
 }
 
@@ -240,38 +233,38 @@ mod test {
 use super::XmlStr;
 
 #[test]
-fn slice_char_data_leading_ampersand() {
-    assert_eq!("&".slice_char_data(), None);
+fn end_of_char_data_leading_ampersand() {
+    assert_eq!("&".end_of_char_data(), None);
 }
 
 #[test]
-fn slice_char_data_leading_less_than() {
-    assert_eq!("<".slice_char_data(), None);
+fn end_of_char_data_leading_less_than() {
+    assert_eq!("<".end_of_char_data(), None);
 }
 
 #[test]
-fn slice_char_data_leading_cdata_end() {
-    assert_eq!("]]>".slice_char_data(), None);
+fn end_of_char_data_leading_cdata_end() {
+    assert_eq!("]]>".end_of_char_data(), None);
 }
 
 #[test]
-fn slice_char_data_until_ampersand() {
-    assert_eq!("hello&world".slice_char_data(), Some(("hello", "&world")));
+fn end_of_char_data_until_ampersand() {
+    assert_eq!("hello&world".end_of_char_data(), Some("hello".len()));
 }
 
 #[test]
-fn slice_char_data_until_less_than() {
-    assert_eq!("hello<world".slice_char_data(), Some(("hello", "<world")));
+fn end_of_char_data_until_less_than() {
+    assert_eq!("hello<world".end_of_char_data(), Some("hello".len()));
 }
 
 #[test]
-fn slice_char_data_until_cdata_end() {
-    assert_eq!("hello]]>world".slice_char_data(), Some(("hello", "]]>world")));
+fn end_of_char_data_until_cdata_end() {
+    assert_eq!("hello]]>world".end_of_char_data(), Some("hello".len()));
 }
 
 #[test]
-fn slice_char_data_includes_right_square() {
-    assert_eq!("hello]world".slice_char_data(), Some(("hello]world", "")));
+fn end_of_char_data_includes_right_square() {
+    assert_eq!("hello]world".end_of_char_data(), Some("hello]world".len()));
 }
 
 }

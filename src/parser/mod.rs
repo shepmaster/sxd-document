@@ -6,6 +6,9 @@ use self::xmlstr::XmlStr;
 
 mod xmlstr;
 
+// TODO: Error handling: should we preserve a hierarchy of what we
+// were trying to do?
+
 pub struct Parser;
 
 struct Element<'a> {
@@ -60,8 +63,8 @@ enum Child<'a> {
 macro_rules! try_parse(
     ($e:expr) => ({
         match $e {
-            None => return None,
-            Some(x) => x,
+            Err(e) => return Err(e),
+            Ok(x) => x,
         }
     })
 )
@@ -70,24 +73,45 @@ macro_rules! try_parse(
 macro_rules! parse_optional(
     ($parser:expr, $start:expr) => ({
         match $parser {
-            None => (None, $start),
-            Some((value, next)) => (Some(value), next),
+            Err(_) => (None, $start),
+            Ok((value, next)) => (Some(value), next),
         }
     })
 )
 
 // Pattern: alternate
-macro_rules! parse_alternate(
-    ($start:expr, {}) => ( None );
-    ($start:expr, {
+// Currently keeping the longest match.
+// Should we keep all of them and decide later?
+macro_rules! parse_alternate_rec(
+    ($start:expr, $errors:expr, {}) => ({
+        $errors.sort_by(|l, r| l.point.offset.cmp(&r.point.offset));
+        Err($errors.pop().unwrap())
+    });
+    ($start:expr, $errors:expr, {
         [$parser:expr -> $transformer:expr],
         $([$parser_rest:expr -> $transformer_rest:expr],)*
     }) => (
         match $parser($start) {
-            Some((val, next)) => Some(($transformer(val), next)),
-            None => parse_alternate!($start, {$([$parser_rest -> $transformer_rest],)*}),
+            Ok((val, next)) => Ok(($transformer(val), next)),
+            Err(e) => {
+                $errors.push(e);
+                parse_alternate_rec!($start, $errors, {
+                    $([$parser_rest -> $transformer_rest],)*
+                })
+            },
         }
     );
+)
+
+macro_rules! parse_alternate(
+    ($start:expr, {
+        $([$parser_rest:expr -> $transformer_rest:expr],)*
+    }) => ({
+        let mut errors = Vec::new();
+        parse_alternate_rec!($start, errors, {
+            $([$parser_rest -> $transformer_rest],)*
+        })
+    });
 )
 
 // Pattern: zero-or-more
@@ -98,88 +122,156 @@ macro_rules! parse_zero_or_more(
         let mut start = $start;
         loop {
             let (item, next_start) = match $parser(start) {
-                Some(x) => x,
-                None => break,
+                Ok(x) => x,
+                Err(_) => break,
             };
 
             items.push(item);
             start = next_start;
         }
 
-        Some((items, start))
+        Ok((items, start))
     }};
 )
 
-type ParseResult<'a, T> = Option<(T, &'a str)>;
+#[deriving(Show,Clone,PartialEq)]
+struct StartPoint<'a> {
+    offset: uint,
+    s: &'a str,
+}
+
+impl<'a> StartPoint<'a> {
+    fn slice_at(&self, position: uint) -> (&'a str, StartPoint<'a>) {
+        (self.s.slice_to(position), StartPoint{offset: self.offset + position,
+                                               s: self.s.slice_from(position)})
+    }
+
+    fn consume_to(&self, l: Option<uint>) -> ParseResult<'a, &'a str> {
+        match l {
+            None => Err(ParseFailure{point: self.clone()}),
+            Some(position) => Ok(self.slice_at(position)),
+        }
+    }
+
+    fn consume_space(&self) -> ParseResult<'a, &'a str> {
+        self.consume_to(self.s.end_of_space())
+    }
+
+    fn consume_attribute_value(&self, quote: &str) -> ParseResult<'a, &'a str> {
+        self.consume_to(self.s.end_of_attribute(quote))
+    }
+
+    fn consume_literal(&self, literal: &str) -> ParseResult<'a, &'a str> {
+        self.consume_to(self.s.end_of_literal(literal))
+    }
+
+    fn consume_name(&self) -> ParseResult<'a, &'a str> {
+        self.consume_to(self.s.end_of_name())
+    }
+
+    fn consume_version_num(&self) -> ParseResult<'a, &'a str> {
+        self.consume_to(self.s.end_of_version_num())
+    }
+
+    fn consume_decimal_chars(&self) -> ParseResult<'a, &'a str> {
+        self.consume_to(self.s.end_of_decimal_chars())
+    }
+
+    fn consume_hex_chars(&self) -> ParseResult<'a, &'a str> {
+        self.consume_to(self.s.end_of_hex_chars())
+    }
+
+    fn consume_char_data(&self) -> ParseResult<'a, &'a str> {
+        self.consume_to(self.s.end_of_char_data())
+    }
+
+    fn consume_cdata(&self) -> ParseResult<'a, &'a str> {
+        self.consume_to(self.s.end_of_cdata())
+    }
+
+    fn consume_comment(&self) -> ParseResult<'a, &'a str> {
+        self.consume_to(self.s.end_of_comment())
+    }
+
+    fn consume_pi_value(&self) -> ParseResult<'a, &'a str> {
+        self.consume_to(self.s.end_of_pi_value())
+    }
+}
+
+struct ParseFailure<'a> {
+    point: StartPoint<'a>,
+}
+
+type ParseResult<'a, T> = Result<(T, StartPoint<'a>), ParseFailure<'a>>;
 
 impl Parser {
     pub fn new() -> Parser {
         Parser
     }
 
-    fn parse_eq<'a>(&self, xml: &'a str) -> ParseResult<'a, ()> {
-        let (_, xml) = parse_optional!(xml.slice_space(), xml);
-        let (_, xml) = try_parse!(xml.slice_literal("="));
-        let (_, xml) = parse_optional!(xml.slice_space(), xml);
+    fn parse_eq<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, ()> {
+        let (_, xml) = parse_optional!(xml.consume_space(), xml);
+        let (_, xml) = try_parse!(xml.consume_literal("="));
+        let (_, xml) = parse_optional!(xml.consume_space(), xml);
 
-        Some(((), xml))
+        Ok(((), xml))
     }
 
-    fn parse_version_info<'a>(&self, xml: &'a str) -> ParseResult<'a, &'a str> {
-        let (_, xml) = try_parse!(xml.slice_space());
-        let (_, xml) = try_parse!(xml.slice_literal("version"));
+    fn parse_version_info<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, &'a str> {
+        let (_, xml) = try_parse!(xml.consume_space());
+        let (_, xml) = try_parse!(xml.consume_literal("version"));
         let (_, xml) = try_parse!(self.parse_eq(xml));
         let (version, xml) = try_parse!(
-            self.parse_quoted_value(xml, |xml, _| xml.slice_version_num())
+            self.parse_quoted_value(xml, |xml, _| xml.consume_version_num())
         );
 
-        Some((version, xml))
+        Ok((version, xml))
     }
 
-    fn parse_xml_declaration<'a>(&self, xml: &'a str) -> ParseResult<'a, ()> {
-        let (_, xml) = try_parse!(xml.slice_literal("<?xml"));
+    fn parse_xml_declaration<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, ()> {
+        let (_, xml) = try_parse!(xml.consume_literal("<?xml"));
         let (_version, xml) = try_parse!(self.parse_version_info(xml));
         // let (encoding, xml) = parse_optional!(self.parse_encoding_declaration(xml));
         // let (standalone, xml) = parse_optional!(self.parse_standalone_declaration(xml));
-        let (_, xml) = parse_optional!(xml.slice_space(), xml);
-        let (_, xml) = try_parse!(xml.slice_literal("?>"));
+        let (_, xml) = parse_optional!(xml.consume_space(), xml);
+        let (_, xml) = try_parse!(xml.consume_literal("?>"));
 
-        Some(((), xml))
+        Ok(((), xml))
     }
 
-    fn parse_misc<'a>(&self, xml: &'a str) -> ParseResult<'a, RootChild<'a>> {
+    fn parse_misc<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, RootChild<'a>> {
         parse_alternate!(xml, {
-            [|xml: &'a str| self.parse_comment(xml) -> |c| CommentRootChild(c)],
-            [|xml: &'a str| self.parse_pi(xml)      -> |p| PIRootChild(p)],
-            [|xml: &'a str| xml.slice_space()       -> |_| IgnoredRootChild],
+            [|xml: StartPoint<'a>| self.parse_comment(xml) -> |c| CommentRootChild(c)],
+            [|xml: StartPoint<'a>| self.parse_pi(xml)      -> |p| PIRootChild(p)],
+            [|xml: StartPoint<'a>| xml.consume_space()     -> |_| IgnoredRootChild],
         })
     }
 
-    fn parse_miscs<'a>(&self, xml: &'a str) -> ParseResult<'a, Vec<RootChild<'a>>> {
+    fn parse_miscs<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Vec<RootChild<'a>>> {
         parse_zero_or_more!(xml, |xml| self.parse_misc(xml))
     }
 
-    fn parse_prolog<'a>(&self, xml: &'a str) -> ParseResult<'a, Vec<RootChild<'a>>> {
+    fn parse_prolog<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Vec<RootChild<'a>>> {
         let (_, xml) = parse_optional!(self.parse_xml_declaration(xml), xml);
         self.parse_miscs(xml)
     }
 
     fn parse_one_quoted_value<'a, T>(&self,
-                                     xml: &'a str,
+                                     xml: StartPoint<'a>,
                                      quote: &str,
-                                     f: |&'a str| -> ParseResult<'a, T>)
+                                     f: |StartPoint<'a>| -> ParseResult<'a, T>)
                                      -> ParseResult<'a, T>
     {
-        let (_, xml) = try_parse!(xml.slice_literal(quote));
+        let (_, xml) = try_parse!(xml.consume_literal(quote));
         let (value, xml) = try_parse!(f(xml));
-        let (_, xml) = try_parse!(xml.slice_literal(quote));
+        let (_, xml) = try_parse!(xml.consume_literal(quote));
 
-        Some((value, xml))
+        Ok((value, xml))
     }
 
     fn parse_quoted_value<'a, T>(&self,
-                                 xml: &'a str,
-                                 f: |&'a str, &str| -> ParseResult<'a, T>)
+                                 xml: StartPoint<'a>,
+                                 f: |StartPoint<'a>, &str| -> ParseResult<'a, T>)
                                  -> ParseResult<'a, T>
     {
         parse_alternate!(xml, {
@@ -188,20 +280,20 @@ impl Parser {
         })
     }
 
-    fn parse_attribute_values<'a>(&self, xml: &'a str, quote: &str)
+    fn parse_attribute_values<'a>(&self, xml: StartPoint<'a>, quote: &str)
                                   -> ParseResult<'a, Vec<AttributeValue<'a>>>
     {
         parse_zero_or_more!(xml, |xml|
             parse_alternate!(xml, {
-                [|xml: &'a str| xml.slice_attribute(quote) -> |v| LiteralAttributeValue(v)],
-                [|xml: &'a str| self.parse_reference(xml)  -> |e| ReferenceAttributeValue(e)],
+                [|xml: StartPoint<'a>| xml.consume_attribute_value(quote) -> |v| LiteralAttributeValue(v)],
+                [|xml: StartPoint<'a>| self.parse_reference(xml)          -> |e| ReferenceAttributeValue(e)],
             }))
     }
 
-    fn parse_attribute<'a>(&self, xml: &'a str) -> ParseResult<'a, Attribute<'a>> {
-        let (_, xml) = try_parse!(xml.slice_space());
+    fn parse_attribute<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Attribute<'a>> {
+        let (_, xml) = try_parse!(xml.consume_space());
 
-        let (name, xml) = try_parse!(xml.slice_name());
+        let (name, xml) = try_parse!(xml.consume_name());
 
         let (_, xml) = try_parse!(self.parse_eq(xml));
 
@@ -209,80 +301,80 @@ impl Parser {
             self.parse_quoted_value(xml, |xml, quote| self.parse_attribute_values(xml, quote))
         );
 
-        Some((Attribute{name: name, values: values}, xml))
+        Ok((Attribute{name: name, values: values}, xml))
     }
 
-    fn parse_attributes<'a>(&self, xml: &'a str) -> ParseResult<'a, Vec<Attribute<'a>>> {
+    fn parse_attributes<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Vec<Attribute<'a>>> {
         parse_zero_or_more!(xml, |xml| self.parse_attribute(xml))
     }
 
-    fn parse_empty_element<'a>(&self, xml: &'a str) -> ParseResult<'a, Element<'a>> {
-        let (_, xml) = try_parse!(xml.slice_literal("<"));
-        let (name, xml) = try_parse!(xml.slice_name());
+    fn parse_empty_element<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Element<'a>> {
+        let (_, xml) = try_parse!(xml.consume_literal("<"));
+        let (name, xml) = try_parse!(xml.consume_name());
         let (attrs, xml) = try_parse!(self.parse_attributes(xml));
-        let (_, xml) = parse_optional!(xml.slice_space(), xml);
-        let (_, xml) = try_parse!(xml.slice_literal("/>"));
+        let (_, xml) = parse_optional!(xml.consume_space(), xml);
+        let (_, xml) = try_parse!(xml.consume_literal("/>"));
 
-        Some((Element{name: name, attributes: attrs, children: Vec::new()}, xml))
+        Ok((Element{name: name, attributes: attrs, children: Vec::new()}, xml))
     }
 
-    fn parse_element_start<'a>(&self, xml: &'a str) -> ParseResult<'a, Element<'a>> {
-        let (_, xml) = try_parse!(xml.slice_literal("<"));
-        let (name, xml) = try_parse!(xml.slice_name());
+    fn parse_element_start<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Element<'a>> {
+        let (_, xml) = try_parse!(xml.consume_literal("<"));
+        let (name, xml) = try_parse!(xml.consume_name());
         let (attrs, xml) = try_parse!(self.parse_attributes(xml));
-        let (_, xml) = parse_optional!(xml.slice_space(), xml);
-        let (_, xml) = try_parse!(xml.slice_literal(">"));
+        let (_, xml) = parse_optional!(xml.consume_space(), xml);
+        let (_, xml) = try_parse!(xml.consume_literal(">"));
 
-        Some((Element{name: name, attributes: attrs, children: Vec::new()}, xml))
+        Ok((Element{name: name, attributes: attrs, children: Vec::new()}, xml))
     }
 
-    fn parse_element_end<'a>(&self, xml: &'a str) -> ParseResult<'a, &'a str> {
-        let (_, xml) = try_parse!(xml.slice_literal("</"));
-        let (name, xml) = try_parse!(xml.slice_name());
-        let (_, xml) = parse_optional!(xml.slice_space(), xml);
-        let (_, xml) = try_parse!(xml.slice_literal(">"));
-        Some((name, xml))
+    fn parse_element_end<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, &'a str> {
+        let (_, xml) = try_parse!(xml.consume_literal("</"));
+        let (name, xml) = try_parse!(xml.consume_name());
+        let (_, xml) = parse_optional!(xml.consume_space(), xml);
+        let (_, xml) = try_parse!(xml.consume_literal(">"));
+        Ok((name, xml))
     }
 
-    fn parse_char_data<'a>(&self, xml: &'a str) -> ParseResult<'a, Text<'a>> {
-        let (text, xml) = try_parse!(xml.slice_char_data());
+    fn parse_char_data<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Text<'a>> {
+        let (text, xml) = try_parse!(xml.consume_char_data());
 
-        Some((Text{text: text}, xml))
+        Ok((Text{text: text}, xml))
     }
 
-    fn parse_cdata<'a>(&self, xml: &'a str) -> ParseResult<'a, Text<'a>> {
-        let (_, xml) = try_parse!(xml.slice_literal("<![CDATA["));
-        let (text, xml) = try_parse!(xml.slice_cdata());
-        let (_, xml) = try_parse!(xml.slice_literal("]]>"));
+    fn parse_cdata<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Text<'a>> {
+        let (_, xml) = try_parse!(xml.consume_literal("<![CDATA["));
+        let (text, xml) = try_parse!(xml.consume_cdata());
+        let (_, xml) = try_parse!(xml.consume_literal("]]>"));
 
-        Some((Text{text: text}, xml))
+        Ok((Text{text: text}, xml))
     }
 
-    fn parse_entity_ref<'a>(&self, xml: &'a str) -> ParseResult<'a, Reference<'a>> {
-        let (_, xml) = try_parse!(xml.slice_literal("&"));
-        let (name, xml) = try_parse!(xml.slice_name());
-        let (_, xml) = try_parse!(xml.slice_literal(";"));
+    fn parse_entity_ref<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
+        let (_, xml) = try_parse!(xml.consume_literal("&"));
+        let (name, xml) = try_parse!(xml.consume_name());
+        let (_, xml) = try_parse!(xml.consume_literal(";"));
 
-        Some((EntityReference(name), xml))
+        Ok((EntityReference(name), xml))
     }
 
-    fn parse_decimal_char_ref<'a>(&self, xml: &'a str) -> ParseResult<'a, Reference<'a>> {
-        let (_, xml) = try_parse!(xml.slice_literal("&#"));
-        let (dec, xml) = try_parse!(xml.slice_decimal_chars());
-        let (_, xml) = try_parse!(xml.slice_literal(";"));
+    fn parse_decimal_char_ref<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
+        let (_, xml) = try_parse!(xml.consume_literal("&#"));
+        let (dec, xml) = try_parse!(xml.consume_decimal_chars());
+        let (_, xml) = try_parse!(xml.consume_literal(";"));
 
-        Some((DecimalCharReference(dec), xml))
+        Ok((DecimalCharReference(dec), xml))
     }
 
-    fn parse_hex_char_ref<'a>(&self, xml: &'a str) -> ParseResult<'a, Reference<'a>> {
-        let (_, xml) = try_parse!(xml.slice_literal("&#x"));
-        let (hex, xml) = try_parse!(xml.slice_hex_chars());
-        let (_, xml) = try_parse!(xml.slice_literal(";"));
+    fn parse_hex_char_ref<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
+        let (_, xml) = try_parse!(xml.consume_literal("&#x"));
+        let (hex, xml) = try_parse!(xml.consume_hex_chars());
+        let (_, xml) = try_parse!(xml.consume_literal(";"));
 
-        Some((HexCharReference(hex), xml))
+        Ok((HexCharReference(hex), xml))
     }
 
-    fn parse_reference<'a>(&self, xml: &'a str) -> ParseResult<'a, Reference<'a>> {
+    fn parse_reference<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
         parse_alternate!(xml, {
             [|xml| self.parse_entity_ref(xml)       -> |e| e],
             [|xml| self.parse_decimal_char_ref(xml) -> |d| d],
@@ -290,33 +382,33 @@ impl Parser {
         })
     }
 
-    fn parse_comment<'a>(&self, xml: &'a str) -> ParseResult<'a, Comment<'a>> {
-        let (_, xml) = try_parse!(xml.slice_literal("<!--"));
-        let (text, xml) = try_parse!(xml.slice_comment());
-        let (_, xml) = try_parse!(xml.slice_literal("-->"));
+    fn parse_comment<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Comment<'a>> {
+        let (_, xml) = try_parse!(xml.consume_literal("<!--"));
+        let (text, xml) = try_parse!(xml.consume_comment());
+        let (_, xml) = try_parse!(xml.consume_literal("-->"));
 
-        Some((Comment{text: text}, xml))
+        Ok((Comment{text: text}, xml))
     }
 
-    fn parse_pi_value<'a>(&self, xml: &'a str) -> ParseResult<'a, &'a str> {
-        let (_, xml) = try_parse!(xml.slice_space());
-        xml.slice_pi_value()
+    fn parse_pi_value<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, &'a str> {
+        let (_, xml) = try_parse!(xml.consume_space());
+        xml.consume_pi_value()
     }
 
-    fn parse_pi<'a>(&self, xml: &'a str) -> ParseResult<'a, ProcessingInstruction<'a>> {
-        let (_, xml) = try_parse!(xml.slice_literal("<?"));
-        let (target, xml) = try_parse!(xml.slice_name());
+    fn parse_pi<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, ProcessingInstruction<'a>> {
+        let (_, xml) = try_parse!(xml.consume_literal("<?"));
+        let (target, xml) = try_parse!(xml.consume_name());
         let (value, xml) = parse_optional!(self.parse_pi_value(xml), xml);
-        let (_, xml) = try_parse!(xml.slice_literal("?>"));
+        let (_, xml) = try_parse!(xml.consume_literal("?>"));
 
         if target.eq_ignore_ascii_case("xml") {
             fail!("Can't use xml as a PI target");
         }
 
-        Some((ProcessingInstruction{target: target, value: value}, xml))
+        Ok((ProcessingInstruction{target: target, value: value}, xml))
     }
 
-    fn parse_content<'a>(&self, xml: &'a str) -> (Vec<Child<'a>>, &'a str) {
+    fn parse_content<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Vec<Child<'a>>> {
         let mut children = Vec::new();
 
         let (char_data, xml) = parse_optional!(self.parse_char_data(xml), xml);
@@ -334,8 +426,8 @@ impl Parser {
             });
 
             let (child, after) = match xxx {
-                Some(x) => x,
-                None => return (children, start),
+                Ok(x) => x,
+                Err(_) => return Ok((children, start)),
             };
 
             let (char_data, xml) = parse_optional!(self.parse_char_data(after), after);
@@ -347,9 +439,9 @@ impl Parser {
         }
     }
 
-    fn parse_non_empty_element<'a>(&self, xml: &'a str) -> ParseResult<'a, Element<'a>> {
+    fn parse_non_empty_element<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Element<'a>> {
         let (mut element, xml) = try_parse!(self.parse_element_start(xml));
-        let (children, xml) = self.parse_content(xml);
+        let (children, xml) = try_parse!(self.parse_content(xml));
         let (name, xml) = try_parse!(self.parse_element_end(xml));
 
         if element.name != name {
@@ -358,26 +450,33 @@ impl Parser {
 
         element.children = children;
 
-        Some((element, xml))
+        Ok((element, xml))
     }
 
-    fn parse_element<'a>(&self, xml: &'a str) -> ParseResult<'a, Element<'a>> {
+    fn parse_element<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Element<'a>> {
         parse_alternate!(xml, {
             [|xml| self.parse_empty_element(xml)     -> |e| e],
             [|xml| self.parse_non_empty_element(xml) -> |e| e],
         })
     }
 
-    pub fn parse(&self, xml: &str) -> super::Document {
+    pub fn parse(&self, xml: &str) -> Result<super::Document, uint> {
+        let xml = StartPoint{offset: 0, s: xml};
+
         let (before_children, xml) = parse_optional!(self.parse_prolog(xml), xml);
-        let (element, xml) = self.parse_element(xml).expect("no element");
+
+        let (element, xml) = match self.parse_element(xml) {
+            Ok(x) => x,
+            Err(pf) => return Err(pf.point.offset),
+        };
+
         let (after_children, _xml) = parse_optional!(self.parse_miscs(xml), xml);
 
         let h = Hydrator;
 
-        h.hydrate_document(before_children.unwrap_or(Vec::new()),
-                           element,
-                           after_children.unwrap_or(Vec::new()))
+        Ok(h.hydrate_document(before_children.unwrap_or(Vec::new()),
+                              element,
+                              after_children.unwrap_or(Vec::new())))
     }
 }
 
@@ -490,12 +589,22 @@ macro_rules! assert_str_eq(
     ($l:expr, $r:expr) => (assert_eq!($l.as_slice(), $r.as_slice()));
 )
 
+fn full_parse(xml: &str) -> Result<Document, uint> {
+    Parser::new()
+        .parse(xml)
+}
+
+fn quick_parse(xml: &str) -> Document {
+    full_parse(xml)
+        .ok()
+        .expect("Failed to parse the XML string")
+}
+
 fn top(doc: &Document) -> Element { doc.root().children()[0].element().unwrap() }
 
 #[test]
 fn a_document_with_a_prolog() {
-    let parser = Parser::new();
-    let doc = parser.parse("<?xml version='1.0' ?><hello />");
+    let doc = quick_parse("<?xml version='1.0' ?><hello />");
     let top = top(&doc);
 
     assert_str_eq!(top.name(), "hello");
@@ -503,8 +612,7 @@ fn a_document_with_a_prolog() {
 
 #[test]
 fn a_document_with_a_prolog_with_double_quotes() {
-    let parser = Parser::new();
-    let doc = parser.parse("<?xml version=\"1.0\" ?><hello />");
+    let doc = quick_parse("<?xml version=\"1.0\" ?><hello />");
     let top = top(&doc);
 
     assert_str_eq!(top.name(), "hello");
@@ -512,8 +620,7 @@ fn a_document_with_a_prolog_with_double_quotes() {
 
 #[test]
 fn a_document_with_a_single_element() {
-    let parser = Parser::new();
-    let doc = parser.parse("<hello />");
+    let doc = quick_parse("<hello />");
     let top = top(&doc);
 
     assert_str_eq!(top.name(), "hello");
@@ -521,8 +628,7 @@ fn a_document_with_a_single_element() {
 
 #[test]
 fn an_element_with_an_attribute() {
-    let parser = Parser::new();
-    let doc = parser.parse("<hello scope='world'/>");
+    let doc = quick_parse("<hello scope='world'/>");
     let top = top(&doc);
 
     assert_str_eq!(top.get_attribute("scope").unwrap(), "world");
@@ -530,8 +636,7 @@ fn an_element_with_an_attribute() {
 
 #[test]
 fn an_element_with_an_attribute_using_double_quotes() {
-    let parser = Parser::new();
-    let doc = parser.parse("<hello scope=\"world\"/>");
+    let doc = quick_parse("<hello scope=\"world\"/>");
     let top = top(&doc);
 
     assert_str_eq!(top.get_attribute("scope").unwrap(), "world");
@@ -539,8 +644,7 @@ fn an_element_with_an_attribute_using_double_quotes() {
 
 #[test]
 fn an_element_with_multiple_attributes() {
-    let parser = Parser::new();
-    let doc = parser.parse("<hello scope=\"world\" happy='true'/>");
+    let doc = quick_parse("<hello scope='world' happy='true'/>");
     let top = top(&doc);
 
     assert_str_eq!(top.get_attribute("scope").unwrap(), "world");
@@ -549,8 +653,7 @@ fn an_element_with_multiple_attributes() {
 
 #[test]
 fn an_attribute_with_references() {
-    let parser = Parser::new();
-    let doc = parser.parse("<log msg='I &lt;3 math' />");
+    let doc = quick_parse("<log msg='I &lt;3 math' />");
     let top = top(&doc);
 
     assert_str_eq!(top.get_attribute("msg").unwrap(), "I <3 math");
@@ -558,8 +661,7 @@ fn an_attribute_with_references() {
 
 #[test]
 fn an_element_that_is_not_self_closing() {
-    let parser = Parser::new();
-    let doc = parser.parse("<hello></hello>");
+    let doc = quick_parse("<hello></hello>");
     let top = top(&doc);
 
     assert_str_eq!(top.name(), "hello");
@@ -567,8 +669,7 @@ fn an_element_that_is_not_self_closing() {
 
 #[test]
 fn nested_elements() {
-    let parser = Parser::new();
-    let doc = parser.parse("<hello><world/></hello>");
+    let doc = quick_parse("<hello><world/></hello>");
     let hello = top(&doc);
     let world = hello.children()[0].element().unwrap();
 
@@ -577,8 +678,7 @@ fn nested_elements() {
 
 #[test]
 fn multiply_nested_elements() {
-    let parser = Parser::new();
-    let doc = parser.parse("<hello><awesome><world/></awesome></hello>");
+    let doc = quick_parse("<hello><awesome><world/></awesome></hello>");
     let hello = top(&doc);
     let awesome = hello.children()[0].element().unwrap();
     let world = awesome.children()[0].element().unwrap();
@@ -588,8 +688,7 @@ fn multiply_nested_elements() {
 
 #[test]
 fn nested_elements_with_attributes() {
-    let parser = Parser::new();
-    let doc = parser.parse("<hello><world name='Earth'/></hello>");
+    let doc = quick_parse("<hello><world name='Earth'/></hello>");
     let hello = top(&doc);
     let world = hello.children()[0].element().unwrap();
 
@@ -598,8 +697,7 @@ fn nested_elements_with_attributes() {
 
 #[test]
 fn element_with_text() {
-    let parser = Parser::new();
-    let doc = parser.parse("<hello>world</hello>");
+    let doc = quick_parse("<hello>world</hello>");
     let hello = top(&doc);
     let text = hello.children()[0].text().unwrap();
 
@@ -608,8 +706,7 @@ fn element_with_text() {
 
 #[test]
 fn element_with_cdata() {
-    let parser = Parser::new();
-    let doc = parser.parse("<words><![CDATA[I have & and < !]]></words>");
+    let doc = quick_parse("<words><![CDATA[I have & and < !]]></words>");
     let words = top(&doc);
     let text = words.children()[0].text().unwrap();
 
@@ -618,8 +715,7 @@ fn element_with_cdata() {
 
 #[test]
 fn element_with_comment() {
-    let parser = Parser::new();
-    let doc = parser.parse("<hello><!-- A comment --></hello>");
+    let doc = quick_parse("<hello><!-- A comment --></hello>");
     let words = top(&doc);
     let comment = words.children()[0].comment().unwrap();
 
@@ -628,8 +724,7 @@ fn element_with_comment() {
 
 #[test]
 fn comment_before_top_element() {
-    let parser = Parser::new();
-    let doc = parser.parse("<!-- A comment --><hello />");
+    let doc = quick_parse("<!-- A comment --><hello />");
     let comment = doc.root().children()[0].comment().unwrap();
 
     assert_str_eq!(comment.text(), " A comment ");
@@ -637,12 +732,11 @@ fn comment_before_top_element() {
 
 #[test]
 fn multiple_comments_before_top_element() {
-    let parser = Parser::new();
     let xml = r"
 <!--Comment 1-->
 <!--Comment 2-->
 <hello />";
-    let doc = parser.parse(xml);
+    let doc = quick_parse(xml);
     let comment1 = doc.root().children()[0].comment().unwrap();
     let comment2 = doc.root().children()[1].comment().unwrap();
 
@@ -652,12 +746,11 @@ fn multiple_comments_before_top_element() {
 
 #[test]
 fn multiple_comments_after_top_element() {
-    let parser = Parser::new();
     let xml = r"
 <hello />
 <!--Comment 1-->
 <!--Comment 2-->";
-    let doc = parser.parse(xml);
+    let doc = quick_parse(xml);
     let comment1 = doc.root().children()[1].comment().unwrap();
     let comment2 = doc.root().children()[2].comment().unwrap();
 
@@ -667,8 +760,7 @@ fn multiple_comments_after_top_element() {
 
 #[test]
 fn element_with_processing_instruction() {
-    let parser = Parser::new();
-    let doc = parser.parse("<hello><?device?></hello>");
+    let doc = quick_parse("<hello><?device?></hello>");
     let hello = top(&doc);
     let pi = hello.children()[0].processing_instruction().unwrap();
 
@@ -678,13 +770,12 @@ fn element_with_processing_instruction() {
 
 #[test]
 fn top_level_processing_instructions() {
-    let parser = Parser::new();
     let xml = r"
 <?output printer?>
 <hello />
 <?validated?>";
 
-    let doc = parser.parse(xml);
+    let doc = quick_parse(xml);
     let pi1 = doc.root().children()[0].processing_instruction().unwrap();
     let pi2 = doc.root().children()[2].processing_instruction().unwrap();
 
@@ -697,8 +788,7 @@ fn top_level_processing_instructions() {
 
 #[test]
 fn element_with_decimal_char_reference() {
-    let parser = Parser::new();
-    let doc = parser.parse("<math>2 &#62; 1</math>");
+    let doc = quick_parse("<math>2 &#62; 1</math>");
     let math = top(&doc);
     let text1 = math.children()[0].text().unwrap();
     let text2 = math.children()[1].text().unwrap();
@@ -711,8 +801,7 @@ fn element_with_decimal_char_reference() {
 
 #[test]
 fn element_with_hexidecimal_char_reference() {
-    let parser = Parser::new();
-    let doc = parser.parse("<math>1 &#x3c; 2</math>");
+    let doc = quick_parse("<math>1 &#x3c; 2</math>");
     let math = top(&doc);
     let text1 = math.children()[0].text().unwrap();
     let text2 = math.children()[1].text().unwrap();
@@ -725,8 +814,7 @@ fn element_with_hexidecimal_char_reference() {
 
 #[test]
 fn element_with_entity_reference() {
-    let parser = Parser::new();
-    let doc = parser.parse("<math>I &lt;3 math</math>");
+    let doc = quick_parse("<math>I &lt;3 math</math>");
     let math = top(&doc);
     let text1 = math.children()[0].text().unwrap();
     let text2 = math.children()[1].text().unwrap();
@@ -739,8 +827,7 @@ fn element_with_entity_reference() {
 
 #[test]
 fn element_with_mixed_children() {
-    let parser = Parser::new();
-    let doc = parser.parse("<hello>to <!--fixme--><a><![CDATA[the]]></a><?world?></hello>");
+    let doc = quick_parse("<hello>to <!--fixme--><a><![CDATA[the]]></a><?world?></hello>");
     let hello = top(&doc);
 
     let text    = hello.children()[0].text().unwrap();
@@ -752,6 +839,58 @@ fn element_with_mixed_children() {
     assert_str_eq!(comment.text(), "fixme");
     assert_str_eq!(element.name(), "a");
     assert_str_eq!(pi.target(),    "world");
+}
+
+#[test]
+fn failure_no_open_brace() {
+    let r = full_parse("hi />");
+
+    assert_eq!(r, Err(0));
+}
+
+#[test]
+fn failure_unclosed_tag() {
+    let r = full_parse("<hi");
+
+    assert_eq!(r, Err(3));
+}
+
+#[test]
+fn failure_unexpected_space() {
+    let r = full_parse("<hi / >");
+
+    assert_eq!(r, Err(4));
+}
+
+#[test]
+fn failure_nested_unclosed_tag() {
+    let r = full_parse("<hi><oops</hi>");
+
+    // Better at < ?
+    assert_eq!(r, Err(4));
+}
+
+#[test]
+fn failure_nested_unexpected_space() {
+    let r = full_parse("<hi><oops / ></hi>");
+
+    // Better at / ?
+    assert_eq!(r, Err(4));
+}
+
+#[test]
+fn failure_malformed_entity_reference() {
+    let r = full_parse("<hi>Entity: &;</hi>");
+
+    assert_eq!(r, Err(12));
+}
+
+#[test]
+fn failure_nested_malformed_entity_reference() {
+    let r = full_parse("<hi><bye>Entity: &;</bye></hi>");
+
+    // Better at &
+    assert_eq!(r, Err(4));
 }
 
 }
