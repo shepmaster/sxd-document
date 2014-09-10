@@ -205,6 +205,10 @@ impl<'a> StartPoint<'a> {
     fn consume_pi_value(&self) -> ParseResult<'a, &'a str> {
         self.consume_to(self.s.end_of_pi_value())
     }
+
+    fn consume_start_tag(&self) -> ParseResult<'a, &'a str> {
+        self.consume_to(self.s.end_of_start_tag())
+    }
 }
 
 struct ParseFailure<'a> {
@@ -318,7 +322,7 @@ impl Parser {
     }
 
     fn parse_empty_element<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Element<'a>> {
-        let (_, xml) = try_parse!(xml.consume_literal("<"));
+        let (_, xml) = try_parse!(xml.consume_start_tag());
         let (name, xml) = try_parse!(xml.consume_name());
         let (attrs, xml) = try_parse!(self.parse_attributes(xml));
         let (_, xml) = parse_optional!(xml.consume_space(), xml);
@@ -328,7 +332,7 @@ impl Parser {
     }
 
     fn parse_element_start<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Element<'a>> {
-        let (_, xml) = try_parse!(xml.consume_literal("<"));
+        let (_, xml) = try_parse!(xml.consume_start_tag());
         let (name, xml) = try_parse!(xml.consume_name());
         let (attrs, xml) = try_parse!(self.parse_attributes(xml));
         let (_, xml) = parse_optional!(xml.consume_space(), xml);

@@ -11,6 +11,7 @@ pub trait XmlStr {
     fn end_of_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> Option<uint>;
     fn end_of_name(&self) -> Option<uint>;
     fn end_of_space(&self) -> Option<uint>;
+    fn end_of_start_tag(&self) -> Option<uint>;
 }
 
 impl<'a> XmlStr for &'a str {
@@ -153,6 +154,24 @@ impl<'a> XmlStr for &'a str {
 
     fn end_of_space(&self) -> Option<uint> {
         self.end_of_start_rest(|c| c.is_space_char(), |c| c.is_space_char())
+    }
+
+    fn end_of_start_tag(&self) -> Option<uint> {
+        let mut positions = self.char_indices();
+
+        match positions.next() {
+            Some((_, c)) if '<' == c => (),
+            _ => return None,
+        };
+
+        match positions.next() {
+            Some((offset, c)) =>
+                match c {
+                    '?' | '!' | '/' => None,
+                    _ => Some(offset),
+                },
+            None => Some(self.len()),
+        }
     }
 }
 
