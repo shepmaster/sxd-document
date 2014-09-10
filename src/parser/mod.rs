@@ -1,3 +1,26 @@
+//! Error handling
+//!
+//! When an error occurs in an alternation,
+//! we return the most interesting failure.
+//!
+//! When an error occurs while parsing zero-or-more items,
+//! we return the items parsed in addition to the failure point.
+//! If the next required item fails,
+//! we return the more interesting error of the two.
+//!
+//! When we have multiple errors,
+//! the *most interesting error* is the one that occurred last in the input.
+//! We assume that this will be closest to what the user intended.
+//!
+//! Unresolved questions:
+//!
+//! - Should zero-or-one mimic zero-or-more?
+//! - Should we restart from both the failure point and the original start point?
+//! - Should we preserve a tree of all the failures?
+//!
+//! Influence taken from
+//! http://www.scheidecker.net/2012/12/03/parser-combinators/
+
 use std::ascii::AsciiExt;
 use std::char::from_u32;
 use std::num::from_str_radix;
@@ -5,9 +28,6 @@ use std::num::from_str_radix;
 use self::xmlstr::XmlStr;
 
 mod xmlstr;
-
-// TODO: Error handling: should we preserve a hierarchy of what we
-// were trying to do?
 
 pub struct Parser;
 
@@ -76,41 +96,69 @@ enum Child<'a> {
     PIChild(ProcessingInstruction<'a>),
 }
 
+fn best_failure<'a>(mut errors: Vec<ParseFailure<'a>>) -> ParseFailure<'a> {
+    errors.sort_by(|l, r| l.point.offset.cmp(&r.point.offset));
+    errors.pop().expect("Called without any errors")
+}
+
 macro_rules! try_parse(
     ($e:expr) => ({
         match $e {
-            Err(e) => return Err(e),
-            Ok(x) => x,
+            Success(x) => x,
+            Partial((_, pf, _)) |
+            Failure(pf) => return Failure(pf),
         }
     })
+)
+
+macro_rules! try_partial_parse(
+    ($e:expr) => ({
+        match $e {
+            Success((v, xml)) => (v, vec![], xml),
+            Partial((v, pf, xml)) => (v, vec![pf], xml),
+            Failure(pf) => return Failure(pf),
+        }
+    })
+)
+
+macro_rules! try_resume_after_partial_failure(
+    ($partial:expr, $e:expr) => ({
+        match $e {
+            Success(x) => x,
+            Partial((_, pf, _)) |
+            Failure(pf) => {
+                $partial.push(pf);
+                return Failure(best_failure($partial))
+            },
+        }
+    });
 )
 
 // Pattern: zero-or-one
 macro_rules! parse_optional(
     ($parser:expr, $start:expr) => ({
         match $parser {
-            Err(_) => (None, $start),
-            Ok((value, next)) => (Some(value), next),
+            Success((value, next)) => (Some(value), next),
+            Partial((value, _, next)) => (Some(value), next),
+            Failure(_) => (None, $start),
         }
     })
 )
 
 // Pattern: alternate
-// Currently keeping the longest match.
-// Should we keep all of them and decide later?
 macro_rules! parse_alternate_rec(
     ($start:expr, $errors:expr, {}) => ({
-        $errors.sort_by(|l, r| l.point.offset.cmp(&r.point.offset));
-        Err($errors.pop().unwrap())
+        Failure(best_failure($errors))
     });
     ($start:expr, $errors:expr, {
         [$parser:expr -> $transformer:expr],
         $([$parser_rest:expr -> $transformer_rest:expr],)*
     }) => (
         match $parser($start) {
-            Ok((val, next)) => Ok(($transformer(val), next)),
-            Err(e) => {
-                $errors.push(e);
+            Success((val, next)) => Success(($transformer(val), next)),
+            Partial((_, pf, _)) |
+            Failure(pf) => {
+                $errors.push(pf);
                 parse_alternate_rec!($start, $errors, {
                     $([$parser_rest -> $transformer_rest],)*
                 })
@@ -134,19 +182,24 @@ macro_rules! parse_alternate(
 macro_rules! parse_zero_or_more(
     ($start:expr, $parser:expr) => {{
         let mut items = Vec::new();
+        let mut err;
 
         let mut start = $start;
         loop {
             let (item, next_start) = match $parser(start) {
-                Ok(x) => x,
-                Err(_) => break,
+                Success(x) => x,
+                Partial((_, pf, _)) |
+                Failure(pf) => {
+                    err = Some(pf);
+                    break
+                }
             };
 
             items.push(item);
             start = next_start;
         }
 
-        Ok((items, start))
+        Partial((items, err.unwrap(), start))
     }};
 )
 
@@ -164,8 +217,8 @@ impl<'a> StartPoint<'a> {
 
     fn consume_to(&self, l: Option<uint>) -> ParseResult<'a, &'a str> {
         match l {
-            None => Err(ParseFailure{point: self.clone()}),
-            Some(position) => Ok(self.slice_at(position)),
+            None => Failure(ParseFailure{point: self.clone()}),
+            Some(position) => Success(self.slice_at(position)),
         }
     }
 
@@ -222,7 +275,11 @@ struct ParseFailure<'a> {
     point: StartPoint<'a>,
 }
 
-type ParseResult<'a, T> = Result<(T, StartPoint<'a>), ParseFailure<'a>>;
+enum ParseResult<'a, T> {
+    Success((T, StartPoint<'a>)),
+    Partial((T, ParseFailure<'a>, StartPoint<'a>)),
+    Failure((ParseFailure<'a>)),
+}
 
 impl Parser {
     pub fn new() -> Parser {
@@ -234,7 +291,7 @@ impl Parser {
         let (_, xml) = try_parse!(xml.consume_literal("="));
         let (_, xml) = parse_optional!(xml.consume_space(), xml);
 
-        Ok(((), xml))
+        Success(((), xml))
     }
 
     fn parse_version_info<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, &'a str> {
@@ -245,7 +302,7 @@ impl Parser {
             self.parse_quoted_value(xml, |xml, _| xml.consume_version_num())
         );
 
-        Ok((version, xml))
+        Success((version, xml))
     }
 
     fn parse_xml_declaration<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, ()> {
@@ -256,7 +313,7 @@ impl Parser {
         let (_, xml) = parse_optional!(xml.consume_space(), xml);
         let (_, xml) = try_parse!(xml.consume_literal("?>"));
 
-        Ok(((), xml))
+        Success(((), xml))
     }
 
     fn parse_misc<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, RootChild<'a>> {
@@ -283,10 +340,10 @@ impl Parser {
                                      -> ParseResult<'a, T>
     {
         let (_, xml) = try_parse!(xml.consume_literal(quote));
-        let (value, xml) = try_parse!(f(xml));
-        let (_, xml) = try_parse!(xml.consume_literal(quote));
+        let (value, mut f, xml) = try_partial_parse!(f(xml));
+        let (_, xml) = try_resume_after_partial_failure!(f, xml.consume_literal(quote));
 
-        Ok((value, xml))
+        Success((value, xml))
     }
 
     fn parse_quoted_value<'a, T>(&self,
@@ -321,7 +378,7 @@ impl Parser {
             self.parse_quoted_value(xml, |xml, quote| self.parse_attribute_values(xml, quote))
         );
 
-        Ok((Attribute{name: name, values: values}, xml))
+        Success((Attribute{name: name, values: values}, xml))
     }
 
     fn parse_attributes<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Vec<Attribute<'a>>> {
@@ -333,13 +390,13 @@ impl Parser {
         let (name, xml) = try_parse!(xml.consume_name());
         let (_, xml) = parse_optional!(xml.consume_space(), xml);
         let (_, xml) = try_parse!(xml.consume_literal(">"));
-        Ok((name, xml))
+        Success((name, xml))
     }
 
     fn parse_char_data<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Text<'a>> {
         let (text, xml) = try_parse!(xml.consume_char_data());
 
-        Ok((Text{text: text}, xml))
+        Success((Text{text: text}, xml))
     }
 
     fn parse_cdata<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Text<'a>> {
@@ -347,7 +404,7 @@ impl Parser {
         let (text, xml) = try_parse!(xml.consume_cdata());
         let (_, xml) = try_parse!(xml.consume_literal("]]>"));
 
-        Ok((Text{text: text}, xml))
+        Success((Text{text: text}, xml))
     }
 
     fn parse_entity_ref<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
@@ -355,7 +412,7 @@ impl Parser {
         let (name, xml) = try_parse!(xml.consume_name());
         let (_, xml) = try_parse!(xml.consume_literal(";"));
 
-        Ok((EntityReference(name), xml))
+        Success((EntityReference(name), xml))
     }
 
     fn parse_decimal_char_ref<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
@@ -363,7 +420,7 @@ impl Parser {
         let (dec, xml) = try_parse!(xml.consume_decimal_chars());
         let (_, xml) = try_parse!(xml.consume_literal(";"));
 
-        Ok((DecimalCharReference(dec), xml))
+        Success((DecimalCharReference(dec), xml))
     }
 
     fn parse_hex_char_ref<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
@@ -371,7 +428,7 @@ impl Parser {
         let (hex, xml) = try_parse!(xml.consume_hex_chars());
         let (_, xml) = try_parse!(xml.consume_literal(";"));
 
-        Ok((HexCharReference(hex), xml))
+        Success((HexCharReference(hex), xml))
     }
 
     fn parse_reference<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
@@ -387,7 +444,7 @@ impl Parser {
         let (text, xml) = try_parse!(xml.consume_comment());
         let (_, xml) = try_parse!(xml.consume_literal("-->"));
 
-        Ok((Comment{text: text}, xml))
+        Success((Comment{text: text}, xml))
     }
 
     fn parse_pi_value<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, &'a str> {
@@ -405,7 +462,7 @@ impl Parser {
             fail!("Can't use xml as a PI target");
         }
 
-        Ok((ProcessingInstruction{target: target, value: value}, xml))
+        Success((ProcessingInstruction{target: target, value: value}, xml))
     }
 
     fn parse_content<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Vec<Child<'a>>> {
@@ -426,8 +483,9 @@ impl Parser {
             });
 
             let (child, after) = match xxx {
-                Ok(x) => x,
-                Err(_) => return Ok((children, start)),
+                Success(x) => x,
+                Partial((_, pf, _)) |
+                Failure(pf) => return Partial((children, pf, start)),
             };
 
             let (char_data, xml) = parse_optional!(self.parse_char_data(after), after);
@@ -442,53 +500,58 @@ impl Parser {
     fn parse_empty_element_tail<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Vec<Child<'a>>> {
         let (_, xml) = try_parse!(xml.consume_literal("/>"));
 
-        Ok((Vec::new(), xml))
+        Success((Vec::new(), xml))
     }
 
     fn parse_non_empty_element_tail<'a>(&self, xml: StartPoint<'a>, start_name: &str) -> ParseResult<'a, Vec<Child<'a>>> {
         let (_, xml) = try_parse!(xml.consume_literal(">"));
 
-        let (children, xml) = try_parse!(self.parse_content(xml));
+        let (children, mut f, xml) = try_partial_parse!(self.parse_content(xml));
 
-        let (end_name, xml) = try_parse!(self.parse_element_end(xml));
+        let (end_name, xml) = try_resume_after_partial_failure!(f, self.parse_element_end(xml));
 
         if start_name != end_name {
             fail!("tags do not match!");
         }
 
-        Ok((children, xml))
+        Success((children, xml))
     }
 
     fn parse_element<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Element<'a>> {
         let (_, xml) = try_parse!(xml.consume_start_tag());
         let (name, xml) = try_parse!(xml.consume_name());
-        let (attrs, xml) = try_parse!(self.parse_attributes(xml));
+
+        let (attrs, mut f, xml) = try_partial_parse!(self.parse_attributes(xml));
+
         let (_, xml) = parse_optional!(xml.consume_space(), xml);
 
-        let (children, xml) = try_parse!(parse_alternate!(xml, {
-            [|xml| self.parse_empty_element_tail(xml)           -> |e| e],
-            [|xml| self.parse_non_empty_element_tail(xml, name) -> |e| e],
-        }));
+        let (children, xml) = try_resume_after_partial_failure!(f,
+            parse_alternate!(xml, {
+                [|xml| self.parse_empty_element_tail(xml)           -> |e| e],
+                [|xml| self.parse_non_empty_element_tail(xml, name) -> |e| e],
+            })
+        );
 
-        Ok((Element{name: name, attributes: attrs, children: children}, xml))
+        Success((Element{name: name, attributes: attrs, children: children}, xml))
     }
 
     fn parse_document<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Document<'a>> {
-        let (before_children, xml) = parse_optional!(self.parse_prolog(xml), xml);
-        let (element, xml) = try_parse!(self.parse_element(xml));
+        let (before_children, mut f, xml) = try_partial_parse!(self.parse_prolog(xml));
+        let (element, xml) = try_resume_after_partial_failure!(f, self.parse_element(xml));
         let (after_children, xml) = parse_optional!(self.parse_miscs(xml), xml);
 
-        Ok((Document {before_children: before_children.unwrap_or(Vec::new()),
-                      element: element,
-                      after_children: after_children.unwrap_or(Vec::new())}, xml))
+        Success((Document{before_children: before_children,
+                          element: element,
+                          after_children: after_children.unwrap_or(Vec::new())}, xml))
     }
 
     pub fn parse(&self, xml: &str) -> Result<super::Document, uint> {
         let xml = StartPoint{offset: 0, s: xml};
 
         let (document, _) = match self.parse_document(xml) {
-            Ok(x) => x,
-            Err(pf) => return Err(pf.point.offset),
+            Success(x) => x,
+            Partial((_, pf, _)) |
+            Failure(pf) => return Err(pf.point.offset),
         };
 
         // TODO: Check fully parsed
@@ -877,34 +940,75 @@ fn failure_unexpected_space() {
 }
 
 #[test]
+fn failure_attribute_without_open_quote() {
+    let r = full_parse("<hi oops=value' />");
+    assert_eq!(r, Err(9));
+}
+
+#[test]
+#[ignore]
+fn failure_attribute_without_close_quote() {
+    let r = full_parse("<hi oops='value />");
+
+    assert_eq!(r, Err(99));
+}
+
+#[test]
+#[ignore]
+fn failure_unclosed_attribute_and_tag() {
+    let r = full_parse("<hi oops='value");
+
+    assert_eq!(r, Err(99));
+}
+
+#[test]
 fn failure_nested_unclosed_tag() {
     let r = full_parse("<hi><oops</hi>");
 
-    // Better at < ?
-    assert_eq!(r, Err(4));
+    assert_eq!(r, Err(9));
 }
 
 #[test]
 fn failure_nested_unexpected_space() {
     let r = full_parse("<hi><oops / ></hi>");
 
-    // Better at / ?
-    assert_eq!(r, Err(4));
+    assert_eq!(r, Err(10));
 }
 
 #[test]
 fn failure_malformed_entity_reference() {
     let r = full_parse("<hi>Entity: &;</hi>");
 
-    assert_eq!(r, Err(12));
+    assert_eq!(r, Err(13));
 }
 
 #[test]
 fn failure_nested_malformed_entity_reference() {
     let r = full_parse("<hi><bye>Entity: &;</bye></hi>");
 
-    // Better at &
-    assert_eq!(r, Err(4));
+    assert_eq!(r, Err(18));
+}
+
+#[test]
+fn failure_nested_attribute_without_open_quote() {
+    let r = full_parse("<hi><bye oops=value' /></hi>");
+    assert_eq!(r, Err(14));
+}
+
+#[test]
+#[ignore]
+fn failure_nested_attribute_without_close_quote() {
+    let r = full_parse("<hi><bye oops='value /></hi>");
+
+    assert_eq!(r, Err(99));
+}
+
+#[test]
+#[ignore]
+fn failure_nested_unclosed_attribute_and_tag() {
+    let r = full_parse("<hi><bye oops='value</hi>");
+
+    assert_eq!(r, Err(99));
 }
 
 }
