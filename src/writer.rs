@@ -7,7 +7,7 @@
 mod test {
     use std::io::{IoResult,MemWriter};
 
-    use super::super::{Document,Element,Text};
+    use super::super::{Document,Element,Text,Comment};
     use super::super::{ElementElementChild,TextElementChild,CommentElementChild,PIElementChild};
 
     macro_rules! assert_str_eq(
@@ -18,6 +18,7 @@ mod test {
         WElement(Element),
         WElementEnd(String),
         WText(Text),
+        WComment(Comment),
     }
 
     fn format_element<W : Writer>(element: Element, todo: &mut Vec<Content>, writer: &mut W) -> IoResult<()> {
@@ -38,7 +39,7 @@ mod test {
             let x = children.move_iter().map(|c| match c {
                 ElementElementChild(element) => WElement(element),
                 TextElementChild(t) => WText(t),
-                CommentElementChild(_) => fail!("comment?"),
+                CommentElementChild(c) => WComment(c),
                 PIElementChild(_) => fail!("PI?"),
             }).collect();
             todo.push_all_move(x);
@@ -60,6 +61,7 @@ mod test {
                 WElement(e) => try!(format_element(e, &mut todo, writer)),
                 WElementEnd(name) => try!(write!(writer, "</{}>", name)),
                 WText(t) => try!(writer.write_str(t.text().as_slice())),
+                WComment(c) => try!(write!(writer, "<!--{}-->", c.text())),
             }
         }
 
@@ -115,5 +117,17 @@ mod test {
 
         let xml = format_xml(&d);
         assert_str_eq!(xml, "<?xml version='1.0'?><hello>A fine day to you!</hello>");
+    }
+
+    #[test]
+    fn nested_comment() {
+        let d = Document::new();
+        let hello = d.new_element("hello".to_string());
+        let comment = d.new_comment(" Fill this in ".to_string());
+        hello.append_child(comment);
+        d.root().append_child(hello);
+
+        let xml = format_xml(&d);
+        assert_str_eq!(xml, "<?xml version='1.0'?><hello><!-- Fill this in --></hello>");
     }
 }
