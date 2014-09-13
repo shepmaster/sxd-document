@@ -3,97 +3,102 @@
 // Quote style
 // Ordering of attributes
 
+use std::io::IoResult;
+
+use super::{ElementElementChild,TextElementChild,CommentElementChild,PIElementChild};
+use super::{ElementRootChild,CommentRootChild,PIRootChild};
+
+enum Content {
+    Element(super::Element),
+    ElementEnd(String),
+    Text(super::Text),
+    Comment(super::Comment),
+    ProcessingInstruction(super::ProcessingInstruction),
+}
+
+fn format_element<W : Writer>(element: super::Element, todo: &mut Vec<Content>, writer: &mut W) -> IoResult<()> {
+    try!(write!(writer, "<{}", element.name()));
+
+    for attr in element.attributes().iter() {
+        try!(write!(writer, " {}='{}'", attr.name(), attr.value()));
+    }
+
+    let mut children = element.children();
+    if children.is_empty() {
+        writer.write_str("/>")
+    } else {
+        try!(writer.write_str(">"));
+
+        todo.push(ElementEnd(element.name()));
+        children.reverse();
+        let x = children.move_iter().map(|c| match c {
+            ElementElementChild(element) => Element(element),
+            TextElementChild(t)          => Text(t),
+            CommentElementChild(c)       => Comment(c),
+            PIElementChild(p)            => ProcessingInstruction(p),
+        }).collect();
+        todo.push_all_move(x);
+
+        Ok(())
+    }
+}
+
+fn format_comment<W : Writer>(comment: super::Comment, writer: &mut W) -> IoResult<()> {
+    write!(writer, "<!--{}-->", comment.text())
+}
+
+fn format_processing_instruction<W : Writer>(pi: super::ProcessingInstruction, writer: &mut W) -> IoResult<()> {
+    match pi.value() {
+        None    => write!(writer, "<?{}?>", pi.target()),
+        Some(v) => write!(writer, "<?{} {}?>", pi.target(), v),
+    }
+}
+
+fn format_one<W : Writer>(content: Content, todo: &mut Vec<Content>, writer: &mut W) -> IoResult<()> {
+    match content {
+        Element(e)               => format_element(e, todo, writer),
+        ElementEnd(name)         => write!(writer, "</{}>", name),
+        Text(t)                  => writer.write_str(t.text().as_slice()),
+        Comment(c)               => format_comment(c, writer),
+        ProcessingInstruction(p) => format_processing_instruction(p, writer),
+    }
+}
+
+fn format_body<W : Writer>(element: super::Element, writer: &mut W) -> IoResult<()> {
+    let mut todo = vec![Element(element)];
+
+    while ! todo.is_empty() {
+        try!(format_one(todo.pop().unwrap(), &mut todo, writer));
+    }
+
+    Ok(())
+}
+
+pub fn format_document<W : Writer>(doc: &super::Document, writer: &mut W) -> IoResult<()> {
+    try!(writer.write_str("<?xml version='1.0'?>"));
+
+    for child in doc.root().children().move_iter() {
+        try!(match child {
+            ElementRootChild(e) => format_body(e, writer),
+            CommentRootChild(c) => format_comment(c, writer),
+            PIRootChild(p)      => format_processing_instruction(p, writer),
+        })
+    }
+
+    Ok(())
+}
+
+
 #[cfg(test)]
 mod test {
-    use std::io::{IoResult,MemWriter};
+    use std::io::MemWriter;
 
-    use super::super::{Document,Element,Text,Comment,ProcessingInstruction};
-    use super::super::{ElementElementChild,TextElementChild,CommentElementChild,PIElementChild};
-    use super::super::{ElementRootChild,CommentRootChild,PIRootChild};
+    use super::super::Document;
+    use super::format_document;
 
     macro_rules! assert_str_eq(
         ($l:expr, $r:expr) => (assert_eq!($l.as_slice(), $r.as_slice()));
     )
-
-    enum Content {
-        WElement(Element),
-        WElementEnd(String),
-        WText(Text),
-        WComment(Comment),
-        WProcessingInstruction(ProcessingInstruction),
-    }
-
-    fn format_element<W : Writer>(element: Element, todo: &mut Vec<Content>, writer: &mut W) -> IoResult<()> {
-        try!(write!(writer, "<{}", element.name()));
-
-        for attr in element.attributes().iter() {
-            try!(write!(writer, " {}='{}'", attr.name(), attr.value()));
-        }
-
-        let mut children = element.children();
-        if children.is_empty() {
-            writer.write_str("/>")
-        } else {
-            try!(writer.write_str(">"));
-
-            todo.push(WElementEnd(element.name()));
-            children.reverse();
-            let x = children.move_iter().map(|c| match c {
-                ElementElementChild(element) => WElement(element),
-                TextElementChild(t) => WText(t),
-                CommentElementChild(c) => WComment(c),
-                PIElementChild(p) => WProcessingInstruction(p),
-            }).collect();
-            todo.push_all_move(x);
-
-            Ok(())
-        }
-    }
-
-    fn format_comment<W : Writer>(comment: Comment, writer: &mut W) -> IoResult<()> {
-        write!(writer, "<!--{}-->", comment.text())
-    }
-
-    fn format_processing_instruction<W : Writer>(pi: ProcessingInstruction, writer: &mut W) -> IoResult<()> {
-        match pi.value() {
-            None    => write!(writer, "<?{}?>", pi.target()),
-            Some(v) => write!(writer, "<?{} {}?>", pi.target(), v),
-        }
-    }
-
-    fn format_one<W : Writer>(content: Content, todo: &mut Vec<Content>, writer: &mut W) -> IoResult<()> {
-        match content {
-            WElement(e)               => format_element(e, todo, writer),
-            WElementEnd(name)         => write!(writer, "</{}>", name),
-            WText(t)                  => writer.write_str(t.text().as_slice()),
-            WComment(c)               => format_comment(c, writer),
-            WProcessingInstruction(p) => format_processing_instruction(p, writer),
-        }
-    }
-
-    fn format_body<W : Writer>(element: Element, writer: &mut W) -> IoResult<()> {
-        let mut todo = vec![WElement(element)];
-
-        while ! todo.is_empty() {
-            try!(format_one(todo.pop().unwrap(), &mut todo, writer));
-        }
-
-        Ok(())
-    }
-
-    fn format_document<W : Writer>(doc: &Document, writer: &mut W) -> IoResult<()> {
-        try!(writer.write_str("<?xml version='1.0'?>"));
-
-        for child in doc.root().children().move_iter() {
-            try!(match child {
-                ElementRootChild(e) => format_body(e, writer),
-                CommentRootChild(c) => format_comment(c, writer),
-                PIRootChild(p)      => format_processing_instruction(p, writer),
-            })
-        }
-
-        Ok(())
-    }
 
     fn format_xml(doc: &Document) -> String {
         let mut w = MemWriter::new();
