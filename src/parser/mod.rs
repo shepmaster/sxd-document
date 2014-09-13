@@ -127,8 +127,9 @@ macro_rules! try_resume_after_partial_failure(
             Success(x) => x,
             Partial((_, pf, _)) |
             Failure(pf) => {
-                $partial.push(pf);
-                return Failure(best_failure($partial))
+                let mut partial = $partial;
+                partial.push(pf);
+                return Failure(best_failure(partial))
             },
         }
     });
@@ -340,7 +341,7 @@ impl Parser {
                                      -> ParseResult<'a, T>
     {
         let (_, xml) = try_parse!(xml.consume_literal(quote));
-        let (value, mut f, xml) = try_partial_parse!(f(xml));
+        let (value, f, xml) = try_partial_parse!(f(xml));
         let (_, xml) = try_resume_after_partial_failure!(f, xml.consume_literal(quote));
 
         Success((value, xml))
@@ -506,7 +507,7 @@ impl Parser {
     fn parse_non_empty_element_tail<'a>(&self, xml: StartPoint<'a>, start_name: &str) -> ParseResult<'a, Vec<Child<'a>>> {
         let (_, xml) = try_parse!(xml.consume_literal(">"));
 
-        let (children, mut f, xml) = try_partial_parse!(self.parse_content(xml));
+        let (children, f, xml) = try_partial_parse!(self.parse_content(xml));
 
         let (end_name, xml) = try_resume_after_partial_failure!(f, self.parse_element_end(xml));
 
@@ -521,7 +522,7 @@ impl Parser {
         let (_, xml) = try_parse!(xml.consume_start_tag());
         let (name, xml) = try_parse!(xml.consume_name());
 
-        let (attrs, mut f, xml) = try_partial_parse!(self.parse_attributes(xml));
+        let (attrs, f, xml) = try_partial_parse!(self.parse_attributes(xml));
 
         let (_, xml) = parse_optional!(xml.consume_space(), xml);
 
@@ -536,7 +537,7 @@ impl Parser {
     }
 
     fn parse_document<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Document<'a>> {
-        let (before_children, mut f, xml) = try_partial_parse!(self.parse_prolog(xml));
+        let (before_children, f, xml) = try_partial_parse!(self.parse_prolog(xml));
         let (element, xml) = try_resume_after_partial_failure!(f, self.parse_element(xml));
         let (after_children, xml) = parse_optional!(self.parse_miscs(xml), xml);
 
