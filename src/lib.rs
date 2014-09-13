@@ -7,6 +7,7 @@ use std::cell::RefCell;
 use std::collections::hashmap::HashMap;
 
 pub mod parser;
+pub mod writer;
 
 // FIXME: Parents need to be weakref!
 // TODO: See about removing duplication of child / parent implementations.
