@@ -11,47 +11,56 @@ mod xmlstr;
 
 pub struct Parser;
 
+#[deriving(Show)]
 struct Element<'a> {
     name: &'a str,
     attributes: Vec<Attribute<'a>>,
     children: Vec<Child<'a>>,
 }
 
+#[deriving(Show)]
 enum AttributeValue<'a> {
     ReferenceAttributeValue(Reference<'a>),
     LiteralAttributeValue(&'a str),
 }
 
+#[deriving(Show)]
 struct Attribute<'a> {
     name: &'a str,
     values: Vec<AttributeValue<'a>>,
 }
 
+#[deriving(Show)]
 struct Text<'a> {
     text: &'a str,
 }
 
+#[deriving(Show)]
 enum Reference<'a> {
     EntityReference(&'a str),
     DecimalCharReference(&'a str),
     HexCharReference(&'a str),
 }
 
+#[deriving(Show)]
 struct Comment<'a> {
     text: &'a str,
 }
 
+#[deriving(Show)]
 struct ProcessingInstruction<'a> {
     target: &'a str,
     value: Option<&'a str>,
 }
 
+#[deriving(Show)]
 enum RootChild<'a> {
     CommentRootChild(Comment<'a>),
     PIRootChild(ProcessingInstruction<'a>),
     IgnoredRootChild,
 }
 
+#[deriving(Show)]
 enum Child<'a> {
     ElementChild(Element<'a>),
     TextChild(Text<'a>),
