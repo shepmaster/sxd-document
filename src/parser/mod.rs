@@ -12,6 +12,13 @@ mod xmlstr;
 pub struct Parser;
 
 #[deriving(Show)]
+struct Document<'a> {
+    before_children: Vec<RootChild<'a>>,
+    element: Element<'a>,
+    after_children: Vec<RootChild<'a>>,
+}
+
+#[deriving(Show)]
 struct Element<'a> {
     name: &'a str,
     attributes: Vec<Attribute<'a>>,
@@ -473,23 +480,29 @@ impl Parser {
         })
     }
 
+    fn parse_document<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Document<'a>> {
+        let (before_children, xml) = parse_optional!(self.parse_prolog(xml), xml);
+        let (element, xml) = try_parse!(self.parse_element(xml));
+        let (after_children, xml) = parse_optional!(self.parse_miscs(xml), xml);
+
+        Ok((Document {before_children: before_children.unwrap_or(Vec::new()),
+                      element: element,
+                      after_children: after_children.unwrap_or(Vec::new())}, xml))
+    }
+
     pub fn parse(&self, xml: &str) -> Result<super::Document, uint> {
         let xml = StartPoint{offset: 0, s: xml};
 
-        let (before_children, xml) = parse_optional!(self.parse_prolog(xml), xml);
-
-        let (element, xml) = match self.parse_element(xml) {
+        let (document, _) = match self.parse_document(xml) {
             Ok(x) => x,
             Err(pf) => return Err(pf.point.offset),
         };
 
-        let (after_children, _xml) = parse_optional!(self.parse_miscs(xml), xml);
+        // TODO: Check fully parsed
 
         let h = Hydrator;
 
-        Ok(h.hydrate_document(before_children.unwrap_or(Vec::new()),
-                              element,
-                              after_children.unwrap_or(Vec::new())))
+        Ok(h.hydrate_document(document))
     }
 }
 
@@ -573,20 +586,15 @@ impl Hydrator {
         }
     }
 
-    pub fn hydrate_document(&self,
-                        before_children: Vec<RootChild>,
-                        element_data: Element,
-                        after_children: Vec<RootChild>)
-                        -> super::Document
-    {
+    pub fn hydrate_document(&self, document: Document) -> super::Document {
         let doc = super::Document::new();
         let root = doc.root();
 
-        self.hydrate_misc(&doc, before_children);
+        self.hydrate_misc(&doc, document.before_children);
 
-        root.append_child(self.hydrate_element(&doc, element_data));
+        root.append_child(self.hydrate_element(&doc, document.element));
 
-        self.hydrate_misc(&doc, after_children);
+        self.hydrate_misc(&doc, document.after_children);
 
         doc
     }
