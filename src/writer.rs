@@ -56,6 +56,16 @@ mod test {
         }
     }
 
+    fn format_one<W : Writer>(content: Content, todo: &mut Vec<Content>, writer: &mut W) -> IoResult<()> {
+        match content {
+            WElement(e)               => format_element(e, todo, writer),
+            WElementEnd(name)         => write!(writer, "</{}>", name),
+            WText(t)                  => writer.write_str(t.text().as_slice()),
+            WComment(c)               => write!(writer, "<!--{}-->", c.text()),
+            WProcessingInstruction(p) => format_processing_instruction(p, writer),
+        }
+    }
+
     fn format_document<W : Writer>(doc: &Document, writer: &mut W) -> IoResult<()> {
         let mut todo = Vec::new();
 
@@ -65,13 +75,7 @@ mod test {
         todo.push(WElement(e));
 
         while ! todo.is_empty() {
-            match todo.pop().unwrap() {
-                WElement(e) => try!(format_element(e, &mut todo, writer)),
-                WElementEnd(name) => try!(write!(writer, "</{}>", name)),
-                WText(t) => try!(writer.write_str(t.text().as_slice())),
-                WComment(c) => try!(write!(writer, "<!--{}-->", c.text())),
-                WProcessingInstruction(p) => try!(format_processing_instruction(p, writer)),
-            }
+            try!(format_one(todo.pop().unwrap(), &mut todo, writer));
         }
 
         Ok(())
