@@ -946,19 +946,17 @@ fn failure_attribute_without_open_quote() {
 }
 
 #[test]
-#[ignore]
 fn failure_attribute_without_close_quote() {
     let r = full_parse("<hi oops='value />");
 
-    assert_eq!(r, Err(99));
+    assert_eq!(r, Err(18));
 }
 
 #[test]
-#[ignore]
 fn failure_unclosed_attribute_and_tag() {
     let r = full_parse("<hi oops='value");
 
-    assert_eq!(r, Err(99));
+    assert_eq!(r, Err(15));
 }
 
 #[test]
@@ -996,19 +994,17 @@ fn failure_nested_attribute_without_open_quote() {
 }
 
 #[test]
-#[ignore]
 fn failure_nested_attribute_without_close_quote() {
     let r = full_parse("<hi><bye oops='value /></hi>");
 
-    assert_eq!(r, Err(99));
+    assert_eq!(r, Err(23));
 }
 
 #[test]
-#[ignore]
 fn failure_nested_unclosed_attribute_and_tag() {
     let r = full_parse("<hi><bye oops='value</hi>");
 
-    assert_eq!(r, Err(99));
+    assert_eq!(r, Err(20));
 }
 
 }
