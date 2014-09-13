@@ -71,21 +71,25 @@ mod test {
         }
     }
 
+    fn format_body<W : Writer>(element: Element, writer: &mut W) -> IoResult<()> {
+        let mut todo = vec![WElement(element)];
+
+        while ! todo.is_empty() {
+            try!(format_one(todo.pop().unwrap(), &mut todo, writer));
+        }
+
+        Ok(())
+    }
+
     fn format_document<W : Writer>(doc: &Document, writer: &mut W) -> IoResult<()> {
         try!(writer.write_str("<?xml version='1.0'?>"));
 
         for child in doc.root().children().move_iter() {
-            match child {
-                ElementRootChild(e) => {
-                    let mut todo = vec![WElement(e)];
-
-                    while ! todo.is_empty() {
-                        try!(format_one(todo.pop().unwrap(), &mut todo, writer));
-                    }
-                },
-                CommentRootChild(c) => try!(format_comment(c, writer)),
-                PIRootChild(p) => try!(format_processing_instruction(p, writer)),
-            }
+            try!(match child {
+                ElementRootChild(e) => format_body(e, writer),
+                CommentRootChild(c) => format_comment(c, writer),
+                PIRootChild(p)      => format_processing_instruction(p, writer),
+            })
         }
 
         Ok(())
