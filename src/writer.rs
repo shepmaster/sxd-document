@@ -49,6 +49,13 @@ mod test {
         }
     }
 
+    fn format_processing_instruction<W : Writer>(pi: ProcessingInstruction, writer: &mut W) -> IoResult<()> {
+        match pi.value() {
+            None    => write!(writer, "<?{}?>", pi.target()),
+            Some(v) => write!(writer, "<?{} {}?>", pi.target(), v),
+        }
+    }
+
     fn format_document<W : Writer>(doc: &Document, writer: &mut W) -> IoResult<()> {
         let mut todo = Vec::new();
 
@@ -63,7 +70,7 @@ mod test {
                 WElementEnd(name) => try!(write!(writer, "</{}>", name)),
                 WText(t) => try!(writer.write_str(t.text().as_slice())),
                 WComment(c) => try!(write!(writer, "<!--{}-->", c.text())),
-                WProcessingInstruction(p) => try!(write!(writer, "<?{}?>", p.target())),
+                WProcessingInstruction(p) => try!(format_processing_instruction(p, writer)),
             }
         }
 
@@ -143,5 +150,17 @@ mod test {
 
         let xml = format_xml(&d);
         assert_str_eq!(xml, "<?xml version='1.0'?><hello><?display?></hello>");
+    }
+
+    #[test]
+    fn nested_processing_instruction_with_value() {
+        let d = Document::new();
+        let hello = d.new_element("hello".to_string());
+        let pi = d.new_processing_instruction("display".to_string(), Some("screen".to_string()));
+        hello.append_child(pi);
+        d.root().append_child(hello);
+
+        let xml = format_xml(&d);
+        assert_str_eq!(xml, "<?xml version='1.0'?><hello><?display screen?></hello>");
     }
 }
