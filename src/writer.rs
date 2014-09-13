@@ -7,7 +7,7 @@
 mod test {
     use std::io::{IoResult,MemWriter};
 
-    use super::super::{Document,Element,Text,Comment};
+    use super::super::{Document,Element,Text,Comment,ProcessingInstruction};
     use super::super::{ElementElementChild,TextElementChild,CommentElementChild,PIElementChild};
 
     macro_rules! assert_str_eq(
@@ -19,6 +19,7 @@ mod test {
         WElementEnd(String),
         WText(Text),
         WComment(Comment),
+        WProcessingInstruction(ProcessingInstruction),
     }
 
     fn format_element<W : Writer>(element: Element, todo: &mut Vec<Content>, writer: &mut W) -> IoResult<()> {
@@ -40,7 +41,7 @@ mod test {
                 ElementElementChild(element) => WElement(element),
                 TextElementChild(t) => WText(t),
                 CommentElementChild(c) => WComment(c),
-                PIElementChild(_) => fail!("PI?"),
+                PIElementChild(p) => WProcessingInstruction(p),
             }).collect();
             todo.push_all_move(x);
 
@@ -62,6 +63,7 @@ mod test {
                 WElementEnd(name) => try!(write!(writer, "</{}>", name)),
                 WText(t) => try!(writer.write_str(t.text().as_slice())),
                 WComment(c) => try!(write!(writer, "<!--{}-->", c.text())),
+                WProcessingInstruction(p) => try!(write!(writer, "<?{}?>", p.target())),
             }
         }
 
@@ -129,5 +131,17 @@ mod test {
 
         let xml = format_xml(&d);
         assert_str_eq!(xml, "<?xml version='1.0'?><hello><!-- Fill this in --></hello>");
+    }
+
+    #[test]
+    fn nested_processing_instruction_without_value() {
+        let d = Document::new();
+        let hello = d.new_element("hello".to_string());
+        let pi = d.new_processing_instruction("display".to_string(), None);
+        hello.append_child(pi);
+        d.root().append_child(hello);
+
+        let xml = format_xml(&d);
+        assert_str_eq!(xml, "<?xml version='1.0'?><hello><?display?></hello>");
     }
 }
