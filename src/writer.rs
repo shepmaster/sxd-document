@@ -84,7 +84,7 @@ mod test {
                     }
                 },
                 CommentRootChild(c) => try!(format_comment(c, writer)),
-                PIRootChild(_) => fail!("pi?"),
+                PIRootChild(p) => try!(format_processing_instruction(p, writer)),
             }
         }
 
@@ -181,10 +181,20 @@ mod test {
     #[test]
     fn top_level_comment() {
         let d = Document::new();
-        let pi = d.new_comment(" Fill this in ".to_string());
-        d.root().append_child(pi);
+        let comment = d.new_comment(" Fill this in ".to_string());
+        d.root().append_child(comment);
 
         let xml = format_xml(&d);
         assert_str_eq!(xml, "<?xml version='1.0'?><!-- Fill this in -->");
+    }
+
+    #[test]
+    fn top_level_processing_instruction() {
+        let d = Document::new();
+        let pi = d.new_processing_instruction("display".to_string(), None);
+        d.root().append_child(pi);
+
+        let xml = format_xml(&d);
+        assert_str_eq!(xml, "<?xml version='1.0'?><?display?>");
     }
 }
