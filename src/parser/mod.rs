@@ -328,26 +328,6 @@ impl Parser {
         parse_zero_or_more!(xml, |xml| self.parse_attribute(xml))
     }
 
-    fn parse_empty_element<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Element<'a>> {
-        let (_, xml) = try_parse!(xml.consume_start_tag());
-        let (name, xml) = try_parse!(xml.consume_name());
-        let (attrs, xml) = try_parse!(self.parse_attributes(xml));
-        let (_, xml) = parse_optional!(xml.consume_space(), xml);
-        let (_, xml) = try_parse!(xml.consume_literal("/>"));
-
-        Ok((Element{name: name, attributes: attrs, children: Vec::new()}, xml))
-    }
-
-    fn parse_element_start<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Element<'a>> {
-        let (_, xml) = try_parse!(xml.consume_start_tag());
-        let (name, xml) = try_parse!(xml.consume_name());
-        let (attrs, xml) = try_parse!(self.parse_attributes(xml));
-        let (_, xml) = parse_optional!(xml.consume_space(), xml);
-        let (_, xml) = try_parse!(xml.consume_literal(">"));
-
-        Ok((Element{name: name, attributes: attrs, children: Vec::new()}, xml))
-    }
-
     fn parse_element_end<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, &'a str> {
         let (_, xml) = try_parse!(xml.consume_literal("</"));
         let (name, xml) = try_parse!(xml.consume_name());
@@ -459,25 +439,38 @@ impl Parser {
         }
     }
 
-    fn parse_non_empty_element<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Element<'a>> {
-        let (mut element, xml) = try_parse!(self.parse_element_start(xml));
-        let (children, xml) = try_parse!(self.parse_content(xml));
-        let (name, xml) = try_parse!(self.parse_element_end(xml));
+    fn parse_empty_element_tail<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Vec<Child<'a>>> {
+        let (_, xml) = try_parse!(xml.consume_literal("/>"));
 
-        if element.name != name {
+        Ok((Vec::new(), xml))
+    }
+
+    fn parse_non_empty_element_tail<'a>(&self, xml: StartPoint<'a>, start_name: &str) -> ParseResult<'a, Vec<Child<'a>>> {
+        let (_, xml) = try_parse!(xml.consume_literal(">"));
+
+        let (children, xml) = try_parse!(self.parse_content(xml));
+
+        let (end_name, xml) = try_parse!(self.parse_element_end(xml));
+
+        if start_name != end_name {
             fail!("tags do not match!");
         }
 
-        element.children = children;
-
-        Ok((element, xml))
+        Ok((children, xml))
     }
 
     fn parse_element<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Element<'a>> {
-        parse_alternate!(xml, {
-            [|xml| self.parse_empty_element(xml)     -> |e| e],
-            [|xml| self.parse_non_empty_element(xml) -> |e| e],
-        })
+        let (_, xml) = try_parse!(xml.consume_start_tag());
+        let (name, xml) = try_parse!(xml.consume_name());
+        let (attrs, xml) = try_parse!(self.parse_attributes(xml));
+        let (_, xml) = parse_optional!(xml.consume_space(), xml);
+
+        let (children, xml) = try_parse!(parse_alternate!(xml, {
+            [|xml| self.parse_empty_element_tail(xml)           -> |e| e],
+            [|xml| self.parse_non_empty_element_tail(xml, name) -> |e| e],
+        }));
+
+        Ok((Element{name: name, attributes: attrs, children: children}, xml))
     }
 
     fn parse_document<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Document<'a>> {
