@@ -1,7 +1,15 @@
-// Options
-// Space before /
-// Quote style
-// Ordering of attributes
+//! Formats a DOM structure to a Writer
+//!
+//! ### Known issues
+//!
+//! Output is not escaped in any way,
+//! it's very easy to create malformed XML!
+//!
+//! ### Potential options to support
+//!
+//! - Space before `/>`
+//! - Single vs double quotes
+//! - Fixed ordering of attributes
 
 use std::io::IoResult;
 
@@ -74,6 +82,7 @@ fn format_body<W : Writer>(element: super::Element, writer: &mut W) -> IoResult<
     Ok(())
 }
 
+/// Formats a document into a Writer
 pub fn format_document<W : Writer>(doc: &super::Document, writer: &mut W) -> IoResult<()> {
     try!(writer.write_str("<?xml version='1.0'?>"));
 
@@ -87,7 +96,6 @@ pub fn format_document<W : Writer>(doc: &super::Document, writer: &mut W) -> IoR
 
     Ok(())
 }
-
 
 #[cfg(test)]
 mod test {
