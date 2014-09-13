@@ -9,6 +9,7 @@ mod test {
 
     use super::super::{Document,Element,Text,Comment,ProcessingInstruction};
     use super::super::{ElementElementChild,TextElementChild,CommentElementChild,PIElementChild};
+    use super::super::{ElementRootChild,CommentRootChild,PIRootChild};
 
     macro_rules! assert_str_eq(
         ($l:expr, $r:expr) => (assert_eq!($l.as_slice(), $r.as_slice()));
@@ -49,6 +50,10 @@ mod test {
         }
     }
 
+    fn format_comment<W : Writer>(comment: Comment, writer: &mut W) -> IoResult<()> {
+        write!(writer, "<!--{}-->", comment.text())
+    }
+
     fn format_processing_instruction<W : Writer>(pi: ProcessingInstruction, writer: &mut W) -> IoResult<()> {
         match pi.value() {
             None    => write!(writer, "<?{}?>", pi.target()),
@@ -61,21 +66,26 @@ mod test {
             WElement(e)               => format_element(e, todo, writer),
             WElementEnd(name)         => write!(writer, "</{}>", name),
             WText(t)                  => writer.write_str(t.text().as_slice()),
-            WComment(c)               => write!(writer, "<!--{}-->", c.text()),
+            WComment(c)               => format_comment(c, writer),
             WProcessingInstruction(p) => format_processing_instruction(p, writer),
         }
     }
 
     fn format_document<W : Writer>(doc: &Document, writer: &mut W) -> IoResult<()> {
-        let mut todo = Vec::new();
-
         try!(writer.write_str("<?xml version='1.0'?>"));
-        let e = doc.root().children()[0].element().expect("not an element?");
 
-        todo.push(WElement(e));
+        for child in doc.root().children().move_iter() {
+            match child {
+                ElementRootChild(e) => {
+                    let mut todo = vec![WElement(e)];
 
-        while ! todo.is_empty() {
-            try!(format_one(todo.pop().unwrap(), &mut todo, writer));
+                    while ! todo.is_empty() {
+                        try!(format_one(todo.pop().unwrap(), &mut todo, writer));
+                    }
+                },
+                CommentRootChild(c) => try!(format_comment(c, writer)),
+                PIRootChild(_) => fail!("pi?"),
+            }
         }
 
         Ok(())
@@ -166,5 +176,15 @@ mod test {
 
         let xml = format_xml(&d);
         assert_str_eq!(xml, "<?xml version='1.0'?><hello><?display screen?></hello>");
+    }
+
+    #[test]
+    fn top_level_comment() {
+        let d = Document::new();
+        let pi = d.new_comment(" Fill this in ".to_string());
+        d.root().append_child(pi);
+
+        let xml = format_xml(&d);
+        assert_str_eq!(xml, "<?xml version='1.0'?><!-- Fill this in -->");
     }
 }
