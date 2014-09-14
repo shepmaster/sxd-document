@@ -25,7 +25,6 @@
 //! ### Potential cleanups
 //! - Reduce duplication of child / parent
 //! - Reduce duplication of text / comment
-//! - Remove `clone` from inner objects
 
 #![crate_name = "document"]
 #![experimental]
@@ -172,7 +171,6 @@ impl ToRootChild for ProcessingInstruction {
     fn to_root_child(&self) -> RootChild { PIRootChild(self.clone()) }
 }
 
-#[deriving(Clone)]
 struct RootInner {
     document: Document,
     children: Vec<RootChild>,
@@ -241,7 +239,6 @@ impl fmt::Show for Root {
     }
 }
 
-#[deriving(Clone)]
 struct TextInner {
     document: Document,
     text: String,
@@ -308,7 +305,6 @@ impl fmt::Show for Text {
     }
 }
 
-#[deriving(Clone)]
 struct AttributeInner {
     document: Document,
     name: String,
@@ -545,7 +541,6 @@ impl ToElementParent for Root {
     }
 }
 
-#[deriving(Clone)]
 struct ElementInner {
     document: Document,
     name: String,
@@ -621,7 +616,7 @@ impl Element {
         child.set_parent(self.clone());
 
         let mut inner = self.inner.borrow_mut();
-        inner.children.push(child.clone());
+        inner.children.push(child);
     }
 
     pub fn children(&self) -> Vec<ElementChild> {
