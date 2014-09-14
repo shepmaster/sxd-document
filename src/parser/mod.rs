@@ -585,7 +585,7 @@ struct Hydrator;
 
 impl Hydrator {
     fn hydrate_text(&self, doc: &super::Document, text_data: Text) -> super::Text {
-        doc.new_text(text_data.text.to_string())
+        doc.new_text(String::from_str(text_data.text))
     }
 
     fn hydrate_reference_raw(&self, ref_data: Reference) -> String {
@@ -593,22 +593,22 @@ impl Hydrator {
             DecimalCharReference(d) => {
                 let code: u32 = from_str_radix(d, 10).expect("Not valid decimal");
                 let c: char = from_u32(code).expect("Not a valid codepoint");
-                c.to_string()
+                String::from_char(1, c)
             },
             HexCharReference(h) => {
                 let code: u32 = from_str_radix(h, 16).expect("Not valid hex");
                 let c: char = from_u32(code).expect("Not a valid codepoint");
-                c.to_string()
+                String::from_char(1, c)
             },
             EntityReference(e) => {
-                match e {
+                String::from_str(match e {
                     "amp"  => "&",
                     "lt"   => "<",
                     "gt"   => ">",
                     "apos" => "'",
                     "quot" => "\"",
                     _      => fail!("unknown entity"),
-                }.to_string()
+                })
             }
         }
     }
@@ -618,24 +618,24 @@ impl Hydrator {
     }
 
     fn hydrate_comment(&self, doc: &super::Document, comment_data: Comment) -> super::Comment {
-        doc.new_comment(comment_data.text.to_string())
+        doc.new_comment(String::from_str(comment_data.text))
     }
 
     fn hydrate_pi(&self, doc: &super::Document, pi_data: ProcessingInstruction) -> super::ProcessingInstruction {
-        doc.new_processing_instruction(pi_data.target.to_string(), pi_data.value.map(|v| v.to_string()))
+        doc.new_processing_instruction(String::from_str(pi_data.target), pi_data.value.map(|v| String::from_str(v)))
     }
 
     fn hydrate_element(&self, doc: &super::Document, element_data: Element) -> super::Element {
-        let element = doc.new_element(element_data.name.to_string());
+        let element = doc.new_element(String::from_str(element_data.name));
 
         for attr in element_data.attributes.move_iter() {
             let to_v_str = |v: AttributeValue| match v {
-                LiteralAttributeValue(v) => v.to_string(),
+                LiteralAttributeValue(v) => String::from_str(v),
                 ReferenceAttributeValue(r) => self.hydrate_reference_raw(r),
             };
 
             let v = attr.values.move_iter().fold(String::new(), |s, v| s.append(to_v_str(v).as_slice()));
-            element.set_attribute(attr.name.to_string(), v);
+            element.set_attribute(String::from_str(attr.name), v);
         }
 
         for child in element_data.children.move_iter() {
