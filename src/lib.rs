@@ -1,4 +1,19 @@
+//! ### Design decisions
+//!
+//! Try to leverage the type system as much as possible.
+//!
+//! ### Known issues
+//!
+//! - `fail!` is used in recoverable situations.
+//! - Parent pointers need to be weak references.
+//!
+//! ### Potential cleanups
+//! - Reduce duplication of child / parent
+//! - Reduce duplication of text / comment
+//! - Remove `clone` from inner objects
+
 #![crate_name = "document"]
+#![experimental]
 #![feature(macro_rules)]
 
 use std::fmt;
@@ -9,36 +24,13 @@ use std::collections::hashmap::HashMap;
 pub mod parser;
 pub mod writer;
 
-// FIXME: Parents need to be weakref!
-// TODO: See about removing duplication of child / parent implementations.
-// TODO: remove clone from inner?
-// TODO: duplication of text / comment
-// TODO: reevaluate each fail!
-
-// children
-// root nodes -> 1x element, comment, pi
-// element nodes -> element, comment, text, pi (attribute, namespace)
-// text nodes ->
-// attribute nodes ->
-// namespace nodes ->
-// processing instruction nodes ->
-// comment nodes ->
-//
-// parents
-// root nodes ->
-// element nodes -> element, root
-// text nodes -> element
-// attribute nodes -> element
-// namespace nodes -> element
-// processing instruction nodes -> element, root
-// comment nodes -> element, root
-
 struct DocumentInner {
     // We will always have a root, but during construction we have to
     // pick one first
     root: Option<Root>,
 }
 
+/// A hierarchical collection of nodes
 #[deriving(Clone)]
 pub struct Document {
     inner: Rc<RefCell<DocumentInner>>,
@@ -69,6 +61,7 @@ impl Document {
         ProcessingInstruction::new(self.clone(), target, value)
     }
 
+    /// All documents have a root node that begins the node hierarchy
     pub fn root(&self) -> Root {
         let inner = self.inner.borrow();
         inner.root.clone().unwrap()
@@ -87,7 +80,7 @@ impl fmt::Show for Document {
     }
 }
 
-/// Items that may be children of the root node
+/// Nodes that may be children of the root node
 #[deriving(Clone,PartialEq)]
 pub enum RootChild {
     ElementRootChild(Element),
@@ -141,6 +134,7 @@ impl RootChild {
     }
 }
 
+/// Convenience trait to get a `RootChild` from more specific types.
 pub trait ToRootChild {
     fn to_root_child(&self) -> RootChild;
 }
@@ -167,6 +161,7 @@ struct RootInner {
     children: Vec<RootChild>,
 }
 
+/// The top-most node of the hierarchy
 #[deriving(Clone)]
 pub struct Root {
     inner: Rc<RefCell<RootInner>>,
@@ -234,6 +229,7 @@ struct TextInner {
     parent: Option<Element>,
 }
 
+/// Character data
 #[deriving(Clone)]
 pub struct Text {
     inner: Rc<RefCell<TextInner>>,
@@ -299,6 +295,7 @@ struct AttributeInner {
     element: Option<Weak<RefCell<ElementInner>>>,
 }
 
+/// Metadata describing an `Element`
 #[deriving(Clone)]
 pub struct Attribute {
     inner: Rc<RefCell<AttributeInner>>,
@@ -347,7 +344,7 @@ impl fmt::Show for Attribute {
     }
 }
 
-/// Items that may be children of element nodes
+/// Nodes that may be children of element nodes
 #[deriving(Clone,PartialEq,Show)]
 pub enum ElementChild {
     ElementElementChild(Element),
@@ -428,6 +425,7 @@ impl ElementChild {
     }
 }
 
+/// Convenience trait to get an `ElementChild` from more specific types.
 pub trait ToElementChild {
     fn to_element_child(&self) -> ElementChild;
 }
@@ -462,8 +460,10 @@ impl ToElementChild for RootChild {
     }
 }
 
-/// Items that may be parents of element nodes
-// TODO: rename betterer, not just element nodes (comment, pi)
+/// Nodes that may be parents of element nodes
+///
+/// **TODO** Rename to indicate this applies to more than element nodes,
+/// it also includes comments an PIs
 #[deriving(PartialEq,Clone)]
 pub enum ElementParent {
     ElementElementParent(Element),
@@ -505,6 +505,7 @@ impl ElementParent {
     }
 }
 
+/// Convenience trait to get an `ElementParent` from more specific types.
 pub trait ToElementParent {
     fn to_element_parent(&self) -> ElementParent;
 }
@@ -530,6 +531,7 @@ struct ElementInner {
     attributes: HashMap<String, Attribute>,
 }
 
+/// A named container of data
 #[deriving(Clone)]
 pub struct Element {
     inner: Rc<RefCell<ElementInner>>,
@@ -660,6 +662,7 @@ struct CommentInner {
     parent: Option<ElementParent>,
 }
 
+/// Human-readable information not pertinent to the data
 #[deriving(Clone)]
 pub struct Comment {
     inner: Rc<RefCell<CommentInner>>,
@@ -725,6 +728,7 @@ struct ProcessingInstructionInner {
     parent: Option<ElementParent>,
 }
 
+/// Metadata that contains instructions for applications
 #[deriving(Clone)]
 pub struct ProcessingInstruction {
     inner: Rc<RefCell<ProcessingInstructionInner>>,
@@ -797,6 +801,7 @@ impl fmt::Show for ProcessingInstruction {
     }
 }
 
+/// Used when any possible node may be viable.
 #[deriving(Clone,Show,PartialEq)]
 pub enum Any {
     ElementAny(Element),
@@ -877,6 +882,7 @@ impl Any {
     }
 }
 
+/// Convenience trait to get an `Any` from more specific types.
 pub trait ToAny {
     fn to_any(&self) -> Any;
 }
@@ -935,6 +941,7 @@ impl ToAny for RootChild {
     }
 }
 
+/// Convenience constructor for a nodeset
 #[macro_export]
 macro_rules! nodeset(
     ($($e:expr),*) => ({
@@ -946,6 +953,7 @@ macro_rules! nodeset(
     ($($e:expr),+,) => (nodeset!($($e),+))
 )
 
+/// A collection of nodes
 #[deriving(Clone,PartialEq,Show)]
 pub struct Nodeset {
     nodes: Vec<Any>,
