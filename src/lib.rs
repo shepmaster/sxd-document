@@ -1,3 +1,18 @@
+//!
+//! ```
+//! use document::Document;
+//! let doc = Document::new();
+//!
+//! let hello = doc.new_element("hello".to_string());
+//! hello.set_attribute("planet".to_string(), "Earth".to_string());
+//! let comment = doc.new_comment("What about other planets?".to_string());
+//! let text = doc.new_text("Greetings, Earthlings!".to_string());
+//!
+//! hello.append_child(comment);
+//! hello.append_child(text);
+//! doc.root().append_child(hello);
+//! ```
+//!
 //! ### Design decisions
 //!
 //! Try to leverage the type system as much as possible.
@@ -68,6 +83,8 @@ impl Document {
     }
 }
 
+/// Node equality is reference equality,
+/// a node is only ever equal to itself.
 impl PartialEq for Document {
     fn eq(&self, other: &Document) -> bool {
         &*self.inner as *const RefCell<DocumentInner> == &*other.inner as *const RefCell<DocumentInner>
@@ -210,6 +227,8 @@ impl Root {
     }
 }
 
+/// Node equality is reference equality,
+/// a node is only ever equal to itself.
 impl PartialEq for Root {
     fn eq(&self, other: &Root) -> bool {
         &*self.inner as *const RefCell<RootInner> == &*other.inner as *const RefCell<RootInner>
@@ -275,6 +294,8 @@ impl Text {
     }
 }
 
+/// Node equality is reference equality,
+/// a node is only ever equal to itself.
 impl PartialEq for Text {
     fn eq(&self, other: &Text) -> bool {
         &*self.inner as *const RefCell<TextInner> == &*other.inner as *const RefCell<TextInner>
@@ -331,6 +352,8 @@ impl Attribute {
     }
 }
 
+/// Node equality is reference equality,
+/// a node is only ever equal to itself.
 impl PartialEq for Attribute {
     fn eq(&self, other: &Attribute) -> bool {
         &*self.inner as *const RefCell<AttributeInner> == &*other.inner as *const RefCell<AttributeInner>
@@ -642,6 +665,8 @@ impl Element {
     }
 }
 
+/// Node equality is reference equality,
+/// a node is only ever equal to itself.
 impl PartialEq for Element {
     fn eq(&self, other: &Element) -> bool {
         // Nodes have reference equality, so we just check to see if
@@ -709,6 +734,8 @@ impl Comment {
     }
 }
 
+/// Node equality is reference equality,
+/// a node is only ever equal to itself.
 impl PartialEq for Comment {
     fn eq(&self, other: &Comment) -> bool {
         &*self.inner as *const RefCell<CommentInner> == &*other.inner as *const RefCell<CommentInner>
@@ -788,6 +815,8 @@ impl ProcessingInstruction {
     }
 }
 
+/// Node equality is reference equality,
+/// a node is only ever equal to itself.
 impl PartialEq for ProcessingInstruction {
     fn eq(&self, other: &ProcessingInstruction) -> bool {
         &*self.inner as *const RefCell<ProcessingInstructionInner> == &*other.inner as *const RefCell<ProcessingInstructionInner>
