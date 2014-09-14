@@ -2,6 +2,8 @@ extern crate document;
 
 use std::cmp::min;
 use std::io::File;
+use std::io::BufferedWriter;
+use std::io::stdio::stdout_raw;
 
 use document::parser::Parser;
 
@@ -35,6 +37,7 @@ fn main() {
         Err(point) => fail!("Unable to parse: {}", pretty_error(data.as_slice(), point)),
     };
 
-    let mut out = std::io::stdio::stdout();
+    let mut out = BufferedWriter::new(stdout_raw());
+
     document::writer::format_document(&d, &mut out).ok().expect("I can't output");
 }
