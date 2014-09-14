@@ -1,4 +1,21 @@
-//! Error handling
+//! Converts XML strings into a DOM structure
+//!
+//! ### Example
+//!
+//! ```
+//! use document::parser::Parser;
+//! let parser = Parser::new();
+//! let xml = r#"<?xml version="1.0"?>
+//! <!-- Awesome data incoming -->
+//! <data awesome="true">
+//!   <datum>Science</datum>
+//!   <datum><![CDATA[Literature]]></datum>
+//!   <datum>Math &gt; others</datum>
+//! </data>"#;
+//! let doc = parser.parse(xml).ok().expect("Failed to parse");
+//! ```
+//!
+//! ### Error handling
 //!
 //! When an error occurs in an alternation,
 //! we return the most interesting failure.
@@ -12,14 +29,15 @@
 //! the *most interesting error* is the one that occurred last in the input.
 //! We assume that this will be closest to what the user intended.
 //!
-//! Unresolved questions:
+//! ### Unresolved questions:
 //!
 //! - Should zero-or-one mimic zero-or-more?
 //! - Should we restart from both the failure point and the original start point?
 //! - Should we preserve a tree of all the failures?
 //!
-//! Influence taken from
-//! http://www.scheidecker.net/2012/12/03/parser-combinators/
+//! ### Influences
+//!
+//! - http://www.scheidecker.net/2012/12/03/parser-combinators/
 
 use std::ascii::AsciiExt;
 use std::char::from_u32;
