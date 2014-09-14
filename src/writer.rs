@@ -1,5 +1,20 @@
 //! Formats a DOM structure to a Writer
 //!
+//! ### Example
+//! ```
+//! use document::Document;
+//! use document::writer::format_document;
+//!
+//! let doc = Document::new();
+//!
+//! let hello = doc.new_element("hello".to_string());
+//! hello.set_attribute("planet".to_string(), "Earth".to_string());
+//! doc.root().append_child(hello);
+//!
+//! let mut output = std::io::stdio::stdout();
+//! format_document(&doc, &mut output).ok().expect("unable to output XML");
+//! ```
+//!
 //! ### Known issues
 //!
 //! Output is not escaped in any way,
