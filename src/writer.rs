@@ -54,7 +54,7 @@ fn format_element<W : Writer>(element: super::Element, todo: &mut Vec<Content>, 
 
         todo.push(ElementEnd(element.name()));
         children.reverse();
-        let x = children.move_iter().map(|c| match c {
+        let x = children.into_iter().map(|c| match c {
             ElementElementChild(element) => Element(element),
             TextElementChild(t)          => Text(t),
             CommentElementChild(c)       => Comment(c),
@@ -101,7 +101,7 @@ fn format_body<W : Writer>(element: super::Element, writer: &mut W) -> IoResult<
 pub fn format_document<W : Writer>(doc: &super::Document, writer: &mut W) -> IoResult<()> {
     try!(writer.write_str("<?xml version='1.0'?>"));
 
-    for child in doc.root().children().move_iter() {
+    for child in doc.root().children().into_iter() {
         try!(match child {
             ElementRootChild(e) => format_body(e, writer),
             CommentRootChild(c) => format_comment(c, writer),

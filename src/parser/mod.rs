@@ -628,17 +628,17 @@ impl Hydrator {
     fn hydrate_element(&self, doc: &super::Document, element_data: Element) -> super::Element {
         let element = doc.new_element(String::from_str(element_data.name));
 
-        for attr in element_data.attributes.move_iter() {
+        for attr in element_data.attributes.into_iter() {
             let to_v_str = |v: AttributeValue| match v {
                 LiteralAttributeValue(v) => String::from_str(v),
                 ReferenceAttributeValue(r) => self.hydrate_reference_raw(r),
             };
 
-            let v = attr.values.move_iter().fold(String::new(), |s, v| s.append(to_v_str(v).as_slice()));
+            let v = attr.values.into_iter().fold(String::new(), |s, v| s.append(to_v_str(v).as_slice()));
             element.set_attribute(String::from_str(attr.name), v);
         }
 
-        for child in element_data.children.move_iter() {
+        for child in element_data.children.into_iter() {
             match child {
                 ElementChild(e)   => element.append_child(self.hydrate_element(doc, e)),
                 TextChild(t)      => element.append_child(self.hydrate_text(doc, t)),
@@ -652,7 +652,7 @@ impl Hydrator {
     }
 
     fn hydrate_misc(&self, doc: &super::Document, children: Vec<RootChild>) {
-        for child in children.move_iter() {
+        for child in children.into_iter() {
             match child {
                 CommentRootChild(c) => doc.root().append_child(self.hydrate_comment(doc, c)),
                 PIRootChild(p)      => doc.root().append_child(self.hydrate_pi(doc, p)),
