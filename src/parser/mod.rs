@@ -634,7 +634,11 @@ impl Hydrator {
                 ReferenceAttributeValue(r) => self.hydrate_reference_raw(r),
             };
 
-            let v = attr.values.into_iter().fold(String::new(), |s, v| s.append(to_v_str(v).as_slice()));
+            let mut v = String::new();
+            for val in attr.values.into_iter() {
+                v.push_str(to_v_str(val).as_slice());
+            }
+
             element.set_attribute(String::from_str(attr.name), v);
         }
 
