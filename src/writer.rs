@@ -59,8 +59,8 @@ fn format_element<W : Writer>(element: super::Element, todo: &mut Vec<Content>, 
             TextElementChild(t)          => Text(t),
             CommentElementChild(c)       => Comment(c),
             PIElementChild(p)            => ProcessingInstruction(p),
-        }).collect();
-        todo.push_all_move(x);
+        });
+        todo.extend(x);
 
         Ok(())
     }
