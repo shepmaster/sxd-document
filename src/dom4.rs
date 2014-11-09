@@ -96,4 +96,22 @@ mod test {
 
         assert_eq!(children[0], ElementCOE(beta));
     }
+
+    #[test]
+    fn element_children_are_ordered() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let greek = doc.create_element("greek");
+        let alpha = doc.create_element("alpha");
+        let omega = doc.create_element("omega");
+
+        greek.append_child(alpha);
+        greek.append_child(omega);
+
+        let children = greek.children();
+
+        assert_eq!(children[0], ElementCOE(alpha));
+        assert_eq!(children[1], ElementCOE(omega));
+    }
 }

@@ -119,4 +119,22 @@ mod test {
 
         assert_eq!(children[0], ElementCOE(beta));
     }
+
+    #[test]
+    fn element_children_are_ordered() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let greek = s.create_element("greek");
+        let alpha = s.create_element("alpha");
+        let omega = s.create_element("omega");
+
+        c.append_element_child(greek, alpha);
+        c.append_element_child(greek, omega);
+
+        let children: Vec<ChildOfElement> = c.element_children(greek).collect();
+
+        assert_eq!(children[0], ElementCOE(alpha));
+        assert_eq!(children[1], ElementCOE(omega));
+    }
 }
