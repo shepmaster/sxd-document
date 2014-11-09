@@ -30,13 +30,42 @@
 #![experimental]
 #![feature(macro_rules)]
 
+extern crate arena;
+
 use std::fmt;
 use std::rc::{Rc,Weak};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+mod raw;
+pub mod thindom4;
+pub mod dom4;
 pub mod parser;
 pub mod writer;
+
+pub struct Package {
+    storage: raw::Storage,
+    connections: raw::Connections,
+}
+
+impl Package {
+    pub fn new() -> Package {
+        Package {
+            storage: raw::Storage::new(),
+            connections: raw::Connections::new(),
+        }
+    }
+
+    pub fn as_document(&self) -> dom4::Document {
+        dom4::Document::new(&self.storage, &self.connections)
+    }
+
+    pub fn as_thin_document(&self) -> (thindom4::Storage, thindom4::Connections) {
+        let s = thindom4::Storage::new(&self.storage);
+        let c = thindom4::Connections::new(&self.connections);
+        (s, c)
+    }
+}
 
 struct DocumentInner {
     // We will always have a root, but during construction we have to
