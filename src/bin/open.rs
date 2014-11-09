@@ -22,19 +22,19 @@ fn main() {
 
     let data = match file.read_to_end() {
         Ok(x) => x,
-        Err(x) => fail!("Can't read: {}", x),
+        Err(x) => panic!("Can't read: {}", x),
     };
 
     let data = match String::from_utf8(data) {
         Ok(x) => x,
-        Err(x) => fail!("Unable to convert to UTF-8: {}", x),
+        Err(x) => panic!("Unable to convert to UTF-8: {}", x),
     };
 
     let p = Parser::new();
 
     let d = match p.parse(data.as_slice()) {
         Ok(d) => d,
-        Err(point) => fail!("Unable to parse: {}", pretty_error(data.as_slice(), point)),
+        Err(point) => panic!("Unable to parse: {}", pretty_error(data.as_slice(), point)),
     };
 
     let mut out = BufferedWriter::new(stdout_raw());

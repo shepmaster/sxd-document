@@ -478,7 +478,7 @@ impl Parser {
         let (_, xml) = try_parse!(xml.consume_literal("?>"));
 
         if target.eq_ignore_ascii_case("xml") {
-            fail!("Can't use xml as a PI target");
+            panic!("Can't use xml as a PI target");
         }
 
         Success((ProcessingInstruction{target: target, value: value}, xml))
@@ -530,7 +530,7 @@ impl Parser {
         let (end_name, xml) = try_resume_after_partial_failure!(f, self.parse_element_end(xml));
 
         if start_name != end_name {
-            fail!("tags do not match!");
+            panic!("tags do not match!");
         }
 
         Success((children, xml))
@@ -607,7 +607,7 @@ impl Hydrator {
                     "gt"   => ">",
                     "apos" => "'",
                     "quot" => "\"",
-                    _      => fail!("unknown entity"),
+                    _      => panic!("unknown entity"),
                 })
             }
         }

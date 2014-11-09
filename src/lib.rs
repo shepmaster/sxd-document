@@ -19,7 +19,7 @@
 //!
 //! ### Known issues
 //!
-//! - `fail!` is used in recoverable situations.
+//! - `panic!` is used in recoverable situations.
 //! - Parent pointers need to be weak references.
 //!
 //! ### Potential cleanups
@@ -425,19 +425,19 @@ impl ElementChild {
                 match e.parent() {
                     None => None,
                     Some(ElementElementParent(ref e)) => Some(e.clone()),
-                    _ => fail!("An element's child's parent is not an element")
+                    _ => panic!("An element's child's parent is not an element")
                 },
             &CommentElementChild(ref c) =>
                 match c.parent() {
                     None => None,
                     Some(ElementElementParent(ref c)) => Some(c.clone()),
-                    _ => fail!("An element's child's parent is not an element")
+                    _ => panic!("An element's child's parent is not an element")
                 },
             &PIElementChild(ref p) =>
                 match p.parent() {
                     None => None,
                     Some(ElementElementParent(ref p)) => Some(p.clone()),
-                    _ => fail!("An element's child's parent is not an element")
+                    _ => panic!("An element's child's parent is not an element")
                 },
             &TextElementChild(ref t) => t.parent(),
         }
@@ -511,7 +511,7 @@ impl ElementParent {
                 ElementElementChild(ref e) => r.remove_child(e.clone()),
                 CommentElementChild(ref c) => r.remove_child(c.clone()),
                 PIElementChild(ref p)      => r.remove_child(p.clone()),
-                TextElementChild(_)        => fail!("A text node may not be a child of the root node"),
+                TextElementChild(_)        => panic!("A text node may not be a child of the root node"),
             }
         }
     }
