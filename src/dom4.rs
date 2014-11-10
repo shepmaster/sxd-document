@@ -143,4 +143,20 @@ mod test {
 
         assert_eq!(Some(ElementPOC(alpha)), beta.parent());
     }
+
+    #[test]
+    fn changing_parent_of_element_removes_element_from_original_parent() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let parent1 = doc.create_element("parent1");
+        let parent2 = doc.create_element("parent2");
+        let child = doc.create_element("child");
+
+        parent1.append_child(child);
+        parent2.append_child(child);
+
+        assert!(parent1.children().is_empty());
+        assert_eq!(1, parent2.children().len());
+    }
 }

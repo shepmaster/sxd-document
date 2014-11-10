@@ -29,6 +29,7 @@
 #![crate_name = "document"]
 #![experimental]
 #![feature(macro_rules)]
+#![feature(if_let)]
 
 extern crate arena;
 

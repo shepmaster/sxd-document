@@ -55,6 +55,8 @@ impl Element {
     pub fn name(&self) -> &str { self.name.as_slice() }
 }
 
+#[allow(raw_pointer_deriving)]
+#[deriving(PartialEq)]
 pub enum ChildOfElement {
     ElementCOE(*mut Element),
 }
@@ -108,7 +110,15 @@ impl Connections {
         let parent_r = unsafe { &mut *parent };
         let child_r = unsafe { &mut *child };
 
-        // Cleanup previous parentage
+        if let Some(prev_parent) = child_r.parent {
+            match prev_parent {
+                ElementPOC(e) => {
+                    let e_r = unsafe { &mut *e };
+                    e_r.children.retain(|n| *n != ElementCOE(child));
+                },
+            }
+        }
+
         child_r.parent = Some(ElementPOC(parent));
 
         parent_r.children.push(ElementCOE(child));
