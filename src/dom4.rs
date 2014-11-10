@@ -33,6 +33,16 @@ pub struct Element<'d> {
 }
 
 impl<'d> Element<'d> {
+    pub fn parent(&'d self) -> Option<ParentOfChild<'d>> {
+        let connections = self.document.connections.borrow();
+
+        connections.element_parent(self.node).map(|n| {
+            match n {
+                raw::ElementPOC(n) => ElementPOC(self.document.wrap_element(n)),
+            }
+        })
+    }
+
     pub fn append_child(&self, child: Element) {
         let connections = self.document.connections.borrow_mut();
         connections.append_element_child(self.node, child.node)
@@ -77,10 +87,16 @@ impl<'d> ChildOfElement<'d> {
     }
 }
 
+#[deriving(PartialEq,Show)]
+pub enum ParentOfChild<'d> {
+    ElementPOC(Element<'d>),
+}
+
 #[cfg(test)]
 mod test {
     use super::super::Package;
     use super::{ElementCOE};
+    use super::{ElementPOC};
 
     #[test]
     fn elements_can_have_element_children() {
@@ -113,5 +129,18 @@ mod test {
 
         assert_eq!(children[0], ElementCOE(alpha));
         assert_eq!(children[1], ElementCOE(omega));
+    }
+
+    #[test]
+    fn element_children_know_their_parent() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let alpha = doc.create_element("alpha");
+        let beta  = doc.create_element("beta");
+
+        alpha.append_child(beta);
+
+        assert_eq!(Some(ElementPOC(alpha)), beta.parent());
     }
 }

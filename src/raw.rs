@@ -48,7 +48,7 @@ impl StringPool {
 pub struct Element {
     name: InternedString,
     children: Vec<ChildOfElement>,
-    parent: Option<ParentOfElement>,
+    parent: Option<ParentOfChild>,
 }
 
 impl Element {
@@ -59,8 +59,8 @@ pub enum ChildOfElement {
     ElementCOE(*mut Element),
 }
 
-pub enum ParentOfElement {
-    ElementPOE(*mut Element),
+pub enum ParentOfChild {
+    ElementPOC(*mut Element),
 }
 
 pub struct Storage {
@@ -99,12 +99,17 @@ impl Connections {
         Connections
     }
 
+    pub fn element_parent(&self, child: *mut Element) -> Option<ParentOfChild> {
+        let child_r = unsafe { &*child };
+        child_r.parent
+    }
+
     pub fn append_element_child(&self, parent: *mut Element, child: *mut Element) {
         let parent_r = unsafe { &mut *parent };
         let child_r = unsafe { &mut *child };
 
         // Cleanup previous parentage
-        child_r.parent = Some(ElementPOE(parent));
+        child_r.parent = Some(ElementPOC(parent));
 
         parent_r.children.push(ElementCOE(child));
     }

@@ -13,15 +13,8 @@ impl<'d> Storage<'d> {
         }
     }
 
-    fn wrap_element(&self, node: *mut raw::Element) -> Element {
-        Element {
-            lifetime: InvariantLifetime,
-            node: node,
-        }
-    }
-
     pub fn create_element(&'d self, name: &str) -> Element<'d> {
-        self.wrap_element(self.storage.create_element(name))
+        Element::wrap(self.storage.create_element(name))
     }
 }
 
@@ -34,6 +27,14 @@ impl<'d> Connections<'d> {
         Connections {
             connections: connections,
         }
+    }
+
+    pub fn element_parent(&self, child: Element<'d>) -> Option<ParentOfChild<'d>> {
+        self.connections.element_parent(child.node).map(|n| {
+            match n {
+                raw::ElementPOC(n) => ElementPOC(Element::wrap(n)),
+            }
+        })
     }
 
     pub fn append_element_child(&mut self, parent: Element<'d>, child: Element<'d>) {
@@ -74,6 +75,15 @@ pub struct Element<'d> {
     node: *mut raw::Element,
 }
 
+impl<'d> Element<'d> {
+    fn wrap(node: *mut raw::Element) -> Element<'d> {
+        Element {
+            lifetime: InvariantLifetime,
+            node: node,
+        }
+    }
+}
+
 impl<'d> PartialEq for Element<'d> {
     fn eq(&self, other: &Element<'d>) -> bool {
         self.node == other.node
@@ -100,10 +110,24 @@ impl<'d> ChildOfElement<'d> {
     }
 }
 
+#[deriving(PartialEq,Show)]
+pub enum ParentOfChild<'d> {
+    ElementPOC(Element<'d>),
+}
+
+impl<'d> ParentOfChild<'d> {
+    pub fn element(self) -> Option<Element<'d>> {
+        match self {
+            ElementPOC(n) => Some(n)
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::super::Package;
     use super::{ChildOfElement,ElementCOE};
+    use super::{ElementPOC};
 
     #[test]
     fn elements_can_have_element_children() {
@@ -136,5 +160,18 @@ mod test {
 
         assert_eq!(children[0], ElementCOE(alpha));
         assert_eq!(children[1], ElementCOE(omega));
+    }
+
+    #[test]
+    fn element_children_know_their_parent() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let alpha = s.create_element("alpha");
+        let beta  = s.create_element("beta");
+
+        c.append_element_child(alpha, beta);
+
+        assert_eq!(Some(ElementPOC(alpha)), c.element_parent(beta));
     }
 }
