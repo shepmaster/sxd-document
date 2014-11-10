@@ -132,8 +132,7 @@ impl<'d> Element<'d> {
 
 impl<'d> fmt::Show for Element<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let node = unsafe { &* self.node };
-        write!(f, "Element {{ name: {}  }}", node.name())
+        write!(f, "Element {{ name: {} }}", self.name())
     }
 }
 
