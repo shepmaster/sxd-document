@@ -22,6 +22,13 @@ impl<'d> Document<'d> {
         }
     }
 
+    fn wrap_attribute(&'d self, node: *mut raw::Attribute) -> Attribute<'d> {
+        Attribute {
+            document: self,
+            node: node,
+        }
+    }
+
     pub fn create_element(&'d self, name: &str) -> Element<'d> {
         self.wrap_element(self.storage.create_element(name))
     }
@@ -80,6 +87,21 @@ impl<'d> Element<'d> {
             }).collect()
         }
     }
+
+    pub fn set_attribute_value(&self, name: &str, value: &str) -> Attribute<'d> {
+        let attr = self.document.storage.create_attribute(name, value);
+        let connections = self.document.connections.borrow_mut();
+        connections.set_attribute(self.node, attr);
+        self.document.wrap_attribute(attr)
+    }
+
+    pub fn attribute_value(&self, name: &str) -> Option<&'d str> {
+        let connections = self.document.connections.borrow();
+        connections.attribute(self.node, name).map(|a| {
+            let a_r = unsafe { &*a };
+            a_r.value()
+        })
+    }
 }
 
 impl<'d> PartialEq for Element<'d> {
@@ -93,6 +115,11 @@ impl<'d> fmt::Show for Element<'d> {
         let node = unsafe { &* self.node };
         write!(f, "Element {{ name: {}  }}", node.name())
     }
+}
+
+pub struct Attribute<'d> {
+    document: &'d Document<'d>,
+    node: *mut raw::Attribute,
 }
 
 #[deriving(PartialEq,Show)]
@@ -199,5 +226,17 @@ mod test {
         let alpha = doc.create_element("alpha");
         alpha.set_name("beta");
         assert_eq!(alpha.name(), "beta");
+    }
+
+    #[test]
+    fn elements_have_attributes() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let element = doc.create_element("element");
+
+        element.set_attribute_value("hello", "world");
+
+        assert_eq!(Some("world"), element.attribute_value("hello"));
     }
 }

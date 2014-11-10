@@ -49,10 +49,21 @@ pub struct Element {
     name: InternedString,
     children: Vec<ChildOfElement>,
     parent: Option<ParentOfChild>,
+    attributes: Vec<*mut Attribute>,
 }
 
 impl Element {
     pub fn name(&self) -> &str { self.name.as_slice() }
+}
+
+pub struct Attribute {
+    name: InternedString,
+    value: InternedString,
+}
+
+impl Attribute {
+    pub fn name(&self)  -> &str { self.name.as_slice() }
+    pub fn value(&self) -> &str { self.value.as_slice() }
 }
 
 #[allow(raw_pointer_deriving)]
@@ -68,6 +79,7 @@ pub enum ParentOfChild {
 pub struct Storage {
     strings: StringPool,
     elements: TypedArena<Element>,
+    attributes: TypedArena<Attribute>,
 }
 
 impl Storage {
@@ -75,6 +87,7 @@ impl Storage {
         Storage {
             strings: StringPool::new(),
             elements: TypedArena::new(),
+            attributes: TypedArena::new(),
         }
     }
 
@@ -90,6 +103,17 @@ impl Storage {
             name: name,
             children: Vec::new(),
             parent: None,
+            attributes: Vec::new(),
+        })
+    }
+
+    pub fn create_attribute(&self, name: &str, value: &str) -> *mut Attribute {
+        let name = self.intern(name);
+        let value = self.intern(value);
+
+        self.attributes.alloc(Attribute {
+            name: name,
+            value: value,
         })
     }
 
@@ -133,5 +157,18 @@ impl Connections {
     pub unsafe fn element_children(&self, parent: *mut Element) -> &[ChildOfElement] {
         let parent_r = &*parent;
         parent_r.children.as_slice()
+    }
+
+    pub fn attribute(&self, element: *mut Element, name: &str) -> Option<*mut Attribute> {
+        let element_r = unsafe { &*element };
+        element_r.attributes.iter().find(|a| {
+            let a_r: &Attribute = unsafe { &***a };
+            a_r.name.as_slice() == name
+        }).map(|a| *a)
+    }
+
+    pub fn set_attribute(&self, parent: *mut Element, attribute: *mut Attribute) {
+        let parent_r = unsafe { &mut *parent };
+        parent_r.attributes.push(attribute)
     }
 }

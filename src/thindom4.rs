@@ -17,6 +17,10 @@ impl<'d> Storage<'d> {
         Element::wrap(self.storage.create_element(name))
     }
 
+    pub fn create_attribute(&'d self, name: &str, value: &str) -> Attribute<'d> {
+        Attribute::wrap(self.storage.create_attribute(name, value))
+    }
+
     pub fn element_set_name(&self, element: &Element, name: &str) {
         self.storage.element_set_name(element.node, name)
     }
@@ -50,6 +54,17 @@ impl<'d> Connections<'d> {
         // TODO: Test that
         unsafe { ElementChildren { x: self.connections.element_children(parent.node), idx: 0 } }
     }
+
+    pub fn set_attribute(&mut self, parent: Element<'d>, attribute: Attribute<'d>) {
+        self.connections.set_attribute(parent.node, attribute.node);
+    }
+
+    pub fn attribute_value(&self, parent: Element<'d>, name: &str) -> Option<&'d str> {
+        self.connections.attribute(parent.node, name).map(|a| {
+            let a_r = unsafe { &*a };
+            a_r.value()
+        })
+    }
 }
 
 pub struct ElementChildren<'d> {
@@ -74,21 +89,29 @@ impl<'d> Iterator<ChildOfElement<'d>> for ElementChildren<'d> {
     }
 }
 
-pub struct Element<'d> {
-    lifetime: InvariantLifetime<'d>,
-    node: *mut raw::Element,
-}
+macro_rules! node(
+    ($name:ident, $raw:ty) => (
+        pub struct $name<'d> {
+            lifetime: InvariantLifetime<'d>,
+            node: *mut $raw,
+        }
+
+        impl<'d> $name<'d> {
+            fn wrap(node: *mut $raw) -> $name<'d> {
+                $name {
+                    lifetime: InvariantLifetime,
+                    node: node,
+                }
+            }
+
+            fn node(&self) -> &'d $raw { unsafe { &*self.node } }
+        }
+    )
+)
+
+node!(Element, raw::Element)
 
 impl<'d> Element<'d> {
-    fn wrap(node: *mut raw::Element) -> Element<'d> {
-        Element {
-            lifetime: InvariantLifetime,
-            node: node,
-        }
-    }
-
-    fn node(&self) -> &'d raw::Element { unsafe { &*self.node } }
-
     pub fn name(&self) -> &'d str { self.node().name() }
 }
 
@@ -104,6 +127,8 @@ impl<'d> fmt::Show for Element<'d> {
         write!(f, "Element {{ name: {}  }}", node.name())
     }
 }
+
+node!(Attribute, raw::Attribute)
 
 #[deriving(PartialEq,Show)]
 pub enum ChildOfElement<'d> {
@@ -207,5 +232,17 @@ mod test {
         let alpha = s.create_element("alpha");
         s.element_set_name(&alpha, "beta");
         assert_eq!(alpha.name(), "beta");
+    }
+
+    #[test]
+    fn elements_have_attributes() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let element = s.create_element("element");
+        let attr = s.create_attribute("hello", "world");
+        c.set_attribute(element, attr);
+
+        assert_eq!(Some("world"), c.attribute_value(element, "hello"));
     }
 }
