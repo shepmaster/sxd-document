@@ -27,6 +27,18 @@ impl<'d> Document<'d> {
     }
 }
 
+impl<'d> PartialEq for Document<'d> {
+    fn eq(&self, other: &Document<'d>) -> bool {
+        self as *const Document == other as *const Document
+    }
+}
+
+impl<'d> fmt::Show for Document<'d> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Document {{ {} }}", self as *const Document)
+    }
+}
+
 pub struct Element<'d> {
     document: &'d Document<'d>,
     node: *mut raw::Element,
@@ -35,6 +47,7 @@ pub struct Element<'d> {
 impl<'d> Element<'d> {
     fn node(&self) -> &raw::Element { unsafe { &*self.node } }
 
+    pub fn document(&self) -> &'d Document<'d> { self.document }
     pub fn name(&self) -> &str { self.node().name() }
 
     pub fn set_name(&self, name: &str) {
@@ -105,6 +118,16 @@ mod test {
     use super::super::Package;
     use super::{ElementCOE};
     use super::{ElementPOC};
+
+    #[test]
+    fn elements_belong_to_a_document() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let element = doc.create_element("alpha");
+
+        assert_eq!(&doc, element.document());
+    }
 
     #[test]
     fn elements_can_have_element_children() {
