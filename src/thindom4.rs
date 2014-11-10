@@ -59,6 +59,12 @@ impl<'d> Connections<'d> {
         self.connections.attribute_parent(attribute.node).map(|a| Element::wrap(a))
     }
 
+    pub fn attributes(&self, parent: Element<'d>) -> Attributes<'d> {
+        // This is safe because we disallow mutation while this borrow is active
+        // TODO: Test that
+        unsafe { Attributes { x: self.connections.attributes(parent.node), idx: 0 } }
+    }
+
     pub fn set_attribute(&mut self, parent: Element<'d>, attribute: Attribute<'d>) {
         self.connections.set_attribute(parent.node, attribute.node);
     }
@@ -89,6 +95,23 @@ impl<'d> Iterator<ChildOfElement<'d>> for ElementChildren<'d> {
             };
             self.idx += 1;
             Some(ElementCOE(e))
+        }
+    }
+}
+
+pub struct Attributes<'d> {
+    x: &'d [*mut raw::Attribute],
+    idx: uint,
+}
+
+impl<'d> Iterator<Attribute<'d>> for Attributes<'d> {
+    fn next(&mut self) -> Option<Attribute<'d>> {
+        if self.idx >= self.x.len() {
+            None
+        } else {
+            let a = Attribute::wrap(self.x[self.idx]);
+            self.idx += 1;
+            Some(a)
         }
     }
 }
@@ -134,6 +157,11 @@ impl<'d> fmt::Show for Element<'d> {
 
 node!(Attribute, raw::Attribute)
 
+impl<'d> Attribute<'d> {
+    pub fn name(&self)  -> &str { self.node().name() }
+    pub fn value(&self) -> &str { self.node().value() }
+}
+
 #[deriving(PartialEq,Show)]
 pub enum ChildOfElement<'d> {
     ElementCOE(Element<'d>),
@@ -165,6 +193,7 @@ mod test {
     use super::super::Package;
     use super::{ChildOfElement,ElementCOE};
     use super::{ElementPOC};
+    use super::Attribute;
 
     #[test]
     fn elements_can_have_element_children() {
@@ -276,5 +305,28 @@ mod test {
         c.set_attribute(element, attr2);
 
         assert_eq!(Some("galaxy"), c.attribute_value(element, "hello"));
+    }
+
+    #[test]
+    fn attributes_can_be_iterated() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let element = s.create_element("element");
+
+        let attr1 = s.create_attribute("name1", "value1");
+        let attr2 = s.create_attribute("name2", "value2");
+
+        c.set_attribute(element, attr1);
+        c.set_attribute(element, attr2);
+
+        let mut attrs: Vec<Attribute> = c.attributes(element).collect();
+        attrs.sort_by(|a, b| a.name().cmp(b.name()));
+
+        assert_eq!(2, attrs.len());
+        assert_eq!("name1",  attrs[0].name());
+        assert_eq!("value1", attrs[0].value());
+        assert_eq!("name2",  attrs[1].name());
+        assert_eq!("value2", attrs[1].value());
     }
 }

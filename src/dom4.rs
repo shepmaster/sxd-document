@@ -88,6 +88,17 @@ impl<'d> Element<'d> {
         }
     }
 
+    pub fn attributes(&self) -> Vec<Attribute<'d>> {
+        let connections = self.document.connections.borrow();
+        // This is safe because we copy of the children, and the
+        // children are never deallocated.
+        unsafe {
+            connections.attributes(self.node).iter().map(|n| {
+                self.document.wrap_attribute(*n)
+            }).collect()
+        }
+    }
+
     pub fn set_attribute_value(&self, name: &str, value: &str) -> Attribute<'d> {
         let attr = self.document.storage.create_attribute(name, value);
         let connections = self.document.connections.borrow_mut();
@@ -123,6 +134,11 @@ pub struct Attribute<'d> {
 }
 
 impl<'d> Attribute<'d> {
+    fn node(&self) -> &raw::Attribute { unsafe { &*self.node } }
+
+    pub fn name(&self)  -> &str { self.node().name() }
+    pub fn value(&self) -> &str { self.node().value() }
+
     pub fn parent(&self) -> Option<Element<'d>> {
         let connections = self.document.connections.borrow();
         connections.attribute_parent(self.node).map(|n| {
@@ -271,5 +287,25 @@ mod test {
         element.set_attribute_value("hello", "galaxy");
 
         assert_eq!(Some("galaxy"), element.attribute_value("hello"));
+    }
+
+    #[test]
+    fn attributes_can_be_iterated() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let element = doc.create_element("element");
+
+        element.set_attribute_value("name1", "value1");
+        element.set_attribute_value("name2", "value2");
+
+        let mut attrs = element.attributes();
+        attrs.sort_by(|a, b| a.name().cmp(b.name()));
+
+        assert_eq!(2, attrs.len());
+        assert_eq!("name1",  attrs[0].name());
+        assert_eq!("value1", attrs[0].value());
+        assert_eq!("name2",  attrs[1].name());
+        assert_eq!("value2", attrs[1].value());
     }
 }

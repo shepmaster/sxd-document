@@ -172,6 +172,11 @@ impl Connections {
         attr_r.parent
     }
 
+    pub unsafe fn attributes(&self, parent: *mut Element) -> &[*mut Attribute] {
+        let parent_r = &*parent;
+        parent_r.attributes.as_slice()
+    }
+
     pub fn attribute(&self, element: *mut Element, name: &str) -> Option<*mut Attribute> {
         let element_r = unsafe { &*element };
         element_r.attributes.iter().find(|a| {
