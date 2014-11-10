@@ -92,6 +92,12 @@ impl Storage {
             parent: None,
         })
     }
+
+    pub fn element_set_name(&self, element: *mut Element, name: &str) {
+        let name = self.intern(name);
+        let element_r = unsafe { &mut * element };
+        element_r.name = name;
+    }
 }
 
 pub struct Connections;

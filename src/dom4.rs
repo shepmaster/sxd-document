@@ -33,6 +33,14 @@ pub struct Element<'d> {
 }
 
 impl<'d> Element<'d> {
+    fn node(&self) -> &raw::Element { unsafe { &*self.node } }
+
+    pub fn name(&self) -> &str { self.node().name() }
+
+    pub fn set_name(&self, name: &str) {
+        self.document.storage.element_set_name(self.node, name)
+    }
+
     pub fn parent(&'d self) -> Option<ParentOfChild<'d>> {
         let connections = self.document.connections.borrow();
 
@@ -158,5 +166,15 @@ mod test {
 
         assert!(parent1.children().is_empty());
         assert_eq!(1, parent2.children().len());
+    }
+
+    #[test]
+    fn elements_can_be_renamed() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let alpha = doc.create_element("alpha");
+        alpha.set_name("beta");
+        assert_eq!(alpha.name(), "beta");
     }
 }

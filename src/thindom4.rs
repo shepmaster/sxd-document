@@ -16,6 +16,10 @@ impl<'d> Storage<'d> {
     pub fn create_element(&'d self, name: &str) -> Element<'d> {
         Element::wrap(self.storage.create_element(name))
     }
+
+    pub fn element_set_name(&self, element: &Element, name: &str) {
+        self.storage.element_set_name(element.node, name)
+    }
 }
 
 pub struct Connections<'d> {
@@ -82,6 +86,10 @@ impl<'d> Element<'d> {
             node: node,
         }
     }
+
+    fn node(&self) -> &'d raw::Element { unsafe { &*self.node } }
+
+    pub fn name(&self) -> &'d str { self.node().name() }
 }
 
 impl<'d> PartialEq for Element<'d> {
@@ -189,5 +197,15 @@ mod test {
 
         assert_eq!(0, c.element_children(parent1).count());
         assert_eq!(1, c.element_children(parent2).count());
+    }
+
+    #[test]
+    fn elements_can_be_renamed() {
+        let package = Package::new();
+        let (s, _) = package.as_thin_document();
+
+        let alpha = s.create_element("alpha");
+        s.element_set_name(&alpha, "beta");
+        assert_eq!(alpha.name(), "beta");
     }
 }
