@@ -122,6 +122,15 @@ pub struct Attribute<'d> {
     node: *mut raw::Attribute,
 }
 
+impl<'d> Attribute<'d> {
+    pub fn parent(&self) -> Option<Element<'d>> {
+        let connections = self.document.connections.borrow();
+        connections.attribute_parent(self.node).map(|n| {
+            self.document.wrap_element(n)
+        })
+    }
+}
+
 #[deriving(PartialEq,Show)]
 pub enum ChildOfElement<'d> {
     ElementCOE(Element<'d>)
@@ -238,5 +247,16 @@ mod test {
         element.set_attribute_value("hello", "world");
 
         assert_eq!(Some("world"), element.attribute_value("hello"));
+    }
+
+    #[test]
+    fn attributes_know_their_element() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let element = doc.create_element("element");
+        let attr = element.set_attribute_value("hello", "world");
+
+        assert_eq!(Some(element), attr.parent());
     }
 }

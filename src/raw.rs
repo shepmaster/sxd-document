@@ -59,6 +59,7 @@ impl Element {
 pub struct Attribute {
     name: InternedString,
     value: InternedString,
+    parent: Option<*mut Element>,
 }
 
 impl Attribute {
@@ -114,6 +115,7 @@ impl Storage {
         self.attributes.alloc(Attribute {
             name: name,
             value: value,
+            parent: None,
         })
     }
 
@@ -159,6 +161,11 @@ impl Connections {
         parent_r.children.as_slice()
     }
 
+    pub fn attribute_parent(&self, attribute: *mut Attribute) -> Option<*mut Element> {
+        let attr_r = unsafe { &*attribute };
+        attr_r.parent
+    }
+
     pub fn attribute(&self, element: *mut Element, name: &str) -> Option<*mut Attribute> {
         let element_r = unsafe { &*element };
         element_r.attributes.iter().find(|a| {
@@ -169,6 +176,9 @@ impl Connections {
 
     pub fn set_attribute(&self, parent: *mut Element, attribute: *mut Attribute) {
         let parent_r = unsafe { &mut *parent };
-        parent_r.attributes.push(attribute)
+        let attr_r = unsafe { &mut *attribute };
+
+        parent_r.attributes.push(attribute);
+        attr_r.parent = Some(parent);
     }
 }

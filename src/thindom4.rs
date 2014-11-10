@@ -55,6 +55,10 @@ impl<'d> Connections<'d> {
         unsafe { ElementChildren { x: self.connections.element_children(parent.node), idx: 0 } }
     }
 
+    pub fn attribute_parent(&self, attribute: Attribute<'d>) -> Option<Element<'d>> {
+        self.connections.attribute_parent(attribute.node).map(|a| Element::wrap(a))
+    }
+
     pub fn set_attribute(&mut self, parent: Element<'d>, attribute: Attribute<'d>) {
         self.connections.set_attribute(parent.node, attribute.node);
     }
@@ -244,5 +248,17 @@ mod test {
         c.set_attribute(element, attr);
 
         assert_eq!(Some("world"), c.attribute_value(element, "hello"));
+    }
+
+    #[test]
+    fn attributes_know_their_element() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let element = s.create_element("element");
+        let attr = s.create_attribute("hello", "world");
+        c.set_attribute(element, attr);
+
+        assert_eq!(Some(element), c.attribute_parent(attr));
     }
 }
