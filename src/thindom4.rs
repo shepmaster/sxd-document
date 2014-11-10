@@ -133,6 +133,12 @@ macro_rules! node(
 
             fn node(&self) -> &'d $raw { unsafe { &*self.node } }
         }
+
+        impl<'d> PartialEq for $name<'d> {
+            fn eq(&self, other: &$name<'d>) -> bool {
+                self.node == other.node
+            }
+        }
     )
 )
 
@@ -140,12 +146,6 @@ node!(Element, raw::Element)
 
 impl<'d> Element<'d> {
     pub fn name(&self) -> &'d str { self.node().name() }
-}
-
-impl<'d> PartialEq for Element<'d> {
-    fn eq(&self, other: &Element<'d>) -> bool {
-        self.node == other.node
-    }
 }
 
 impl<'d> fmt::Show for Element<'d> {
