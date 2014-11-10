@@ -46,15 +46,30 @@ impl<'d> fmt::Show for Document<'d> {
     }
 }
 
-pub struct Element<'d> {
-    document: &'d Document<'d>,
-    node: *mut raw::Element,
-}
+macro_rules! node(
+    ($name:ident, $raw:ty) => (
+        pub struct $name<'d> {
+            document: &'d Document<'d>,
+            node: *mut $raw,
+        }
+
+        impl<'d> $name<'d> {
+            fn node(&self) -> &$raw { unsafe { &*self.node } }
+
+            pub fn document(&self) -> &'d Document<'d> { self.document }
+        }
+
+        impl<'d> PartialEq for $name<'d> {
+            fn eq(&self, other: &$name<'d>) -> bool {
+                self.node == other.node
+            }
+        }
+    )
+)
+
+node!(Element, raw::Element)
 
 impl<'d> Element<'d> {
-    fn node(&self) -> &raw::Element { unsafe { &*self.node } }
-
-    pub fn document(&self) -> &'d Document<'d> { self.document }
     pub fn name(&self) -> &str { self.node().name() }
 
     pub fn set_name(&self, name: &str) {
@@ -115,12 +130,6 @@ impl<'d> Element<'d> {
     }
 }
 
-impl<'d> PartialEq for Element<'d> {
-    fn eq(&self, other: &Element<'d>) -> bool {
-        self.node == other.node
-    }
-}
-
 impl<'d> fmt::Show for Element<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let node = unsafe { &* self.node };
@@ -128,14 +137,9 @@ impl<'d> fmt::Show for Element<'d> {
     }
 }
 
-pub struct Attribute<'d> {
-    document: &'d Document<'d>,
-    node: *mut raw::Attribute,
-}
+node!(Attribute, raw::Attribute)
 
 impl<'d> Attribute<'d> {
-    fn node(&self) -> &raw::Attribute { unsafe { &*self.node } }
-
     pub fn name(&self)  -> &str { self.node().name() }
     pub fn value(&self) -> &str { self.node().value() }
 
@@ -251,6 +255,17 @@ mod test {
         let alpha = doc.create_element("alpha");
         alpha.set_name("beta");
         assert_eq!(alpha.name(), "beta");
+    }
+
+    #[test]
+    fn attributes_belong_to_a_document() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let element = doc.create_element("alpha");
+        let attr = element.set_attribute_value("hello", "world");
+
+        assert_eq!(&doc, attr.document());
     }
 
     #[test]
