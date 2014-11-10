@@ -23,6 +23,12 @@ impl InternedString {
     }
 }
 
+impl PartialEq for InternedString {
+    fn eq(&self, other: &InternedString) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
 struct StringPool {
     strings: RefCell<Vec<String>>,
 }
@@ -178,6 +184,10 @@ impl Connections {
         let parent_r = unsafe { &mut *parent };
         let attr_r = unsafe { &mut *attribute };
 
+        parent_r.attributes.retain(|a| {
+            let a_r: &Attribute = unsafe { &**a };
+            a_r.name != attr_r.name
+        });
         parent_r.attributes.push(attribute);
         attr_r.parent = Some(parent);
     }

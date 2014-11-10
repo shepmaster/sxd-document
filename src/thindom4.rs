@@ -261,4 +261,20 @@ mod test {
 
         assert_eq!(Some(element), c.attribute_parent(attr));
     }
+
+    #[test]
+    fn attributes_can_be_reset() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let element = s.create_element("element");
+
+        let attr1 = s.create_attribute("hello", "world");
+        let attr2 = s.create_attribute("hello", "galaxy");
+
+        c.set_attribute(element, attr1);
+        c.set_attribute(element, attr2);
+
+        assert_eq!(Some("galaxy"), c.attribute_value(element, "hello"));
+    }
 }

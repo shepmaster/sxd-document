@@ -259,4 +259,17 @@ mod test {
 
         assert_eq!(Some(element), attr.parent());
     }
+
+    #[test]
+    fn attributes_can_be_reset() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let element = doc.create_element("element");
+
+        element.set_attribute_value("hello", "world");
+        element.set_attribute_value("hello", "galaxy");
+
+        assert_eq!(Some("galaxy"), element.attribute_value("hello"));
+    }
 }
