@@ -399,6 +399,16 @@ mod test {
     }
 
     #[test]
+    fn text_belongs_to_a_document() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let text = doc.create_text("Now is the winter of our discontent.");
+
+        assert_eq!(&doc, text.document());
+    }
+
+    #[test]
     fn elements_can_have_text_children() {
         let package = Package::new();
         let doc = package.as_document();
