@@ -210,6 +210,12 @@ impl Storage {
         let element_r = unsafe { &mut * element };
         element_r.name = name;
     }
+
+    pub fn text_set_text(&self, text: *mut Text, new_text: &str) {
+        let new_text = self.intern(new_text);
+        let text_r = unsafe { &mut * text };
+        text_r.text = new_text;
+    }
 }
 
 pub struct Connections;

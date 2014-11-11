@@ -162,6 +162,10 @@ node!(Text, raw::Text)
 impl<'d> Text<'d> {
     pub fn text(&self) -> &str { self.node().text() }
 
+    pub fn set_text(&self, text: &str) {
+        self.document.storage.text_set_text(self.node, text)
+    }
+
     pub fn parent(&self) -> Option<Element<'d>> {
         let connections = self.document.connections.borrow();
         connections.text_parent(self.node).map(|n| {
@@ -420,5 +424,17 @@ mod test {
         sentence.append_child(text);
 
         assert_eq!(text.parent(), Some(sentence));
+    }
+
+    #[test]
+    fn text_can_be_changed() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let text = doc.create_text("Now is the winter of our discontent.");
+
+        text.set_text("Made glorious summer by this sun of York");
+
+        assert_eq!(text.text(), "Made glorious summer by this sun of York");
     }
 }

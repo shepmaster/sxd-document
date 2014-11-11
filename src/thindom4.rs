@@ -28,6 +28,10 @@ impl<'d> Storage<'d> {
     pub fn element_set_name(&self, element: &Element, name: &str) {
         self.storage.element_set_name(element.node, name)
     }
+
+    pub fn text_set_text(&self, text: &Text, new_text: &str) {
+        self.storage.text_set_text(text.node, new_text)
+    }
 }
 
 pub struct Connections<'d> {
@@ -423,5 +427,17 @@ mod test {
         c.append_element_child(sentence, text);
 
         assert_eq!(c.text_parent(text), Some(sentence));
+    }
+
+    #[test]
+    fn text_can_be_changed() {
+        let package = Package::new();
+        let (s, _) = package.as_thin_document();
+
+        let text = s.create_text("Now is the winter of our discontent.");
+
+        s.text_set_text(&text, "Made glorious summer by this sun of York");
+
+        assert_eq!(text.text(), "Made glorious summer by this sun of York");
     }
 }
