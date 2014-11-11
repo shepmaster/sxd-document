@@ -31,6 +31,12 @@ impl<'d> Document<'d> {
         }
     }
 
+    fn wrap_parent_of_child(&'d self, node: raw::ParentOfChild) -> ParentOfChild<'d> {
+        match node {
+            raw::ElementPOC(n) => ElementPOC(self.wrap_element(n)),
+        }
+    }
+
     pub fn create_element(&'d self, name: &str) -> Element<'d> {
         self.wrap_element(self.storage.create_element(name))
     }
@@ -90,9 +96,7 @@ impl<'d> Element<'d> {
         let connections = self.document.connections.borrow();
 
         connections.element_parent(self.node).map(|n| {
-            match n {
-                raw::ElementPOC(n) => ElementPOC(self.document.wrap_element(n)),
-            }
+            self.document.wrap_parent_of_child(n)
         })
     }
 
@@ -190,6 +194,13 @@ node!(Comment, raw::Comment)
 
 impl<'d> Comment<'d> {
     pub fn text(&self) -> &str { self.node().text() }
+
+    pub fn parent(&self) -> Option<ParentOfChild<'d>> {
+        let connections = self.document.connections.borrow();
+        connections.comment_parent(self.node).map(|n| {
+            self.document.wrap_parent_of_child(n)
+        })
+    }
 }
 
 impl<'d> fmt::Show for Comment<'d> {
@@ -483,5 +494,18 @@ mod test {
         let children = sentence.children();
         assert_eq!(1, children.len());
         assert_eq!(children[0], CommentCOE(comment));
+    }
+
+    #[test]
+    fn comment_knows_its_parent() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let sentence = doc.create_element("sentence");
+        let comment = doc.create_comment("Now is the winter of our discontent.");
+
+        sentence.append_child(comment);
+
+        assert_eq!(comment.parent(), Some(ElementPOC(sentence)));
     }
 }

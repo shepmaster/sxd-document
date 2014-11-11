@@ -51,9 +51,13 @@ impl<'d> Connections<'d> {
 
     pub fn element_parent(&self, child: Element<'d>) -> Option<ParentOfChild<'d>> {
         self.connections.element_parent(child.node).map(|n| {
-            match n {
-                raw::ElementPOC(n) => ElementPOC(Element::wrap(n)),
-            }
+            ParentOfChild::wrap(n)
+        })
+    }
+
+    pub fn comment_parent(&self, child: Comment<'d>) -> Option<ParentOfChild<'d>> {
+        self.connections.comment_parent(child.node).map(|n| {
+            ParentOfChild::wrap(n)
         })
     }
 
@@ -243,6 +247,12 @@ pub enum ParentOfChild<'d> {
 }
 
 impl<'d> ParentOfChild<'d> {
+    pub fn wrap(node: raw::ParentOfChild) -> ParentOfChild<'d> {
+        match node {
+            raw::ElementPOC(n) => ElementPOC(Element::wrap(n)),
+        }
+    }
+
     pub fn element(self) -> Option<Element<'d>> {
         match self {
             ElementPOC(n) => Some(n)
@@ -475,5 +485,18 @@ mod test {
 
         assert_eq!(1, children.len());
         assert_eq!(children[0], CommentCOE(comment));
+    }
+
+    #[test]
+    fn comment_knows_its_parent() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let sentence = s.create_element("sentence");
+        let comment = s.create_comment("Now is the winter of our discontent.");
+
+        c.append_element_child(sentence, comment);
+
+        assert_eq!(c.comment_parent(comment), Some(ElementPOC(sentence)));
     }
 }
