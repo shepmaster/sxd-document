@@ -279,6 +279,18 @@ impl Storage {
         let comment_r = unsafe { &mut * comment };
         comment_r.text = new_text;
     }
+
+    pub fn processing_instruction_set_target(&self, pi: *mut ProcessingInstruction, new_target: &str) {
+        let new_target = self.intern(new_target);
+        let pi_r = unsafe { &mut * pi };
+        pi_r.target = new_target;
+    }
+
+    pub fn processing_instruction_set_value(&self, pi: *mut ProcessingInstruction, new_value: Option<&str>) {
+        let new_value = new_value.map(|v| self.intern(v));
+        let pi_r = unsafe { &mut * pi };
+        pi_r.value = new_value;
+    }
 }
 
 pub struct Connections;

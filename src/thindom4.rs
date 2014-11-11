@@ -44,6 +44,14 @@ impl<'d> Storage<'d> {
     pub fn comment_set_text(&self, comment: &Comment, new_text: &str) {
         self.storage.comment_set_text(comment.node, new_text)
     }
+
+    pub fn processing_instruction_set_target(&self, pi: &ProcessingInstruction, new_target: &str) {
+        self.storage.processing_instruction_set_target(pi.node, new_target)
+    }
+
+    pub fn processing_instruction_set_value(&self, pi: &ProcessingInstruction, new_value: Option<&str>) {
+        self.storage.processing_instruction_set_value(pi.node, new_value)
+    }
 }
 
 pub struct Connections<'d> {
@@ -574,5 +582,19 @@ mod test {
         c.append_element_child(element, pi);
 
         assert_eq!(c.processing_instruction_parent(pi), Some(ElementPOC(element)));
+    }
+
+    #[test]
+    fn processing_instruction_can_be_changed() {
+        let package = Package::new();
+        let (s, _) = package.as_thin_document();
+
+        let pi = s.create_processing_instruction("device", None);
+
+        s.processing_instruction_set_target(&pi, "output");
+        s.processing_instruction_set_value(&pi, Some("full-screen"));
+
+        assert_eq!(pi.target(), "output");
+        assert_eq!(pi.value(), Some("full-screen"));
     }
 }

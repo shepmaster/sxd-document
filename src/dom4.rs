@@ -231,6 +231,14 @@ impl<'d> ProcessingInstruction<'d> {
     pub fn target(&self) -> &str { self.node().target() }
     pub fn value(&self) -> Option<&str> { self.node().value() }
 
+    pub fn set_target(&self, new_target: &str) {
+        self.document.storage.processing_instruction_set_target(self.node, new_target);
+    }
+
+    pub fn set_value(&self, new_value: Option<&str>) {
+        self.document.storage.processing_instruction_set_value(self.node, new_value);
+    }
+
     pub fn parent(&self) -> Option<ParentOfChild<'d>> {
         let connections = self.document.connections.borrow();
         connections.processing_instruction_parent(self.node).map(|n| {
@@ -597,5 +605,19 @@ mod test {
         element.append_child(pi);
 
         assert_eq!(pi.parent(), Some(ElementPOC(element)));
+    }
+
+    #[test]
+    fn processing_instruction_can_be_changed() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let pi = doc.create_processing_instruction("device", None);
+
+        pi.set_target("output");
+        pi.set_value(Some("full-screen"));
+
+        assert_eq!(pi.target(), "output");
+        assert_eq!(pi.value(), Some("full-screen"));
     }
 }
