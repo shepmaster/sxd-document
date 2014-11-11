@@ -49,6 +49,12 @@ impl<'d> Connections<'d> {
         })
     }
 
+    pub fn text_parent(&self, child: Text<'d>) -> Option<Element<'d>> {
+        self.connections.text_parent(child.node).map(|n| {
+            Element::wrap(n)
+        })
+    }
+
     pub fn append_element_child<C : ToChildOfElement<'d>>(&mut self, parent: Element<'d>, child: C) {
         let child = child.to_child_of_element();
         self.connections.append_element_child(parent.node, child.as_raw())
@@ -404,5 +410,18 @@ mod test {
 
         assert_eq!(1, children.len());
         assert_eq!(children[0], TextCOE(text));
+    }
+
+    #[test]
+    fn text_knows_its_parent() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let sentence = s.create_element("sentence");
+        let text = s.create_text("Now is the winter of our discontent.");
+
+        c.append_element_child(sentence, text);
+
+        assert_eq!(c.text_parent(text), Some(sentence));
     }
 }

@@ -161,6 +161,13 @@ node!(Text, raw::Text)
 
 impl<'d> Text<'d> {
     pub fn text(&self) -> &str { self.node().text() }
+
+    pub fn parent(&self) -> Option<Element<'d>> {
+        let connections = self.document.connections.borrow();
+        connections.text_parent(self.node).map(|n| {
+            self.document.wrap_element(n)
+        })
+    }
 }
 
 impl<'d> fmt::Show for Text<'d> {
@@ -400,5 +407,18 @@ mod test {
         let children = sentence.children();
         assert_eq!(1, children.len());
         assert_eq!(children[0], TextCOE(text));
+    }
+
+    #[test]
+    fn text_knows_its_parent() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let sentence = doc.create_element("sentence");
+        let text = doc.create_text("Now is the winter of our discontent.");
+
+        sentence.append_child(text);
+
+        assert_eq!(text.parent(), Some(sentence));
     }
 }

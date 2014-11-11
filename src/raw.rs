@@ -224,6 +224,11 @@ impl Connections {
         child_r.parent
     }
 
+    pub fn text_parent(&self, child: *mut Text) -> Option<*mut Element> {
+        let child_r = unsafe { &*child };
+        child_r.parent
+    }
+
     pub fn append_element_child<C : ToChildOfElement>(&self, parent: *mut Element, child: C) {
         let child = child.to_child_of_element();
         let parent_r = unsafe { &mut *parent };
