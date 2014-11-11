@@ -63,15 +63,21 @@ impl<'d> Connections<'d> {
         })
     }
 
+    pub fn text_parent(&self, child: Text<'d>) -> Option<Element<'d>> {
+        self.connections.text_parent(child.node).map(|n| {
+            Element::wrap(n)
+        })
+    }
+
     pub fn comment_parent(&self, child: Comment<'d>) -> Option<ParentOfChild<'d>> {
         self.connections.comment_parent(child.node).map(|n| {
             ParentOfChild::wrap(n)
         })
     }
 
-    pub fn text_parent(&self, child: Text<'d>) -> Option<Element<'d>> {
-        self.connections.text_parent(child.node).map(|n| {
-            Element::wrap(n)
+    pub fn processing_instruction_parent(&self, child: ProcessingInstruction<'d>) -> Option<ParentOfChild<'d>> {
+        self.connections.processing_instruction_parent(child.node).map(|n| {
+            ParentOfChild::wrap(n)
         })
     }
 
@@ -555,5 +561,18 @@ mod test {
         let children: Vec<ChildOfElement> = c.element_children(element).collect();
         assert_eq!(1, children.len());
         assert_eq!(children[0], ProcessingInstructionCOE(pi));
+    }
+
+    #[test]
+    fn processing_instruction_knows_its_parent() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let element = s.create_element("element");
+        let pi = s.create_processing_instruction("device", None);
+
+        c.append_element_child(element, pi);
+
+        assert_eq!(c.processing_instruction_parent(pi), Some(ElementPOC(element)));
     }
 }

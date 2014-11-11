@@ -228,8 +228,15 @@ impl<'d> fmt::Show for Comment<'d> {
 node!(ProcessingInstruction, raw::ProcessingInstruction)
 
 impl<'d> ProcessingInstruction<'d> {
-    pub fn target(&self)  -> &str { self.node().target() }
+    pub fn target(&self) -> &str { self.node().target() }
     pub fn value(&self) -> Option<&str> { self.node().value() }
+
+    pub fn parent(&self) -> Option<ParentOfChild<'d>> {
+        let connections = self.document.connections.borrow();
+        connections.processing_instruction_parent(self.node).map(|n| {
+            self.document.wrap_parent_of_child(n)
+        })
+    }
 }
 
 impl<'d> fmt::Show for ProcessingInstruction<'d> {
@@ -577,5 +584,18 @@ mod test {
         let children = element.children();
         assert_eq!(1, children.len());
         assert_eq!(children[0], ProcessingInstructionCOE(pi));
+    }
+
+    #[test]
+    fn processing_instruction_knows_its_parent() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let element = doc.create_element("element");
+        let pi = doc.create_processing_instruction("device", None);
+
+        element.append_child(pi);
+
+        assert_eq!(pi.parent(), Some(ElementPOC(element)));
     }
 }

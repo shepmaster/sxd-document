@@ -293,12 +293,17 @@ impl Connections {
         child_r.parent
     }
 
+    pub fn text_parent(&self, child: *mut Text) -> Option<*mut Element> {
+        let child_r = unsafe { &*child };
+        child_r.parent
+    }
+
     pub fn comment_parent(&self, child: *mut Comment) -> Option<ParentOfChild> {
         let child_r = unsafe { &*child };
         child_r.parent
     }
 
-    pub fn text_parent(&self, child: *mut Text) -> Option<*mut Element> {
+    pub fn processing_instruction_parent(&self, child: *mut ProcessingInstruction) -> Option<ParentOfChild> {
         let child_r = unsafe { &*child };
         child_r.parent
     }
