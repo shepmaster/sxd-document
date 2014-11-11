@@ -580,6 +580,16 @@ mod test {
     }
 
     #[test]
+    fn processing_instruction_belongs_to_a_document() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let pi = doc.create_processing_instruction("device", None);
+
+        assert_eq!(&doc, pi.document());
+    }
+
+    #[test]
     fn elements_can_have_processing_instruction_children() {
         let package = Package::new();
         let doc = package.as_document();
