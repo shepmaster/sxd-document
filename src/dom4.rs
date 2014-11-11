@@ -7,7 +7,22 @@ pub struct Document<'d> {
     connections: RefCell<&'d raw::Connections>,
 }
 
+macro_rules! wrapper(
+    ($name:ident, $wrapper:ident, $inner:ty) => (
+        fn $name(&'d self, node: *mut $inner) -> $wrapper<'d> {
+            $wrapper {
+                document: self,
+                node: node,
+            }
+        }
+    )
+)
+
 impl<'d> Document<'d> {
+    wrapper!(wrap_element, Element, raw::Element)
+    wrapper!(wrap_attribute, Attribute, raw::Attribute)
+    wrapper!(wrap_text, Text, raw::Text)
+
     pub fn new(storage: &'d raw::Storage, connections: &'d raw::Connections) -> Document<'d> {
         Document {
             storage: storage,
@@ -15,22 +30,12 @@ impl<'d> Document<'d> {
         }
     }
 
-    fn wrap_element(&'d self, node: *mut raw::Element) -> Element<'d> {
-        Element {
-            document: self,
-            node: node,
-        }
-    }
-
-    fn wrap_attribute(&'d self, node: *mut raw::Attribute) -> Attribute<'d> {
-        Attribute {
-            document: self,
-            node: node,
-        }
-    }
-
     pub fn create_element(&'d self, name: &str) -> Element<'d> {
         self.wrap_element(self.storage.create_element(name))
+    }
+
+    pub fn create_text(&'d self, text: &str) -> Text<'d> {
+        self.wrap_text(self.storage.create_text(text))
     }
 }
 
@@ -86,9 +91,10 @@ impl<'d> Element<'d> {
         })
     }
 
-    pub fn append_child(&self, child: Element) {
+    pub fn append_child<C : ToChildOfElement<'d>>(&self, child: C) {
+        let child = child.to_child_of_element();
         let connections = self.document.connections.borrow_mut();
-        connections.append_element_child(self.node, child.node)
+        connections.append_element_child(self.node, child.as_raw())
     }
 
     pub fn children(&'d self) -> Vec<ChildOfElement<'d>> {
@@ -99,6 +105,7 @@ impl<'d> Element<'d> {
             let raw_children = connections.element_children(self.node);
             raw_children.iter().map(|n| match n {
                 &raw::ElementCOE(n) => ElementCOE(self.document.wrap_element(n)),
+                &raw::TextCOE(n) => TextCOE(self.document.wrap_text(n)),
             }).collect()
         }
     }
@@ -150,15 +157,45 @@ impl<'d> Attribute<'d> {
     }
 }
 
-#[deriving(PartialEq,Show)]
-pub enum ChildOfElement<'d> {
-    ElementCOE(Element<'d>)
+node!(Text, raw::Text)
+
+impl<'d> Text<'d> {
+    pub fn text(&self) -> &str { self.node().text() }
 }
 
+impl<'d> fmt::Show for Text<'d> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Text {{ text: {} }}", self.text())
+    }
+}
+
+macro_rules! unpack(
+    ($enum_name:ident, $name:ident, $wrapper:ident, $inner:ident) => (
+        impl<'d> $enum_name<'d> {
+            pub fn $name(self) -> Option<$inner<'d>> {
+                match self {
+                    $wrapper(n) => Some(n),
+                    _ => None,
+                }
+            }
+        }
+    )
+)
+
+#[deriving(PartialEq,Show)]
+pub enum ChildOfElement<'d> {
+    ElementCOE(Element<'d>),
+    TextCOE(Text<'d>),
+}
+
+unpack!(ChildOfElement, element, ElementCOE, Element)
+unpack!(ChildOfElement, text, TextCOE, Text)
+
 impl<'d> ChildOfElement<'d> {
-    pub fn element(self) -> Option<Element<'d>> {
+    pub fn as_raw(&self) -> raw::ChildOfElement {
         match self {
-            ElementCOE(n) => Some(n),
+            &ElementCOE(n) => raw::ElementCOE(n.node),
+            &TextCOE(n) => raw::TextCOE(n.node),
         }
     }
 }
@@ -168,10 +205,37 @@ pub enum ParentOfChild<'d> {
     ElementPOC(Element<'d>),
 }
 
+macro_rules! conversion_trait(
+    ($tr_name:ident, $method:ident, $res_type:ident,
+        { $($leaf_type:ident => $variant:ident),* }
+    ) => (
+        pub trait $tr_name<'d> {
+            fn $method(self) -> $res_type<'d>;
+        }
+
+        impl<'d> $tr_name<'d> for $res_type<'d> {
+            fn $method(self) -> $res_type<'d> {
+                self
+            }
+        }
+
+        $(impl<'d> $tr_name<'d> for $leaf_type<'d> {
+            fn $method(self) -> $res_type<'d> {
+                $variant(self)
+            }
+        })*
+    )
+)
+
+conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
+    Element => ElementCOE,
+    Text => TextCOE
+})
+
 #[cfg(test)]
 mod test {
     use super::super::Package;
-    use super::{ElementCOE};
+    use super::{ElementCOE,TextCOE};
     use super::{ElementPOC};
 
     #[test]
@@ -321,5 +385,20 @@ mod test {
         assert_eq!("value1", attrs[0].value());
         assert_eq!("name2",  attrs[1].name());
         assert_eq!("value2", attrs[1].value());
+    }
+
+    #[test]
+    fn elements_can_have_text_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let sentence = doc.create_element("sentence");
+        let text = doc.create_text("Now is the winter of our discontent.");
+
+        sentence.append_child(text);
+
+        let children = sentence.children();
+        assert_eq!(1, children.len());
+        assert_eq!(children[0], TextCOE(text));
     }
 }

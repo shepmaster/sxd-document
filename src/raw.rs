@@ -73,10 +73,51 @@ impl Attribute {
     pub fn value(&self) -> &str { self.value.as_slice() }
 }
 
+pub struct Text {
+    text: InternedString,
+    parent: Option<*mut Element>,
+}
+
+impl Text {
+    pub fn text(&self) -> &str { self.text.as_slice() }
+}
+
 #[allow(raw_pointer_deriving)]
 #[deriving(PartialEq)]
 pub enum ChildOfElement {
     ElementCOE(*mut Element),
+    TextCOE(*mut Text),
+}
+
+impl ChildOfElement {
+    fn replace_parent(&self, parent: *mut Element) {
+        match self {
+            &ElementCOE(n) => {
+                let n = unsafe { &mut *n };
+
+                if let Some(prev_parent) = n.parent {
+                    match prev_parent {
+                        ElementPOC(e) => {
+                            let e_r = unsafe { &mut *e };
+                            e_r.children.retain(|n| n != self);
+                        },
+                    }
+                }
+
+                n.parent = Some(ElementPOC(parent));
+            },
+            &TextCOE(n) => {
+                let n = unsafe { &mut *n };
+
+                if let Some(prev_parent) = n.parent {
+                    let prev_parent_r = unsafe { &mut *prev_parent };
+                    prev_parent_r.children.retain(|n| n != self);
+                }
+
+                n.parent = Some(parent);
+            },
+        };
+    }
 }
 
 pub enum ParentOfChild {
@@ -87,7 +128,36 @@ pub struct Storage {
     strings: StringPool,
     elements: TypedArena<Element>,
     attributes: TypedArena<Attribute>,
+    texts: TypedArena<Text>,
 }
+
+
+macro_rules! conversion_trait(
+    ($tr_name:ident, $method:ident, $res_type:ident,
+        { $($leaf_type:ident => $variant:ident),* }
+    ) => (
+        pub trait $tr_name {
+            fn $method(self) -> $res_type;
+        }
+
+        impl $tr_name for $res_type {
+            fn $method(self) -> $res_type {
+                self
+            }
+        }
+
+        $(impl $tr_name for *mut $leaf_type {
+            fn $method(self) -> $res_type {
+                $variant(self)
+            }
+        })*
+    )
+)
+
+conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
+    Element => ElementCOE,
+    Text => TextCOE
+})
 
 impl Storage {
     pub fn new() -> Storage {
@@ -95,6 +165,7 @@ impl Storage {
             strings: StringPool::new(),
             elements: TypedArena::new(),
             attributes: TypedArena::new(),
+            texts: TypedArena::new(),
         }
     }
 
@@ -125,6 +196,15 @@ impl Storage {
         })
     }
 
+    pub fn create_text(&self, text: &str) -> *mut Text {
+        let text = self.intern(text);
+
+        self.texts.alloc(Text {
+            text: text,
+            parent: None,
+        })
+    }
+
     pub fn element_set_name(&self, element: *mut Element, name: &str) {
         let name = self.intern(name);
         let element_r = unsafe { &mut * element };
@@ -144,22 +224,12 @@ impl Connections {
         child_r.parent
     }
 
-    pub fn append_element_child(&self, parent: *mut Element, child: *mut Element) {
+    pub fn append_element_child<C : ToChildOfElement>(&self, parent: *mut Element, child: C) {
+        let child = child.to_child_of_element();
         let parent_r = unsafe { &mut *parent };
-        let child_r = unsafe { &mut *child };
 
-        if let Some(prev_parent) = child_r.parent {
-            match prev_parent {
-                ElementPOC(e) => {
-                    let e_r = unsafe { &mut *e };
-                    e_r.children.retain(|n| *n != ElementCOE(child));
-                },
-            }
-        }
-
-        child_r.parent = Some(ElementPOC(parent));
-
-        parent_r.children.push(ElementCOE(child));
+        child.replace_parent(parent);
+        parent_r.children.push(child);
     }
 
     pub unsafe fn element_children(&self, parent: *mut Element) -> &[ChildOfElement] {

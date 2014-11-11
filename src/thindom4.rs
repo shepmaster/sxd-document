@@ -21,6 +21,10 @@ impl<'d> Storage<'d> {
         Attribute::wrap(self.storage.create_attribute(name, value))
     }
 
+    pub fn create_text(&'d self, text: &str) -> Text<'d> {
+        Text::wrap(self.storage.create_text(text))
+    }
+
     pub fn element_set_name(&self, element: &Element, name: &str) {
         self.storage.element_set_name(element.node, name)
     }
@@ -45,8 +49,9 @@ impl<'d> Connections<'d> {
         })
     }
 
-    pub fn append_element_child(&mut self, parent: Element<'d>, child: Element<'d>) {
-        self.connections.append_element_child(parent.node, child.node)
+    pub fn append_element_child<C : ToChildOfElement<'d>>(&mut self, parent: Element<'d>, child: C) {
+        let child = child.to_child_of_element();
+        self.connections.append_element_child(parent.node, child.as_raw())
     }
 
     pub fn element_children(&self, parent: Element<'d>) -> ElementChildren<'d> {
@@ -87,14 +92,12 @@ impl<'d> Iterator<ChildOfElement<'d>> for ElementChildren<'d> {
         if self.idx >= self.x.len() {
             None
         } else {
-            let e = Element {
-                lifetime: InvariantLifetime,
-                node: match self.x[self.idx] {
-                    raw::ElementCOE(n) => n
-                },
+            let c = match self.x[self.idx] {
+                raw::ElementCOE(n) => ElementCOE(Element::wrap(n)),
+                raw::TextCOE(n) => TextCOE(Text::wrap(n)),
             };
             self.idx += 1;
-            Some(ElementCOE(e))
+            Some(c)
         }
     }
 }
@@ -161,15 +164,46 @@ impl<'d> Attribute<'d> {
     pub fn value(&self) -> &str { self.node().value() }
 }
 
+node!(Text, raw::Text)
+
+impl<'d> Text<'d> {
+    pub fn text(&self) -> &str { self.node().text() }
+}
+
+impl<'d> fmt::Show for Text<'d> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Text {{ text: {} }}", self.text())
+    }
+}
+
+
+macro_rules! unpack(
+    ($enum_name:ident, $name:ident, $wrapper:ident, $inner:ident) => (
+        impl<'d> $enum_name<'d> {
+            pub fn $name(self) -> Option<$inner<'d>> {
+                match self {
+                    $wrapper(n) => Some(n),
+                    _ => None,
+                }
+            }
+        }
+    )
+)
+
 #[deriving(PartialEq,Show)]
 pub enum ChildOfElement<'d> {
     ElementCOE(Element<'d>),
+    TextCOE(Text<'d>),
 }
 
+unpack!(ChildOfElement, element, ElementCOE, Element)
+unpack!(ChildOfElement, text, TextCOE, Text)
+
 impl<'d> ChildOfElement<'d> {
-    pub fn element(self) -> Option<Element<'d>> {
+    pub fn as_raw(&self) -> raw::ChildOfElement {
         match self {
-            ElementCOE(n) => Some(n)
+            &ElementCOE(n) => raw::ElementCOE(n.node),
+            &TextCOE(n) => raw::TextCOE(n.node),
         }
     }
 }
@@ -187,10 +221,37 @@ impl<'d> ParentOfChild<'d> {
     }
 }
 
+macro_rules! conversion_trait(
+    ($tr_name:ident, $method:ident, $res_type:ident,
+        { $($leaf_type:ident => $variant:ident),* }
+    ) => (
+        pub trait $tr_name<'d> {
+            fn $method(self) -> $res_type<'d>;
+        }
+
+        impl<'d> $tr_name<'d> for $res_type<'d> {
+            fn $method(self) -> $res_type<'d> {
+                self
+            }
+        }
+
+        $(impl<'d> $tr_name<'d> for $leaf_type<'d> {
+            fn $method(self) -> $res_type<'d> {
+                $variant(self)
+            }
+        })*
+    )
+)
+
+conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
+    Element => ElementCOE,
+    Text => TextCOE
+})
+
 #[cfg(test)]
 mod test {
     use super::super::Package;
-    use super::{ChildOfElement,ElementCOE};
+    use super::{ChildOfElement,ElementCOE,TextCOE};
     use super::{ElementPOC};
     use super::Attribute;
 
@@ -327,5 +388,21 @@ mod test {
         assert_eq!("value1", attrs[0].value());
         assert_eq!("name2",  attrs[1].name());
         assert_eq!("value2", attrs[1].value());
+    }
+
+    #[test]
+    fn elements_can_have_text_children() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let sentence = s.create_element("sentence");
+        let text = s.create_text("Now is the winter of our discontent.");
+
+        c.append_element_child(sentence, text);
+
+        let children: Vec<ChildOfElement> = c.element_children(sentence).collect();
+
+        assert_eq!(1, children.len());
+        assert_eq!(children[0], TextCOE(text));
     }
 }
