@@ -91,12 +91,24 @@ impl Comment {
     pub fn text(&self) -> &str { self.text.as_slice() }
 }
 
+pub struct ProcessingInstruction {
+    target: InternedString,
+    value: Option<InternedString>,
+    parent: Option<ParentOfChild>,
+}
+
+impl ProcessingInstruction {
+    pub fn target(&self) -> &str { self.target.as_slice() }
+    pub fn value(&self) -> Option<&str> { self.value.as_ref().map(|v| v.as_slice()) }
+}
+
 #[allow(raw_pointer_deriving)]
 #[deriving(PartialEq)]
 pub enum ChildOfElement {
     ElementCOE(*mut Element),
     TextCOE(*mut Text),
     CommentCOE(*mut Comment),
+    ProcessingInstructionCOE(*mut ProcessingInstruction),
 }
 
 impl ChildOfElement {
@@ -123,6 +135,10 @@ impl ChildOfElement {
                 let n = unsafe { &mut *n };
                 repl_parent(&mut n.parent);
             }
+            &ProcessingInstructionCOE(n) => {
+                let n = unsafe { &mut *n };
+                repl_parent(&mut n.parent);
+            },
             &TextCOE(n) => {
                 let n = unsafe { &mut *n };
 
@@ -174,6 +190,7 @@ pub struct Storage {
     attributes: TypedArena<Attribute>,
     texts: TypedArena<Text>,
     comments: TypedArena<Comment>,
+    processing_instructions: TypedArena<ProcessingInstruction>,
 }
 
 impl Storage {
@@ -184,6 +201,7 @@ impl Storage {
             attributes: TypedArena::new(),
             texts: TypedArena::new(),
             comments: TypedArena::new(),
+            processing_instructions: TypedArena::new(),
         }
     }
 
@@ -228,6 +246,18 @@ impl Storage {
 
         self.comments.alloc(Comment {
             text: text,
+            parent: None,
+        })
+    }
+
+    pub fn create_processing_instruction(&self, target: &str, value: Option<&str>)
+                                         -> *mut ProcessingInstruction {
+        let target = self.intern(target);
+        let value = value.map(|v| self.intern(v));
+
+        self.processing_instructions.alloc(ProcessingInstruction {
+            target: target,
+            value: value,
             parent: None,
         })
     }

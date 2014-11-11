@@ -29,6 +29,10 @@ impl<'d> Storage<'d> {
         Comment::wrap(self.storage.create_comment(text))
     }
 
+    pub fn create_processing_instruction(&'d self, target: &str, value: Option<&str>) -> ProcessingInstruction<'d> {
+        ProcessingInstruction::wrap(self.storage.create_processing_instruction(target, value))
+    }
+
     pub fn element_set_name(&self, element: &Element, name: &str) {
         self.storage.element_set_name(element.node, name)
     }
@@ -114,11 +118,7 @@ impl<'d> Iterator<ChildOfElement<'d>> for ElementChildren<'d> {
         if self.idx >= self.x.len() {
             None
         } else {
-            let c = match self.x[self.idx] {
-                raw::ElementCOE(n) => ElementCOE(Element::wrap(n)),
-                raw::TextCOE(n) => TextCOE(Text::wrap(n)),
-                raw::CommentCOE(n) => CommentCOE(Comment::wrap(n)),
-            };
+            let c = ChildOfElement::wrap(self.x[self.idx]);
             self.idx += 1;
             Some(c)
         }
@@ -211,6 +211,19 @@ impl<'d> fmt::Show for Comment<'d> {
     }
 }
 
+node!(ProcessingInstruction, raw::ProcessingInstruction)
+
+impl<'d> ProcessingInstruction<'d> {
+    pub fn target(&self) -> &str { self.node().target() }
+    pub fn value(&self) -> Option<&str> { self.node().value() }
+}
+
+impl<'d> fmt::Show for ProcessingInstruction<'d> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ProcessingInstruction {{ target: {}, value: {} }}", self.target(), self.value())
+    }
+}
+
 macro_rules! unpack(
     ($enum_name:ident, $name:ident, $wrapper:ident, $inner:ident) => (
         impl<'d> $enum_name<'d> {
@@ -229,18 +242,30 @@ pub enum ChildOfElement<'d> {
     ElementCOE(Element<'d>),
     TextCOE(Text<'d>),
     CommentCOE(Comment<'d>),
+    ProcessingInstructionCOE(ProcessingInstruction<'d>),
 }
 
 unpack!(ChildOfElement, element, ElementCOE, Element)
 unpack!(ChildOfElement, text, TextCOE, Text)
 unpack!(ChildOfElement, comment, CommentCOE, Comment)
+unpack!(ChildOfElement, processing_instruction, ProcessingInstructionCOE, ProcessingInstruction)
 
 impl<'d> ChildOfElement<'d> {
+    pub fn wrap(node: raw::ChildOfElement) -> ChildOfElement<'d> {
+        match node {
+            raw::ElementCOE(n) => ElementCOE(Element::wrap(n)),
+            raw::TextCOE(n) => TextCOE(Text::wrap(n)),
+            raw::CommentCOE(n) => CommentCOE(Comment::wrap(n)),
+            raw::ProcessingInstructionCOE(n) => ProcessingInstructionCOE(ProcessingInstruction::wrap(n)),
+        }
+    }
+
     pub fn as_raw(&self) -> raw::ChildOfElement {
         match self {
             &ElementCOE(n) => raw::ElementCOE(n.node),
             &TextCOE(n) => raw::TextCOE(n.node),
             &CommentCOE(n) => raw::CommentCOE(n.node),
+            &ProcessingInstructionCOE(n) => raw::ProcessingInstructionCOE(n.node),
         }
     }
 }
@@ -289,13 +314,14 @@ macro_rules! conversion_trait(
 conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
     Element => ElementCOE,
     Text => TextCOE,
-    Comment => CommentCOE
+    Comment => CommentCOE,
+    ProcessingInstruction => ProcessingInstructionCOE
 })
 
 #[cfg(test)]
 mod test {
     use super::super::Package;
-    use super::{ChildOfElement,ElementCOE,TextCOE,CommentCOE};
+    use super::{ChildOfElement,ElementCOE,TextCOE,CommentCOE,ProcessingInstructionCOE};
     use super::{ElementPOC};
     use super::Attribute;
 
@@ -514,5 +540,20 @@ mod test {
         s.comment_set_text(&comment, "Made glorious summer by this sun of York");
 
         assert_eq!(comment.text(), "Made glorious summer by this sun of York");
+    }
+
+    #[test]
+    fn elements_can_have_processing_instruction_children() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let element = s.create_element("element");
+        let pi = s.create_processing_instruction("device", None);
+
+        c.append_element_child(element, pi);
+
+        let children: Vec<ChildOfElement> = c.element_children(element).collect();
+        assert_eq!(1, children.len());
+        assert_eq!(children[0], ProcessingInstructionCOE(pi));
     }
 }
