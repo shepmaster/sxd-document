@@ -195,6 +195,10 @@ node!(Comment, raw::Comment)
 impl<'d> Comment<'d> {
     pub fn text(&self) -> &str { self.node().text() }
 
+    pub fn set_text(&self, new_text: &str) {
+        self.document.storage.comment_set_text(self.node, new_text)
+    }
+
     pub fn parent(&self) -> Option<ParentOfChild<'d>> {
         let connections = self.document.connections.borrow();
         connections.comment_parent(self.node).map(|n| {
@@ -507,5 +511,17 @@ mod test {
         sentence.append_child(comment);
 
         assert_eq!(comment.parent(), Some(ElementPOC(sentence)));
+    }
+
+    #[test]
+    fn comment_can_be_changed() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let comment = doc.create_comment("Now is the winter of our discontent.");
+
+        comment.set_text("Made glorious summer by this sun of York");
+
+        assert_eq!(comment.text(), "Made glorious summer by this sun of York");
     }
 }

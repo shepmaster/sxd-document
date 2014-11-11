@@ -243,6 +243,12 @@ impl Storage {
         let text_r = unsafe { &mut * text };
         text_r.text = new_text;
     }
+
+    pub fn comment_set_text(&self, comment: *mut Comment, new_text: &str) {
+        let new_text = self.intern(new_text);
+        let comment_r = unsafe { &mut * comment };
+        comment_r.text = new_text;
+    }
 }
 
 pub struct Connections;

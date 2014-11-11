@@ -36,6 +36,10 @@ impl<'d> Storage<'d> {
     pub fn text_set_text(&self, text: &Text, new_text: &str) {
         self.storage.text_set_text(text.node, new_text)
     }
+
+    pub fn comment_set_text(&self, comment: &Comment, new_text: &str) {
+        self.storage.comment_set_text(comment.node, new_text)
+    }
 }
 
 pub struct Connections<'d> {
@@ -498,5 +502,17 @@ mod test {
         c.append_element_child(sentence, comment);
 
         assert_eq!(c.comment_parent(comment), Some(ElementPOC(sentence)));
+    }
+
+    #[test]
+    fn comment_can_be_changed() {
+        let package = Package::new();
+        let (s, _) = package.as_thin_document();
+
+        let comment = s.create_comment("Now is the winter of our discontent.");
+
+        s.comment_set_text(&comment, "Made glorious summer by this sun of York");
+
+        assert_eq!(comment.text(), "Made glorious summer by this sun of York");
     }
 }
