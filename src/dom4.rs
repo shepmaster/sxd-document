@@ -22,6 +22,7 @@ impl<'d> Document<'d> {
     wrapper!(wrap_element, Element, raw::Element)
     wrapper!(wrap_attribute, Attribute, raw::Attribute)
     wrapper!(wrap_text, Text, raw::Text)
+    wrapper!(wrap_comment, Comment, raw::Comment)
 
     pub fn new(storage: &'d raw::Storage, connections: &'d raw::Connections) -> Document<'d> {
         Document {
@@ -36,6 +37,10 @@ impl<'d> Document<'d> {
 
     pub fn create_text(&'d self, text: &str) -> Text<'d> {
         self.wrap_text(self.storage.create_text(text))
+    }
+
+    pub fn create_comment(&'d self, text: &str) -> Comment<'d> {
+        self.wrap_comment(self.storage.create_comment(text))
     }
 }
 
@@ -106,6 +111,7 @@ impl<'d> Element<'d> {
             raw_children.iter().map(|n| match n {
                 &raw::ElementCOE(n) => ElementCOE(self.document.wrap_element(n)),
                 &raw::TextCOE(n) => TextCOE(self.document.wrap_text(n)),
+                &raw::CommentCOE(n) => CommentCOE(self.document.wrap_comment(n)),
             }).collect()
         }
     }
@@ -180,6 +186,18 @@ impl<'d> fmt::Show for Text<'d> {
     }
 }
 
+node!(Comment, raw::Comment)
+
+impl<'d> Comment<'d> {
+    pub fn text(&self) -> &str { self.node().text() }
+}
+
+impl<'d> fmt::Show for Comment<'d> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Comment {{ text: {} }}", self.text())
+    }
+}
+
 macro_rules! unpack(
     ($enum_name:ident, $name:ident, $wrapper:ident, $inner:ident) => (
         impl<'d> $enum_name<'d> {
@@ -197,16 +215,19 @@ macro_rules! unpack(
 pub enum ChildOfElement<'d> {
     ElementCOE(Element<'d>),
     TextCOE(Text<'d>),
+    CommentCOE(Comment<'d>),
 }
 
 unpack!(ChildOfElement, element, ElementCOE, Element)
 unpack!(ChildOfElement, text, TextCOE, Text)
+unpack!(ChildOfElement, comment, CommentCOE, Comment)
 
 impl<'d> ChildOfElement<'d> {
     pub fn as_raw(&self) -> raw::ChildOfElement {
         match self {
             &ElementCOE(n) => raw::ElementCOE(n.node),
             &TextCOE(n) => raw::TextCOE(n.node),
+            &CommentCOE(n) => raw::CommentCOE(n.node),
         }
     }
 }
@@ -240,13 +261,14 @@ macro_rules! conversion_trait(
 
 conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
     Element => ElementCOE,
-    Text => TextCOE
+    Text => TextCOE,
+    Comment => CommentCOE
 })
 
 #[cfg(test)]
 mod test {
     use super::super::Package;
-    use super::{ElementCOE,TextCOE};
+    use super::{ElementCOE,TextCOE,CommentCOE};
     use super::{ElementPOC};
 
     #[test]
@@ -446,5 +468,20 @@ mod test {
         text.set_text("Made glorious summer by this sun of York");
 
         assert_eq!(text.text(), "Made glorious summer by this sun of York");
+    }
+
+    #[test]
+    fn elements_can_have_comment_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let sentence = doc.create_element("sentence");
+        let comment = doc.create_comment("Now is the winter of our discontent.");
+
+        sentence.append_child(comment);
+
+        let children = sentence.children();
+        assert_eq!(1, children.len());
+        assert_eq!(children[0], CommentCOE(comment));
     }
 }

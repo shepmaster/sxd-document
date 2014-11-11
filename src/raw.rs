@@ -82,30 +82,47 @@ impl Text {
     pub fn text(&self) -> &str { self.text.as_slice() }
 }
 
+pub struct Comment {
+    text: InternedString,
+    parent: Option<ParentOfChild>,
+}
+
+impl Comment {
+    pub fn text(&self) -> &str { self.text.as_slice() }
+}
+
 #[allow(raw_pointer_deriving)]
 #[deriving(PartialEq)]
 pub enum ChildOfElement {
     ElementCOE(*mut Element),
     TextCOE(*mut Text),
+    CommentCOE(*mut Comment),
 }
 
 impl ChildOfElement {
     fn replace_parent(&self, parent: *mut Element) {
+        let repl_parent = |parent_field: &mut Option<ParentOfChild>| {
+            if let &Some(prev_parent) = parent_field {
+                match prev_parent {
+                    ElementPOC(e) => {
+                        let e_r = unsafe { &mut *e };
+                        e_r.children.retain(|n| n != self);
+                    },
+                }
+            }
+
+            *parent_field = Some(ElementPOC(parent));
+        };
+
         match self {
             &ElementCOE(n) => {
                 let n = unsafe { &mut *n };
-
-                if let Some(prev_parent) = n.parent {
-                    match prev_parent {
-                        ElementPOC(e) => {
-                            let e_r = unsafe { &mut *e };
-                            e_r.children.retain(|n| n != self);
-                        },
-                    }
-                }
-
-                n.parent = Some(ElementPOC(parent));
+                repl_parent(&mut n.parent);
             },
+            &CommentCOE(n) => {
+                let n = unsafe { &mut *n };
+                repl_parent(&mut n.parent);
+            }
             &TextCOE(n) => {
                 let n = unsafe { &mut *n };
 
@@ -123,14 +140,6 @@ impl ChildOfElement {
 pub enum ParentOfChild {
     ElementPOC(*mut Element),
 }
-
-pub struct Storage {
-    strings: StringPool,
-    elements: TypedArena<Element>,
-    attributes: TypedArena<Attribute>,
-    texts: TypedArena<Text>,
-}
-
 
 macro_rules! conversion_trait(
     ($tr_name:ident, $method:ident, $res_type:ident,
@@ -159,6 +168,14 @@ conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
     Text => TextCOE
 })
 
+pub struct Storage {
+    strings: StringPool,
+    elements: TypedArena<Element>,
+    attributes: TypedArena<Attribute>,
+    texts: TypedArena<Text>,
+    comments: TypedArena<Comment>,
+}
+
 impl Storage {
     pub fn new() -> Storage {
         Storage {
@@ -166,6 +183,7 @@ impl Storage {
             elements: TypedArena::new(),
             attributes: TypedArena::new(),
             texts: TypedArena::new(),
+            comments: TypedArena::new(),
         }
     }
 
@@ -200,6 +218,15 @@ impl Storage {
         let text = self.intern(text);
 
         self.texts.alloc(Text {
+            text: text,
+            parent: None,
+        })
+    }
+
+    pub fn create_comment(&self, text: &str) -> *mut Comment {
+        let text = self.intern(text);
+
+        self.comments.alloc(Comment {
             text: text,
             parent: None,
         })
