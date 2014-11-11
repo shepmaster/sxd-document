@@ -486,6 +486,16 @@ mod test {
     }
 
     #[test]
+    fn comment_belongs_to_a_document() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let comment = doc.create_comment("Now is the winter of our discontent.");
+
+        assert_eq!(&doc, comment.document());
+    }
+
+    #[test]
     fn elements_can_have_comment_children() {
         let package = Package::new();
         let doc = package.as_document();
