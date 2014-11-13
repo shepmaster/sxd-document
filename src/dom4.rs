@@ -400,7 +400,7 @@ mod test {
     use super::super::Package;
     use super::{ElementCOR,CommentCOR,ProcessingInstructionCOR};
     use super::{ElementCOE,TextCOE,CommentCOE,ProcessingInstructionCOE};
-    use super::{ElementPOC};
+    use super::{RootPOC,ElementPOC};
 
     #[test]
     fn root_can_have_element_children() {
@@ -462,6 +462,19 @@ mod test {
         let children = root.children();
         assert_eq!(1, children.len());
         assert_eq!(children[0], ProcessingInstructionCOR(pi));
+    }
+
+    #[test]
+    fn root_child_knows_its_parent() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let root = doc.root();
+        let alpha = doc.create_element("alpha");
+
+        root.append_child(alpha);
+
+        assert_eq!(Some(RootPOC(root)), alpha.parent());
     }
 
     #[test]

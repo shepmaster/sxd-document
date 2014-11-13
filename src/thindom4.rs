@@ -65,6 +65,10 @@ impl<'d> Connections<'d> {
         }
     }
 
+    pub fn root(&self) -> Root<'d> {
+        Root::wrap(self.connections.root())
+    }
+
     pub fn element_parent(&self, child: Element<'d>) -> Option<ParentOfChild<'d>> {
         self.connections.element_parent(child.node).map(|n| {
             ParentOfChild::wrap(n)
@@ -408,7 +412,7 @@ mod test {
     use super::super::Package;
     use super::{ChildOfRoot,ElementCOR,CommentCOR,ProcessingInstructionCOR};
     use super::{ChildOfElement,ElementCOE,TextCOE,CommentCOE,ProcessingInstructionCOE};
-    use super::{ElementPOC};
+    use super::{RootPOC,ElementPOC};
     use super::Attribute;
 
     #[test]
@@ -467,6 +471,18 @@ mod test {
         let children: Vec<ChildOfRoot> = c.root_children().collect();
         assert_eq!(1, children.len());
         assert_eq!(children[0], ProcessingInstructionCOR(pi));
+    }
+
+    #[test]
+    fn root_child_knows_its_parent() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let alpha = s.create_element("alpha");
+
+        c.append_root_child(alpha);
+
+        assert_eq!(Some(RootPOC(c.root())), c.element_parent(alpha));
     }
 
     #[test]
