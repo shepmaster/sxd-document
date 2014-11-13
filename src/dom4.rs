@@ -382,6 +382,12 @@ macro_rules! conversion_trait(
     )
 )
 
+conversion_trait!(ToChildOfRoot, to_child_of_root, ChildOfRoot, {
+    Element => ElementCOR,
+    Comment => CommentCOR,
+    ProcessingInstruction => ProcessingInstructionCOR
+})
+
 conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
     Element => ElementCOE,
     Text => TextCOE,
@@ -389,15 +395,10 @@ conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
     ProcessingInstruction => ProcessingInstructionCOE
 })
 
-conversion_trait!(ToChildOfRoot, to_child_of_root, ChildOfRoot, {
-    Element => ElementCOR,
-    Comment => CommentCOR
-})
-
 #[cfg(test)]
 mod test {
     use super::super::Package;
-    use super::{ElementCOR,CommentCOR};
+    use super::{ElementCOR,CommentCOR,ProcessingInstructionCOR};
     use super::{ElementCOE,TextCOE,CommentCOE,ProcessingInstructionCOE};
     use super::{ElementPOC};
 
@@ -429,6 +430,21 @@ mod test {
         let children = root.children();
         assert_eq!(1, children.len());
         assert_eq!(children[0], CommentCOR(comment));
+    }
+
+    #[test]
+    fn root_can_have_processing_instruction_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let root = doc.root();
+        let pi = doc.create_processing_instruction("device", None);
+
+        root.append_child(pi);
+
+        let children = root.children();
+        assert_eq!(1, children.len());
+        assert_eq!(children[0], ProcessingInstructionCOR(pi));
     }
 
     #[test]
