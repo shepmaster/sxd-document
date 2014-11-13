@@ -406,7 +406,7 @@ conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
 #[cfg(test)]
 mod test {
     use super::super::Package;
-    use super::{ChildOfRoot,ElementCOR};
+    use super::{ChildOfRoot,ElementCOR,CommentCOR};
     use super::{ChildOfElement,ElementCOE,TextCOE,CommentCOE,ProcessingInstructionCOE};
     use super::{ElementPOC};
     use super::Attribute;
@@ -423,6 +423,20 @@ mod test {
         let children: Vec<ChildOfRoot> = c.root_children().collect();
         assert_eq!(1, children.len());
         assert_eq!(children[0], ElementCOR(element));
+    }
+
+    #[test]
+    fn root_can_have_comment_children() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let comment = s.create_comment("Now is the winter of our discontent.");
+
+        c.append_root_child(comment);
+
+        let children: Vec<ChildOfRoot> = c.root_children().collect();
+        assert_eq!(1, children.len());
+        assert_eq!(children[0], CommentCOR(comment));
     }
 
     #[test]
