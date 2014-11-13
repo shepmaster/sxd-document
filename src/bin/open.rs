@@ -32,12 +32,15 @@ fn main() {
 
     let p = Parser::new();
 
-    let d = match p.parse(data.as_slice()) {
+    let package = match p.parse(data.as_slice()) {
         Ok(d) => d,
         Err(point) => panic!("Unable to parse: {}", pretty_error(data.as_slice(), point)),
     };
 
     let mut out = BufferedWriter::new(stdout_raw());
 
-    document::writer::format_document(&d, &mut out).ok().expect("I can't output");
+    {
+        let d = package.as_document();
+        document::writer::format_document(&d, &mut out).ok().expect("I can't output");
+    }
 }

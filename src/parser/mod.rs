@@ -44,6 +44,8 @@ use std::char::from_u32;
 use std::num::from_str_radix;
 
 use self::xmlstr::XmlStr;
+use super::Package;
+use super::dom4;
 
 mod xmlstr;
 
@@ -564,7 +566,7 @@ impl Parser {
                           after_children: after_children.unwrap_or(Vec::new())}, xml))
     }
 
-    pub fn parse(&self, xml: &str) -> Result<super::Document, uint> {
+    pub fn parse(&self, xml: &str) -> Result<Package, uint> {
         let xml = StartPoint{offset: 0, s: xml};
 
         let (document, _) = match self.parse_document(xml) {
@@ -584,11 +586,11 @@ impl Parser {
 struct Hydrator;
 
 impl Hydrator {
-    fn hydrate_text(&self, doc: &super::Document, text_data: Text) -> super::Text {
-        doc.new_text(String::from_str(text_data.text))
+    fn hydrate_text<'d>(&self, doc: &'d dom4::Document<'d>, text_data: Text) -> dom4::Text<'d> {
+        doc.create_text(text_data.text)
     }
 
-    fn hydrate_reference_raw(&self, ref_data: Reference) -> String {
+    fn hydrate_reference_raw<'d>(&self, ref_data: Reference) -> String {
         match ref_data {
             DecimalCharReference(d) => {
                 let code: u32 = from_str_radix(d, 10).expect("Not valid decimal");
@@ -613,20 +615,20 @@ impl Hydrator {
         }
     }
 
-    fn hydrate_reference(&self, doc: &super::Document, ref_data: Reference) -> super::Text {
-        doc.new_text(self.hydrate_reference_raw(ref_data))
+    fn hydrate_reference<'d>(&self, doc: &'d dom4::Document<'d>, ref_data: Reference) -> dom4::Text<'d> {
+        doc.create_text(self.hydrate_reference_raw(ref_data).as_slice())
     }
 
-    fn hydrate_comment(&self, doc: &super::Document, comment_data: Comment) -> super::Comment {
-        doc.new_comment(String::from_str(comment_data.text))
+    fn hydrate_comment<'d>(&self, doc: &'d dom4::Document<'d>, comment_data: Comment) -> dom4::Comment<'d> {
+        doc.create_comment(comment_data.text)
     }
 
-    fn hydrate_pi(&self, doc: &super::Document, pi_data: ProcessingInstruction) -> super::ProcessingInstruction {
-        doc.new_processing_instruction(String::from_str(pi_data.target), pi_data.value.map(|v| String::from_str(v)))
+    fn hydrate_pi<'d>(&self, doc: &'d dom4::Document<'d>, pi_data: ProcessingInstruction) -> dom4::ProcessingInstruction<'d> {
+        doc.create_processing_instruction(pi_data.target, pi_data.value)
     }
 
-    fn hydrate_element(&self, doc: &super::Document, element_data: Element) -> super::Element {
-        let element = doc.new_element(String::from_str(element_data.name));
+    fn hydrate_element<'d>(&self, doc: &'d dom4::Document<'d>, element_data: Element) -> dom4::Element<'d> {
+        let element = doc.create_element(element_data.name);
 
         for attr in element_data.attributes.into_iter() {
             let to_v_str = |v: AttributeValue| match v {
@@ -639,7 +641,7 @@ impl Hydrator {
                 v.push_str(to_v_str(val).as_slice());
             }
 
-            element.set_attribute(String::from_str(attr.name), v);
+            element.set_attribute_value(attr.name, v.as_slice());
         }
 
         for child in element_data.children.into_iter() {
@@ -655,7 +657,7 @@ impl Hydrator {
         element
     }
 
-    fn hydrate_misc(&self, doc: &super::Document, children: Vec<RootChild>) {
+    fn hydrate_misc<'d>(&self, doc: &'d dom4::Document<'d>, children: Vec<RootChild>) {
         for child in children.into_iter() {
             match child {
                 CommentRootChild(c) => doc.root().append_child(self.hydrate_comment(doc, c)),
@@ -665,46 +667,53 @@ impl Hydrator {
         }
     }
 
-    pub fn hydrate_document(&self, document: Document) -> super::Document {
-        let doc = super::Document::new();
-        let root = doc.root();
+    pub fn hydrate_document(&self, document: Document) -> Package {
+        let package = Package::new();
 
-        self.hydrate_misc(&doc, document.before_children);
+        {
+            let doc = package.as_document();
+            let root = doc.root();
 
-        root.append_child(self.hydrate_element(&doc, document.element));
+            self.hydrate_misc(&doc, document.before_children);
 
-        self.hydrate_misc(&doc, document.after_children);
+            root.append_child(self.hydrate_element(&doc, document.element));
 
-        doc
+            self.hydrate_misc(&doc, document.after_children);
+        }
+
+        package
     }
 }
 
 #[cfg(test)]
 mod test {
-
     use super::Parser;
-    use super::super::{Document,Element};
+    use super::super::{Package,Document,Element};
+    use super::super::dom4;
 
     macro_rules! assert_str_eq(
         ($l:expr, $r:expr) => (assert_eq!($l.as_slice(), $r.as_slice()));
-        )
+    )
 
-    fn full_parse(xml: &str) -> Result<Document, uint> {
+    fn full_parse(xml: &str) -> Result<Package, uint> {
         Parser::new()
             .parse(xml)
     }
 
-    fn quick_parse(xml: &str) -> Document {
+    fn quick_parse(xml: &str) -> Package {
         full_parse(xml)
             .ok()
             .expect("Failed to parse the XML string")
     }
 
-    fn top(doc: &Document) -> Element { doc.root().children()[0].element().unwrap() }
+    fn top<'d>(doc: &'d dom4::Document<'d>) -> dom4::Element<'d> {
+        doc.root().children()[0].element().unwrap()
+    }
 
     #[test]
     fn a_document_with_a_prolog() {
-        let doc = quick_parse("<?xml version='1.0' ?><hello />");
+        let package = quick_parse("<?xml version='1.0' ?><hello />");
+        let doc = package.as_document();
         let top = top(&doc);
 
         assert_str_eq!(top.name(), "hello");
@@ -712,7 +721,8 @@ mod test {
 
     #[test]
     fn a_document_with_a_prolog_with_double_quotes() {
-        let doc = quick_parse("<?xml version=\"1.0\" ?><hello />");
+        let package = quick_parse("<?xml version=\"1.0\" ?><hello />");
+        let doc = package.as_document();
         let top = top(&doc);
 
         assert_str_eq!(top.name(), "hello");
@@ -720,7 +730,8 @@ mod test {
 
     #[test]
     fn a_document_with_a_single_element() {
-        let doc = quick_parse("<hello />");
+        let package = quick_parse("<hello />");
+        let doc = package.as_document();
         let top = top(&doc);
 
         assert_str_eq!(top.name(), "hello");
@@ -728,40 +739,45 @@ mod test {
 
     #[test]
     fn an_element_with_an_attribute() {
-        let doc = quick_parse("<hello scope='world'/>");
+        let package = quick_parse("<hello scope='world'/>");
+        let doc = package.as_document();
         let top = top(&doc);
 
-        assert_str_eq!(top.get_attribute("scope").unwrap(), "world");
+        assert_str_eq!(top.attribute_value("scope").unwrap(), "world");
     }
 
     #[test]
     fn an_element_with_an_attribute_using_double_quotes() {
-        let doc = quick_parse("<hello scope=\"world\"/>");
+        let package = quick_parse("<hello scope=\"world\"/>");
+        let doc = package.as_document();
         let top = top(&doc);
 
-        assert_str_eq!(top.get_attribute("scope").unwrap(), "world");
+        assert_str_eq!(top.attribute_value("scope").unwrap(), "world");
     }
 
     #[test]
     fn an_element_with_multiple_attributes() {
-        let doc = quick_parse("<hello scope='world' happy='true'/>");
+        let package = quick_parse("<hello scope='world' happy='true'/>");
+        let doc = package.as_document();
         let top = top(&doc);
 
-        assert_str_eq!(top.get_attribute("scope").unwrap(), "world");
-        assert_str_eq!(top.get_attribute("happy").unwrap(), "true");
+        assert_str_eq!(top.attribute_value("scope").unwrap(), "world");
+        assert_str_eq!(top.attribute_value("happy").unwrap(), "true");
     }
 
     #[test]
     fn an_attribute_with_references() {
-        let doc = quick_parse("<log msg='I &lt;3 math' />");
+        let package = quick_parse("<log msg='I &lt;3 math' />");
+        let doc = package.as_document();
         let top = top(&doc);
 
-        assert_str_eq!(top.get_attribute("msg").unwrap(), "I <3 math");
+        assert_str_eq!(top.attribute_value("msg").unwrap(), "I <3 math");
     }
 
     #[test]
     fn an_element_that_is_not_self_closing() {
-        let doc = quick_parse("<hello></hello>");
+        let package = quick_parse("<hello></hello>");
+        let doc = package.as_document();
         let top = top(&doc);
 
         assert_str_eq!(top.name(), "hello");
@@ -769,7 +785,8 @@ mod test {
 
     #[test]
     fn nested_elements() {
-        let doc = quick_parse("<hello><world/></hello>");
+        let package = quick_parse("<hello><world/></hello>");
+        let doc = package.as_document();
         let hello = top(&doc);
         let world = hello.children()[0].element().unwrap();
 
@@ -778,7 +795,8 @@ mod test {
 
     #[test]
     fn multiply_nested_elements() {
-        let doc = quick_parse("<hello><awesome><world/></awesome></hello>");
+        let package = quick_parse("<hello><awesome><world/></awesome></hello>");
+        let doc = package.as_document();
         let hello = top(&doc);
         let awesome = hello.children()[0].element().unwrap();
         let world = awesome.children()[0].element().unwrap();
@@ -788,16 +806,18 @@ mod test {
 
     #[test]
     fn nested_elements_with_attributes() {
-        let doc = quick_parse("<hello><world name='Earth'/></hello>");
+        let package = quick_parse("<hello><world name='Earth'/></hello>");
+        let doc = package.as_document();
         let hello = top(&doc);
         let world = hello.children()[0].element().unwrap();
 
-        assert_str_eq!(world.get_attribute("name").unwrap(), "Earth");
+        assert_str_eq!(world.attribute_value("name").unwrap(), "Earth");
     }
 
     #[test]
     fn element_with_text() {
-        let doc = quick_parse("<hello>world</hello>");
+        let package = quick_parse("<hello>world</hello>");
+        let doc = package.as_document();
         let hello = top(&doc);
         let text = hello.children()[0].text().unwrap();
 
@@ -806,7 +826,8 @@ mod test {
 
     #[test]
     fn element_with_cdata() {
-        let doc = quick_parse("<words><![CDATA[I have & and < !]]></words>");
+        let package = quick_parse("<words><![CDATA[I have & and < !]]></words>");
+        let doc = package.as_document();
         let words = top(&doc);
         let text = words.children()[0].text().unwrap();
 
@@ -815,7 +836,8 @@ mod test {
 
     #[test]
     fn element_with_comment() {
-        let doc = quick_parse("<hello><!-- A comment --></hello>");
+        let package = quick_parse("<hello><!-- A comment --></hello>");
+        let doc = package.as_document();
         let words = top(&doc);
         let comment = words.children()[0].comment().unwrap();
 
@@ -824,7 +846,8 @@ mod test {
 
     #[test]
     fn comment_before_top_element() {
-        let doc = quick_parse("<!-- A comment --><hello />");
+        let package = quick_parse("<!-- A comment --><hello />");
+        let doc = package.as_document();
         let comment = doc.root().children()[0].comment().unwrap();
 
         assert_str_eq!(comment.text(), " A comment ");
@@ -836,7 +859,8 @@ mod test {
 <!--Comment 1-->
 <!--Comment 2-->
 <hello />";
-        let doc = quick_parse(xml);
+        let package = quick_parse(xml);
+        let doc = package.as_document();
         let comment1 = doc.root().children()[0].comment().unwrap();
         let comment2 = doc.root().children()[1].comment().unwrap();
 
@@ -850,7 +874,8 @@ mod test {
 <hello />
 <!--Comment 1-->
 <!--Comment 2-->";
-        let doc = quick_parse(xml);
+        let package = quick_parse(xml);
+        let doc = package.as_document();
         let comment1 = doc.root().children()[1].comment().unwrap();
         let comment2 = doc.root().children()[2].comment().unwrap();
 
@@ -860,7 +885,8 @@ mod test {
 
     #[test]
     fn element_with_processing_instruction() {
-        let doc = quick_parse("<hello><?device?></hello>");
+        let package = quick_parse("<hello><?device?></hello>");
+        let doc = package.as_document();
         let hello = top(&doc);
         let pi = hello.children()[0].processing_instruction().unwrap();
 
@@ -875,7 +901,8 @@ mod test {
 <hello />
 <?validated?>";
 
-        let doc = quick_parse(xml);
+        let package = quick_parse(xml);
+        let doc = package.as_document();
         let pi1 = doc.root().children()[0].processing_instruction().unwrap();
         let pi2 = doc.root().children()[2].processing_instruction().unwrap();
 
@@ -888,7 +915,8 @@ mod test {
 
     #[test]
     fn element_with_decimal_char_reference() {
-        let doc = quick_parse("<math>2 &#62; 1</math>");
+        let package = quick_parse("<math>2 &#62; 1</math>");
+        let doc = package.as_document();
         let math = top(&doc);
         let text1 = math.children()[0].text().unwrap();
         let text2 = math.children()[1].text().unwrap();
@@ -901,7 +929,8 @@ mod test {
 
     #[test]
     fn element_with_hexidecimal_char_reference() {
-        let doc = quick_parse("<math>1 &#x3c; 2</math>");
+        let package = quick_parse("<math>1 &#x3c; 2</math>");
+        let doc = package.as_document();
         let math = top(&doc);
         let text1 = math.children()[0].text().unwrap();
         let text2 = math.children()[1].text().unwrap();
@@ -914,7 +943,8 @@ mod test {
 
     #[test]
     fn element_with_entity_reference() {
-        let doc = quick_parse("<math>I &lt;3 math</math>");
+        let package = quick_parse("<math>I &lt;3 math</math>");
+        let doc = package.as_document();
         let math = top(&doc);
         let text1 = math.children()[0].text().unwrap();
         let text2 = math.children()[1].text().unwrap();
@@ -927,7 +957,8 @@ mod test {
 
     #[test]
     fn element_with_mixed_children() {
-        let doc = quick_parse("<hello>to <!--fixme--><a><![CDATA[the]]></a><?world?></hello>");
+        let package = quick_parse("<hello>to <!--fixme--><a><![CDATA[the]]></a><?world?></hello>");
+        let doc = package.as_document();
         let hello = top(&doc);
 
         let text    = hello.children()[0].text().unwrap();
