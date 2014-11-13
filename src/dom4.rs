@@ -403,6 +403,16 @@ mod test {
     use super::{RootPOC,ElementPOC};
 
     #[test]
+    fn the_root_belongs_to_a_document() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let root = doc.root();
+
+        assert_eq!(&doc, root.document());
+    }
+
+    #[test]
     fn root_can_have_element_children() {
         let package = Package::new();
         let doc = package.as_document();
