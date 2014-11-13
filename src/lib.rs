@@ -51,9 +51,11 @@ pub struct Package {
 
 impl Package {
     pub fn new() -> Package {
+        let s = raw::Storage::new();
+        let root = s.create_root();
         Package {
-            storage: raw::Storage::new(),
-            connections: raw::Connections::new(),
+            storage: s,
+            connections: raw::Connections::new(root),
         }
     }
 

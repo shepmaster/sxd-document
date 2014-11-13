@@ -51,6 +51,10 @@ impl StringPool {
     }
 }
 
+pub struct Root {
+    children: Vec<ChildOfRoot>,
+}
+
 pub struct Element {
     name: InternedString,
     children: Vec<ChildOfElement>,
@@ -104,6 +108,41 @@ impl ProcessingInstruction {
 
 #[allow(raw_pointer_deriving)]
 #[deriving(PartialEq)]
+pub enum ChildOfRoot {
+    ElementCOR(*mut Element),
+    CommentCOR(*mut Comment),
+    ProcessingInstructionCOR(*mut ProcessingInstruction),
+}
+
+impl ChildOfRoot {
+    fn to_child_of_element(self) -> ChildOfElement {
+        match self {
+            ElementCOR(n) => ElementCOE(n),
+            CommentCOR(n) => CommentCOE(n),
+            ProcessingInstructionCOR(n) => ProcessingInstructionCOE(n),
+        }
+    }
+
+    fn replace_parent(&self, parent: *mut Root) {
+        match self {
+            &ElementCOR(n) => {
+                let n = unsafe { &mut *n };
+                replace_parent(*self, RootPOC(parent), &mut n.parent);
+            },
+            &CommentCOR(n) => {
+                let n = unsafe { &mut *n };
+                replace_parent(*self, RootPOC(parent), &mut n.parent);
+            },
+            &ProcessingInstructionCOR(n) => {
+                let n = unsafe { &mut *n };
+                replace_parent(*self, RootPOC(parent), &mut n.parent);
+            },
+        };
+    }
+}
+
+#[allow(raw_pointer_deriving)]
+#[deriving(PartialEq)]
 pub enum ChildOfElement {
     ElementCOE(*mut Element),
     TextCOE(*mut Text),
@@ -111,33 +150,39 @@ pub enum ChildOfElement {
     ProcessingInstructionCOE(*mut ProcessingInstruction),
 }
 
+fn replace_parent(child: ChildOfRoot, parent: ParentOfChild, parent_field: &mut Option<ParentOfChild>) {
+    if let &Some(prev_parent) = parent_field {
+        match prev_parent {
+            RootPOC(r) => {
+                let r_r = unsafe { &mut *r };
+                r_r.children.retain(|n| *n != child);
+            },
+            ElementPOC(e) => {
+                let e_r = unsafe { &mut *e };
+                let as_element_child = child.to_child_of_element();
+                e_r.children.retain(|n| *n != as_element_child);
+            },
+        }
+    }
+
+    *parent_field = Some(parent);
+}
+
+
 impl ChildOfElement {
     fn replace_parent(&self, parent: *mut Element) {
-        let repl_parent = |parent_field: &mut Option<ParentOfChild>| {
-            if let &Some(prev_parent) = parent_field {
-                match prev_parent {
-                    ElementPOC(e) => {
-                        let e_r = unsafe { &mut *e };
-                        e_r.children.retain(|n| n != self);
-                    },
-                }
-            }
-
-            *parent_field = Some(ElementPOC(parent));
-        };
-
         match self {
             &ElementCOE(n) => {
                 let n = unsafe { &mut *n };
-                repl_parent(&mut n.parent);
+                replace_parent(ElementCOR(n), ElementPOC(parent), &mut n.parent);
             },
             &CommentCOE(n) => {
                 let n = unsafe { &mut *n };
-                repl_parent(&mut n.parent);
+                replace_parent(CommentCOR(n), ElementPOC(parent), &mut n.parent);
             }
             &ProcessingInstructionCOE(n) => {
                 let n = unsafe { &mut *n };
-                repl_parent(&mut n.parent);
+                replace_parent(ProcessingInstructionCOR(n), ElementPOC(parent), &mut n.parent);
             },
             &TextCOE(n) => {
                 let n = unsafe { &mut *n };
@@ -154,6 +199,7 @@ impl ChildOfElement {
 }
 
 pub enum ParentOfChild {
+    RootPOC(*mut Root),
     ElementPOC(*mut Element),
 }
 
@@ -184,8 +230,13 @@ conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
     Text => TextCOE
 })
 
+conversion_trait!(ToChildOfRoot, to_child_of_root, ChildOfRoot, {
+    Element => ElementCOR
+})
+
 pub struct Storage {
     strings: StringPool,
+    roots: TypedArena<Root>,
     elements: TypedArena<Element>,
     attributes: TypedArena<Attribute>,
     texts: TypedArena<Text>,
@@ -197,6 +248,7 @@ impl Storage {
     pub fn new() -> Storage {
         Storage {
             strings: StringPool::new(),
+            roots: TypedArena::new(),
             elements: TypedArena::new(),
             attributes: TypedArena::new(),
             texts: TypedArena::new(),
@@ -208,6 +260,12 @@ impl Storage {
     fn intern(&self, s: &str) -> InternedString {
         let interned = self.strings.intern(s);
         InternedString::from_str(interned)
+    }
+
+    pub fn create_root(&self) -> *mut Root {
+        self.roots.alloc(Root {
+            children: Vec::new(),
+        })
     }
 
     pub fn create_element(&self, name: &str) -> *mut Element {
@@ -293,11 +351,19 @@ impl Storage {
     }
 }
 
-pub struct Connections;
+pub struct Connections {
+    root: *mut Root,
+}
 
 impl Connections {
-    pub fn new() -> Connections {
-        Connections
+    pub fn new(root: *mut Root) -> Connections {
+        Connections {
+            root: root,
+        }
+    }
+
+    pub fn root(&self) -> *mut Root {
+        self.root
     }
 
     pub fn element_parent(&self, child: *mut Element) -> Option<ParentOfChild> {
@@ -320,12 +386,25 @@ impl Connections {
         child_r.parent
     }
 
+    pub fn append_root_child<C : ToChildOfRoot>(&self, child: C) {
+        let child = child.to_child_of_root();
+        let parent_r = unsafe { &mut *self.root };
+
+        child.replace_parent(self.root);
+        parent_r.children.push(child);
+    }
+
     pub fn append_element_child<C : ToChildOfElement>(&self, parent: *mut Element, child: C) {
         let child = child.to_child_of_element();
         let parent_r = unsafe { &mut *parent };
 
         child.replace_parent(parent);
         parent_r.children.push(child);
+    }
+
+    pub unsafe fn root_children(&self) -> &[ChildOfRoot] {
+        let parent_r = &*self.root;
+        parent_r.children.as_slice()
     }
 
     pub unsafe fn element_children(&self, parent: *mut Element) -> &[ChildOfElement] {

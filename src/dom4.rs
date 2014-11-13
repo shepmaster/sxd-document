@@ -19,6 +19,7 @@ macro_rules! wrapper(
 )
 
 impl<'d> Document<'d> {
+    wrapper!(wrap_root, Root, raw::Root)
     wrapper!(wrap_element, Element, raw::Element)
     wrapper!(wrap_attribute, Attribute, raw::Attribute)
     wrapper!(wrap_text, Text, raw::Text)
@@ -34,7 +35,16 @@ impl<'d> Document<'d> {
 
     fn wrap_parent_of_child(&'d self, node: raw::ParentOfChild) -> ParentOfChild<'d> {
         match node {
+            raw::RootPOC(n) => RootPOC(self.wrap_root(n)),
             raw::ElementPOC(n) => ElementPOC(self.wrap_element(n)),
+        }
+    }
+
+    fn wrap_child_of_root(&'d self, node: raw::ChildOfRoot) -> ChildOfRoot<'d> {
+        match node {
+            raw::ElementCOR(n) => ElementCOR(self.wrap_element(n)),
+            raw::CommentCOR(n) => CommentCOR(self.wrap_comment(n)),
+            raw::ProcessingInstructionCOR(n) => ProcessingInstructionCOR(self.wrap_pi(n)),
         }
     }
 
@@ -45,6 +55,10 @@ impl<'d> Document<'d> {
             raw::CommentCOE(n) => CommentCOE(self.wrap_comment(n)),
             raw::ProcessingInstructionCOE(n) => ProcessingInstructionCOE(self.wrap_pi(n)),
         }
+    }
+
+    pub fn root(&'d self) -> Root<'d> {
+        self.wrap_root(self.connections.borrow().root())
     }
 
     pub fn create_element(&'d self, name: &str) -> Element<'d> {
@@ -84,6 +98,7 @@ macro_rules! node(
         }
 
         impl<'d> $name<'d> {
+            #[allow(dead_code)]
             fn node(&self) -> &$raw { unsafe { &*self.node } }
 
             pub fn document(&self) -> &'d Document<'d> { self.document }
@@ -97,6 +112,34 @@ macro_rules! node(
     )
 )
 
+node!(Root, raw::Root)
+
+impl<'d> Root<'d> {
+    pub fn append_child<C : ToChildOfRoot<'d>>(&self, child: C) {
+        let child = child.to_child_of_root();
+        let connections = self.document.connections.borrow_mut();
+        connections.append_root_child(child.as_raw())
+    }
+
+    pub fn children(&self) -> Vec<ChildOfRoot<'d>> {
+        let connections = self.document.connections.borrow();
+        // This is safe because we copy of the children, and the
+        // children are never deallocated.
+        unsafe {
+            let raw_children = connections.root_children();
+            raw_children.iter().map(|n| {
+                self.document.wrap_child_of_root(*n)
+            }).collect()
+        }
+    }
+}
+
+impl<'d> fmt::Show for Root<'d> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Root")
+    }
+}
+
 node!(Element, raw::Element)
 
 impl<'d> Element<'d> {
@@ -106,7 +149,7 @@ impl<'d> Element<'d> {
         self.document.storage.element_set_name(self.node, name)
     }
 
-    pub fn parent(&'d self) -> Option<ParentOfChild<'d>> {
+    pub fn parent(&self) -> Option<ParentOfChild<'d>> {
         let connections = self.document.connections.borrow();
 
         connections.element_parent(self.node).map(|n| {
@@ -120,7 +163,7 @@ impl<'d> Element<'d> {
         connections.append_element_child(self.node, child.as_raw())
     }
 
-    pub fn children(&'d self) -> Vec<ChildOfElement<'d>> {
+    pub fn children(&self) -> Vec<ChildOfElement<'d>> {
         let connections = self.document.connections.borrow();
         // This is safe because we copy of the children, and the
         // children are never deallocated.
@@ -267,6 +310,27 @@ macro_rules! unpack(
 )
 
 #[deriving(PartialEq,Show)]
+pub enum ChildOfRoot<'d> {
+    ElementCOR(Element<'d>),
+    CommentCOR(Comment<'d>),
+    ProcessingInstructionCOR(ProcessingInstruction<'d>),
+}
+
+unpack!(ChildOfRoot, element, ElementCOR, Element)
+unpack!(ChildOfRoot, comment, CommentCOR, Comment)
+unpack!(ChildOfRoot, processing_instruction, ProcessingInstructionCOR, ProcessingInstruction)
+
+impl<'d> ChildOfRoot<'d> {
+    pub fn as_raw(&self) -> raw::ChildOfRoot {
+        match self {
+            &ElementCOR(n) => raw::ElementCOR(n.node),
+            &CommentCOR(n) => raw::CommentCOR(n.node),
+            &ProcessingInstructionCOR(n) => raw::ProcessingInstructionCOR(n.node),
+        }
+    }
+}
+
+#[deriving(PartialEq,Show)]
 pub enum ChildOfElement<'d> {
     ElementCOE(Element<'d>),
     TextCOE(Text<'d>),
@@ -292,6 +356,7 @@ impl<'d> ChildOfElement<'d> {
 
 #[deriving(PartialEq,Show)]
 pub enum ParentOfChild<'d> {
+    RootPOC(Root<'d>),
     ElementPOC(Element<'d>),
 }
 
@@ -324,11 +389,31 @@ conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
     ProcessingInstruction => ProcessingInstructionCOE
 })
 
+conversion_trait!(ToChildOfRoot, to_child_of_root, ChildOfRoot, {
+    Element => ElementCOR
+})
+
 #[cfg(test)]
 mod test {
     use super::super::Package;
+    use super::{ElementCOR};
     use super::{ElementCOE,TextCOE,CommentCOE,ProcessingInstructionCOE};
     use super::{ElementPOC};
+
+    #[test]
+    fn root_can_have_element_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let root = doc.root();
+        let element = doc.create_element("alpha");
+
+        root.append_child(element);
+
+        let children = root.children();
+        assert_eq!(1, children.len());
+        assert_eq!(children[0], ElementCOR(element));
+    }
 
     #[test]
     fn elements_belong_to_a_document() {
