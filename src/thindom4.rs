@@ -426,6 +426,22 @@ mod test {
     }
 
     #[test]
+    fn root_has_maximum_of_one_element_child() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let alpha = s.create_element("alpha");
+        let beta = s.create_element("beta");
+
+        c.append_root_child(alpha);
+        c.append_root_child(beta);
+
+        let children: Vec<ChildOfRoot> = c.root_children().collect();
+        assert_eq!(1, children.len());
+        assert_eq!(children[0], ElementCOR(beta));
+    }
+
+    #[test]
     fn root_can_have_comment_children() {
         let package = Package::new();
         let (s, mut c) = package.as_thin_document();

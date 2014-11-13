@@ -115,6 +115,13 @@ pub enum ChildOfRoot {
 }
 
 impl ChildOfRoot {
+    fn is_element(&self) -> bool {
+        match self {
+            &ElementCOR(_) => true,
+            _ => false,
+        }
+    }
+
     fn to_child_of_element(self) -> ChildOfElement {
         match self {
             ElementCOR(n) => ElementCOE(n),
@@ -126,7 +133,9 @@ impl ChildOfRoot {
     fn replace_parent(&self, parent: *mut Root) {
         match self {
             &ElementCOR(n) => {
+                let parent_r = unsafe { &mut *parent };
                 let n = unsafe { &mut *n };
+                parent_r.children.retain(|c| !c.is_element());
                 replace_parent(*self, RootPOC(parent), &mut n.parent);
             },
             &CommentCOR(n) => {

@@ -418,6 +418,23 @@ mod test {
     }
 
     #[test]
+    fn root_has_maximum_of_one_element_child() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let root = doc.root();
+        let alpha = doc.create_element("alpha");
+        let beta = doc.create_element("beta");
+
+        root.append_child(alpha);
+        root.append_child(beta);
+
+        let children = root.children();
+        assert_eq!(1, children.len());
+        assert_eq!(children[0], ElementCOR(beta));
+    }
+
+    #[test]
     fn root_can_have_comment_children() {
         let package = Package::new();
         let doc = package.as_document();
