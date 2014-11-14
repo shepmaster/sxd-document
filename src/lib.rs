@@ -22,11 +22,15 @@
 #![experimental]
 #![feature(macro_rules)]
 #![feature(if_let)]
+#![feature(default_type_params)]
 
 extern crate arena;
+extern crate test;
+extern crate xxhash;
 
 use std::fmt;
 
+mod string_pool;
 mod raw;
 pub mod thindom4;
 pub mod dom4;

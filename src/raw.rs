@@ -1,55 +1,5 @@
 use arena::TypedArena;
-use std::cell::RefCell;
-use std::raw::Slice;
-use std::mem;
-use std::str;
-
-struct InternedString {
-    slice: Slice<u8>,
-}
-
-impl InternedString {
-    fn from_str(s: &str) -> InternedString {
-        InternedString {
-            slice: unsafe { mem::transmute(s.as_bytes()) },
-        }
-    }
-
-    fn as_slice(&self) -> &str {
-        unsafe {
-            let bytes = mem::transmute(self.slice);
-            str::raw::from_utf8(bytes)
-        }
-    }
-}
-
-impl PartialEq for InternedString {
-    fn eq(&self, other: &InternedString) -> bool {
-        self.as_slice() == other.as_slice()
-    }
-}
-
-struct StringPool {
-    strings: RefCell<Vec<String>>,
-}
-
-impl StringPool {
-    pub fn new() -> StringPool {
-        StringPool {
-            strings: RefCell::new(Vec::new()),
-        }
-    }
-
-    pub fn intern(&self, s: &str) -> &str {
-        let mut strings = self.strings.borrow_mut();
-        strings.push(String::from_str(s));
-        let interned = strings.last().unwrap();
-
-        // We will never remove a string, so the lifetime is that of
-        // this object.
-        unsafe { mem::transmute(interned.as_slice()) }
-    }
-}
+use string_pool::{StringPool,InternedString};
 
 pub struct Root {
     children: Vec<ChildOfRoot>,
