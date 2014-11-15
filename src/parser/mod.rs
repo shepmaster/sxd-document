@@ -46,28 +46,15 @@
 use std::ascii::AsciiExt;
 use std::char::from_u32;
 use std::num::from_str_radix;
+use std::cell::RefCell;
 
 use self::xmlstr::XmlStr;
-use super::Package;
+
 use super::dom4;
 
 mod xmlstr;
 
 pub struct Parser;
-
-#[deriving(Show)]
-struct Document<'a> {
-    before_children: Vec<RootChild<'a>>,
-    element: Element<'a>,
-    after_children: Vec<RootChild<'a>>,
-}
-
-#[deriving(Show)]
-struct Element<'a> {
-    name: &'a str,
-    attributes: Vec<Attribute<'a>>,
-    children: Vec<Child<'a>>,
-}
 
 #[deriving(Show)]
 enum AttributeValue<'a> {
@@ -76,48 +63,10 @@ enum AttributeValue<'a> {
 }
 
 #[deriving(Show)]
-struct Attribute<'a> {
-    name: &'a str,
-    values: Vec<AttributeValue<'a>>,
-}
-
-#[deriving(Show)]
-struct Text<'a> {
-    text: &'a str,
-}
-
-#[deriving(Show)]
 enum Reference<'a> {
     EntityReference(&'a str),
     DecimalCharReference(&'a str),
     HexCharReference(&'a str),
-}
-
-#[deriving(Show)]
-struct Comment<'a> {
-    text: &'a str,
-}
-
-#[deriving(Show)]
-struct ProcessingInstruction<'a> {
-    target: &'a str,
-    value: Option<&'a str>,
-}
-
-#[deriving(Show)]
-enum RootChild<'a> {
-    CommentRootChild(Comment<'a>),
-    PIRootChild(ProcessingInstruction<'a>),
-    IgnoredRootChild,
-}
-
-#[deriving(Show)]
-enum Child<'a> {
-    ElementChild(Element<'a>),
-    TextChild(Text<'a>),
-    ReferenceChild(Reference<'a>),
-    CommentChild(Comment<'a>),
-    PIChild(ProcessingInstruction<'a>),
 }
 
 fn best_failure<'a>(mut errors: Vec<ParseFailure<'a>>) -> ParseFailure<'a> {
@@ -206,12 +155,11 @@ macro_rules! parse_alternate(
 // Pattern: zero-or-more
 macro_rules! parse_zero_or_more(
     ($start:expr, $parser:expr) => {{
-        let mut items = Vec::new();
         let mut err;
 
         let mut start = $start;
         loop {
-            let (item, next_start) = match $parser(start) {
+            let (_, next_start) = match $parser(start) {
                 Success(x) => x,
                 Partial((_, pf, _)) |
                 Failure(pf) => {
@@ -220,11 +168,10 @@ macro_rules! parse_zero_or_more(
                 }
             };
 
-            items.push(item);
             start = next_start;
         }
 
-        Partial((items, err.unwrap(), start))
+        Partial(((), err.unwrap(), start))
     }};
 )
 
@@ -341,21 +288,21 @@ impl Parser {
         Success(((), xml))
     }
 
-    fn parse_misc<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, RootChild<'a>> {
+    fn parse_misc<'a, 's, S : ParserSink>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()> {
         parse_alternate!(xml, {
-            [|xml: StartPoint<'a>| self.parse_comment(xml) -> |c| CommentRootChild(c)],
-            [|xml: StartPoint<'a>| self.parse_pi(xml)      -> |p| PIRootChild(p)],
-            [|xml: StartPoint<'a>| xml.consume_space()     -> |_| IgnoredRootChild],
+            [|xml: StartPoint<'a>| self.parse_comment(xml, sink) -> |_| ()],
+            [|xml: StartPoint<'a>| self.parse_pi(xml, sink)      -> |_| ()],
+            [|xml: StartPoint<'a>| xml.consume_space()           -> |_| ()],
         })
     }
 
-    fn parse_miscs<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Vec<RootChild<'a>>> {
-        parse_zero_or_more!(xml, |xml| self.parse_misc(xml))
+    fn parse_miscs<'a, 's, S : ParserSink>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()> {
+        parse_zero_or_more!(xml, |xml| self.parse_misc(xml, sink))
     }
 
-    fn parse_prolog<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Vec<RootChild<'a>>> {
+    fn parse_prolog<'a, 's, S : ParserSink>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()> {
         let (_, xml) = parse_optional!(self.parse_xml_declaration(xml), xml);
-        self.parse_miscs(xml)
+        self.parse_miscs(xml, sink)
     }
 
     fn parse_one_quoted_value<'a, T>(&self,
@@ -382,32 +329,37 @@ impl Parser {
         })
     }
 
-    fn parse_attribute_values<'a>(&self, xml: StartPoint<'a>, quote: &str)
-                                  -> ParseResult<'a, Vec<AttributeValue<'a>>>
+    fn parse_attribute_values<'a, 's, S : ParserSink>(&self, xml: StartPoint<'a>, sink: &'s mut S,
+                                                  quote: &str)
+                                  -> ParseResult<'a, ()>
     {
         parse_zero_or_more!(xml, |xml|
             parse_alternate!(xml, {
-                [|xml: StartPoint<'a>| xml.consume_attribute_value(quote) -> |v| LiteralAttributeValue(v)],
-                [|xml: StartPoint<'a>| self.parse_reference(xml)          -> |e| ReferenceAttributeValue(e)],
+                [|xml: StartPoint<'a>| xml.consume_attribute_value(quote) -> |v| sink.attribute_value(LiteralAttributeValue(v))],
+                [|xml: StartPoint<'a>| self.parse_reference(xml)          -> |e| sink.attribute_value(ReferenceAttributeValue(e))],
             }))
     }
 
-    fn parse_attribute<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Attribute<'a>> {
+    fn parse_attribute<'a, 's, S : ParserSink>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()> {
         let (_, xml) = try_parse!(xml.consume_space());
 
         let (name, xml) = try_parse!(xml.consume_name());
 
+        sink.attribute_start(name);
+
         let (_, xml) = try_parse!(self.parse_eq(xml));
 
-        let (values, xml) = try_parse!(
-            self.parse_quoted_value(xml, |xml, quote| self.parse_attribute_values(xml, quote))
+        let (_, xml) = try_parse!(
+            self.parse_quoted_value(xml, |xml, quote| self.parse_attribute_values(xml, sink, quote))
         );
 
-        Success((Attribute{name: name, values: values}, xml))
+        sink.attribute_end(name);
+
+        Success(((), xml))
     }
 
-    fn parse_attributes<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Vec<Attribute<'a>>> {
-        parse_zero_or_more!(xml, |xml| self.parse_attribute(xml))
+    fn parse_attributes<'a, 's, S : ParserSink>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()> {
+        parse_zero_or_more!(xml, |xml| self.parse_attribute(xml, sink))
     }
 
     fn parse_element_end<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, &'a str> {
@@ -418,18 +370,22 @@ impl Parser {
         Success((name, xml))
     }
 
-    fn parse_char_data<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Text<'a>> {
+    fn parse_char_data<'a, 's, S : ParserSink>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()> {
         let (text, xml) = try_parse!(xml.consume_char_data());
 
-        Success((Text{text: text}, xml))
+        sink.text(text);
+
+        Success(((), xml))
     }
 
-    fn parse_cdata<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Text<'a>> {
+    fn parse_cdata<'a, 's, S : ParserSink>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()> {
         let (_, xml) = try_parse!(xml.consume_literal("<![CDATA["));
         let (text, xml) = try_parse!(xml.consume_cdata());
         let (_, xml) = try_parse!(xml.consume_literal("]]>"));
 
-        Success((Text{text: text}, xml))
+        sink.text(text);
+
+        Success(((), xml))
     }
 
     fn parse_entity_ref<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
@@ -464,12 +420,14 @@ impl Parser {
         })
     }
 
-    fn parse_comment<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Comment<'a>> {
+    fn parse_comment<'a, 's, S : ParserSink>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()> {
         let (_, xml) = try_parse!(xml.consume_literal("<!--"));
         let (text, xml) = try_parse!(xml.consume_comment());
         let (_, xml) = try_parse!(xml.consume_literal("-->"));
 
-        Success((Comment{text: text}, xml))
+        sink.comment(text);
+
+        Success(((), xml))
     }
 
     fn parse_pi_value<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, &'a str> {
@@ -477,7 +435,7 @@ impl Parser {
         xml.consume_pi_value()
     }
 
-    fn parse_pi<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, ProcessingInstruction<'a>> {
+    fn parse_pi<'a, 's, S : ParserSink>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()> {
         let (_, xml) = try_parse!(xml.consume_literal("<?"));
         let (target, xml) = try_parse!(xml.consume_name());
         let (value, xml) = parse_optional!(self.parse_pi_value(xml), xml);
@@ -487,51 +445,47 @@ impl Parser {
             panic!("Can't use xml as a PI target");
         }
 
-        Success((ProcessingInstruction{target: target, value: value}, xml))
+        sink.processing_instruction(target, value);
+
+        Success(((), xml))
     }
 
-    fn parse_content<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Vec<Child<'a>>> {
-        let mut children = Vec::new();
-
-        let (char_data, xml) = parse_optional!(self.parse_char_data(xml), xml);
-        char_data.map(|c| children.push(TextChild(c)));
+    fn parse_content<'a, 's, S : ParserSink>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()> {
+        let (_, xml) = parse_optional!(self.parse_char_data(xml, sink), xml);
 
         // Pattern: zero-or-more
         let mut start = xml;
         loop {
             let xxx = parse_alternate!(start, {
-                [|xml| self.parse_element(xml)   -> |e| ElementChild(e)],
-                [|xml| self.parse_cdata(xml)     -> |t| TextChild(t)],
-                [|xml| self.parse_reference(xml) -> |r| ReferenceChild(r)],
-                [|xml| self.parse_comment(xml)   -> |c| CommentChild(c)],
-                [|xml| self.parse_pi(xml)        -> |p| PIChild(p)],
+                [|xml| self.parse_element(xml, sink) -> |_| ()],
+                [|xml| self.parse_cdata(xml, sink)   -> |_| ()],
+                [|xml| self.parse_reference(xml)     -> |r| sink.reference(r)],
+                [|xml| self.parse_comment(xml, sink) -> |_| ()],
+                [|xml| self.parse_pi(xml, sink)      -> |_| ()],
             });
 
-            let (child, after) = match xxx {
+            let (_, after) = match xxx {
                 Success(x) => x,
                 Partial((_, pf, _)) |
-                Failure(pf) => return Partial((children, pf, start)),
+                Failure(pf) => return Partial(((), pf, start)),
             };
 
-            let (char_data, xml) = parse_optional!(self.parse_char_data(after), after);
-
-            children.push(child);
-            char_data.map(|c| children.push(TextChild(c)));
+            let (_, xml) = parse_optional!(self.parse_char_data(after, sink), after);
 
             start = xml;
         }
     }
 
-    fn parse_empty_element_tail<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Vec<Child<'a>>> {
+    fn parse_empty_element_tail<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, ()> {
         let (_, xml) = try_parse!(xml.consume_literal("/>"));
 
-        Success((Vec::new(), xml))
+        Success(((), xml))
     }
 
-    fn parse_non_empty_element_tail<'a>(&self, xml: StartPoint<'a>, start_name: &str) -> ParseResult<'a, Vec<Child<'a>>> {
+    fn parse_non_empty_element_tail<'a, 's, S : ParserSink>(&self, xml: StartPoint<'a>, sink: &'s mut S, start_name: &str) -> ParseResult<'a, ()> {
         let (_, xml) = try_parse!(xml.consume_literal(">"));
 
-        let (children, f, xml) = try_partial_parse!(self.parse_content(xml));
+        let (_, f, xml) = try_partial_parse!(self.parse_content(xml, sink));
 
         let (end_name, xml) = try_resume_after_partial_failure!(f, self.parse_element_end(xml));
 
@@ -539,153 +493,175 @@ impl Parser {
             panic!("tags do not match!");
         }
 
-        Success((children, xml))
+        Success(((), xml))
     }
 
-    fn parse_element<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Element<'a>> {
+    fn parse_element<'a, 's, S : ParserSink>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()> {
         let (_, xml) = try_parse!(xml.consume_start_tag());
         let (name, xml) = try_parse!(xml.consume_name());
 
-        let (attrs, f, xml) = try_partial_parse!(self.parse_attributes(xml));
+        sink.element_start(name);
+
+        let (_, f, xml) = try_partial_parse!(self.parse_attributes(xml, sink));
 
         let (_, xml) = parse_optional!(xml.consume_space(), xml);
 
-        let (children, xml) = try_resume_after_partial_failure!(f,
+        let (_, xml) = try_resume_after_partial_failure!(f,
             parse_alternate!(xml, {
-                [|xml| self.parse_empty_element_tail(xml)           -> |e| e],
-                [|xml| self.parse_non_empty_element_tail(xml, name) -> |e| e],
+                [|xml| self.parse_empty_element_tail(xml)                 -> |_| ()],
+                [|xml| self.parse_non_empty_element_tail(xml, sink, name) -> |_| ()],
             })
         );
 
-        Success((Element{name: name, attributes: attrs, children: children}, xml))
+        sink.element_end(name);
+
+        Success(((), xml))
     }
 
-    fn parse_document<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Document<'a>> {
-        let (before_children, f, xml) = try_partial_parse!(self.parse_prolog(xml));
-        let (element, xml) = try_resume_after_partial_failure!(f, self.parse_element(xml));
-        let (after_children, xml) = parse_optional!(self.parse_miscs(xml), xml);
+    fn parse_document<'a, 's, S : ParserSink>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()> {
+        let (_, f, xml) = try_partial_parse!(self.parse_prolog(xml, sink));
+        let (_, xml) = try_resume_after_partial_failure!(f, self.parse_element(xml, sink));
+        let (_, xml) = parse_optional!(self.parse_miscs(xml, sink), xml);
 
-        Success((Document{before_children: before_children,
-                          element: element,
-                          after_children: after_children.unwrap_or(Vec::new())}, xml))
+        Success(((), xml))
     }
 
-    pub fn parse(&self, xml: &str) -> Result<Package, uint> {
+    pub fn parse<'a>(&self, xml: &'a str) -> Result<super::Package, uint> {
         let xml = StartPoint{offset: 0, s: xml};
+        let package = super::Package::new();
 
-        let (document, _) = match self.parse_document(xml) {
-            Success(x) => x,
-            Partial((_, pf, _)) |
-            Failure(pf) => return Err(pf.point.offset),
-        };
+        {
+            let doc = package.as_document();
+            let mut hydrator = SaxHydrator::new(&doc);
+
+            match self.parse_document(xml, &mut hydrator) {
+                Success(x) => x,
+                Partial((_, pf, _)) |
+                Failure(pf) => return Err(pf.point.offset),
+            };
+        }
 
         // TODO: Check fully parsed
 
-        let h = Hydrator;
-
-        Ok(h.hydrate_document(document))
+        Ok(package)
     }
 }
 
-struct Hydrator;
+trait ParserSink {
+    fn element_start(&mut self, name: &str);
+    fn element_end(&mut self, name: &str);
+    fn comment(&mut self, text: &str);
+    fn processing_instruction(&mut self, target: &str, value: Option<&str>);
+    fn text(&mut self, text: &str);
+    fn reference(&mut self, reference: Reference);
+    fn attribute_start(&mut self, name: &str);
+    fn attribute_value(&mut self, value: AttributeValue);
+    fn attribute_end(&mut self, name: &str);
+}
 
-impl Hydrator {
-    fn hydrate_text<'d>(&self, doc: &'d dom4::Document<'d>, text_data: Text) -> dom4::Text<'d> {
-        doc.create_text(text_data.text)
+struct SaxHydrator<'d> {
+    doc: &'d dom4::Document<'d>,
+    stack: Vec<dom4::Element<'d>>,
+    attr_value: RefCell<String>,
+}
+
+impl<'d> SaxHydrator<'d> {
+    fn new(doc: &'d dom4::Document<'d>) -> SaxHydrator<'d> {
+        SaxHydrator {
+            doc: doc,
+            stack: Vec::new(),
+            attr_value: RefCell::new(String::new()),
+        }
     }
 
-    fn hydrate_reference_raw<'d>(&self, ref_data: Reference) -> String {
+    fn current_element(&self) -> &dom4::Element<'d> {
+        self.stack.last().expect("No element to append to")
+    }
+
+    fn append_text(&self, text: dom4::Text<'d>) {
+        self.current_element().append_child(text);
+    }
+
+    fn append_to_either<T : dom4::ToChildOfRoot<'d>>(&self, child: T) {
+        match self.stack.last() {
+            None => self.doc.root().append_child(child),
+            Some(parent) => parent.append_child(child.to_child_of_root()),
+        }
+    }
+
+    fn decode_reference<T>(&self, ref_data: Reference, cb: |&str| -> T) -> T {
         match ref_data {
             DecimalCharReference(d) => {
                 let code: u32 = from_str_radix(d, 10).expect("Not valid decimal");
                 let c: char = from_u32(code).expect("Not a valid codepoint");
-                String::from_char(1, c)
+                let s = String::from_char(1, c);
+                cb(s.as_slice())
             },
             HexCharReference(h) => {
                 let code: u32 = from_str_radix(h, 16).expect("Not valid hex");
                 let c: char = from_u32(code).expect("Not a valid codepoint");
-                String::from_char(1, c)
+                let s = String::from_char(1, c);
+                cb(s.as_slice())
             },
             EntityReference(e) => {
-                String::from_str(match e {
+                let s = match e {
                     "amp"  => "&",
                     "lt"   => "<",
                     "gt"   => ">",
                     "apos" => "'",
                     "quot" => "\"",
                     _      => panic!("unknown entity"),
-                })
+                };
+                cb(s)
             }
         }
     }
+}
 
-    fn hydrate_reference<'d>(&self, doc: &'d dom4::Document<'d>, ref_data: Reference) -> dom4::Text<'d> {
-        doc.create_text(self.hydrate_reference_raw(ref_data).as_slice())
+impl<'d> ParserSink for SaxHydrator<'d> {
+    fn element_start(&mut self, name: &str) {
+        let element = self.doc.create_element(name);
+        self.append_to_either(element);
+        self.stack.push(element);
     }
 
-    fn hydrate_comment<'d>(&self, doc: &'d dom4::Document<'d>, comment_data: Comment) -> dom4::Comment<'d> {
-        doc.create_comment(comment_data.text)
+    fn element_end(&mut self, _name: &str) {
+        self.stack.pop();
     }
 
-    fn hydrate_pi<'d>(&self, doc: &'d dom4::Document<'d>, pi_data: ProcessingInstruction) -> dom4::ProcessingInstruction<'d> {
-        doc.create_processing_instruction(pi_data.target, pi_data.value)
+    fn comment(&mut self, text: &str) {
+        let comment = self.doc.create_comment(text);
+        self.append_to_either(comment);
     }
 
-    fn hydrate_element<'d>(&self, doc: &'d dom4::Document<'d>, element_data: Element) -> dom4::Element<'d> {
-        let element = doc.create_element(element_data.name);
-
-        for attr in element_data.attributes.into_iter() {
-            let to_v_str = |v: AttributeValue| match v {
-                LiteralAttributeValue(v) => String::from_str(v),
-                ReferenceAttributeValue(r) => self.hydrate_reference_raw(r),
-            };
-
-            let mut v = String::new();
-            for val in attr.values.into_iter() {
-                v.push_str(to_v_str(val).as_slice());
-            }
-
-            element.set_attribute_value(attr.name, v.as_slice());
-        }
-
-        for child in element_data.children.into_iter() {
-            match child {
-                ElementChild(e)   => element.append_child(self.hydrate_element(doc, e)),
-                TextChild(t)      => element.append_child(self.hydrate_text(doc, t)),
-                ReferenceChild(r) => element.append_child(self.hydrate_reference(doc, r)),
-                CommentChild(c)   => element.append_child(self.hydrate_comment(doc, c)),
-                PIChild(pi)       => element.append_child(self.hydrate_pi(doc, pi)),
-            }
-        }
-
-        element
+    fn processing_instruction(&mut self, target: &str, value: Option<&str>) {
+        let pi = self.doc.create_processing_instruction(target, value);
+        self.append_to_either(pi);
     }
 
-    fn hydrate_misc<'d>(&self, doc: &'d dom4::Document<'d>, children: Vec<RootChild>) {
-        for child in children.into_iter() {
-            match child {
-                CommentRootChild(c) => doc.root().append_child(self.hydrate_comment(doc, c)),
-                PIRootChild(p)      => doc.root().append_child(self.hydrate_pi(doc, p)),
-                IgnoredRootChild    => {},
-            }
+    fn text(&mut self, text: &str) {
+        let text = self.doc.create_text(text);
+        self.append_text(text);
+    }
+
+    fn reference(&mut self, reference: Reference) {
+        let text = self.decode_reference(reference, |s| self.doc.create_text(s));
+        self.append_text(text);
+    }
+
+    fn attribute_start(&mut self, _name: &str) {
+        self.attr_value.borrow_mut().clear();
+    }
+
+    fn attribute_value(&mut self, value: AttributeValue) {
+        match value {
+            LiteralAttributeValue(v) => self.attr_value.borrow_mut().push_str(v),
+            ReferenceAttributeValue(r) => self.decode_reference(r, |s| self.attr_value.borrow_mut().push_str(s)),
         }
     }
 
-    pub fn hydrate_document(&self, document: Document) -> Package {
-        let package = Package::new();
-
-        {
-            let doc = package.as_document();
-            let root = doc.root();
-
-            self.hydrate_misc(&doc, document.before_children);
-
-            root.append_child(self.hydrate_element(&doc, document.element));
-
-            self.hydrate_misc(&doc, document.after_children);
-        }
-
-        package
+    fn attribute_end(&mut self, name: &str) {
+        self.current_element().set_attribute_value(name, self.attr_value.borrow().as_slice());
     }
 }
 
