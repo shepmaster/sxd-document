@@ -682,352 +682,351 @@ impl Hydrator {
 #[cfg(test)]
 mod test {
 
-use super::Parser;
-use super::super::{Document,Element};
+    use super::Parser;
+    use super::super::{Document,Element};
 
-macro_rules! assert_str_eq(
-    ($l:expr, $r:expr) => (assert_eq!($l.as_slice(), $r.as_slice()));
-)
+    macro_rules! assert_str_eq(
+        ($l:expr, $r:expr) => (assert_eq!($l.as_slice(), $r.as_slice()));
+        )
 
-fn full_parse(xml: &str) -> Result<Document, uint> {
-    Parser::new()
-        .parse(xml)
-}
+    fn full_parse(xml: &str) -> Result<Document, uint> {
+        Parser::new()
+            .parse(xml)
+    }
 
-fn quick_parse(xml: &str) -> Document {
-    full_parse(xml)
-        .ok()
-        .expect("Failed to parse the XML string")
-}
+    fn quick_parse(xml: &str) -> Document {
+        full_parse(xml)
+            .ok()
+            .expect("Failed to parse the XML string")
+    }
 
-fn top(doc: &Document) -> Element { doc.root().children()[0].element().unwrap() }
+    fn top(doc: &Document) -> Element { doc.root().children()[0].element().unwrap() }
 
-#[test]
-fn a_document_with_a_prolog() {
-    let doc = quick_parse("<?xml version='1.0' ?><hello />");
-    let top = top(&doc);
+    #[test]
+    fn a_document_with_a_prolog() {
+        let doc = quick_parse("<?xml version='1.0' ?><hello />");
+        let top = top(&doc);
 
-    assert_str_eq!(top.name(), "hello");
-}
+        assert_str_eq!(top.name(), "hello");
+    }
 
-#[test]
-fn a_document_with_a_prolog_with_double_quotes() {
-    let doc = quick_parse("<?xml version=\"1.0\" ?><hello />");
-    let top = top(&doc);
+    #[test]
+    fn a_document_with_a_prolog_with_double_quotes() {
+        let doc = quick_parse("<?xml version=\"1.0\" ?><hello />");
+        let top = top(&doc);
 
-    assert_str_eq!(top.name(), "hello");
-}
+        assert_str_eq!(top.name(), "hello");
+    }
 
-#[test]
-fn a_document_with_a_single_element() {
-    let doc = quick_parse("<hello />");
-    let top = top(&doc);
+    #[test]
+    fn a_document_with_a_single_element() {
+        let doc = quick_parse("<hello />");
+        let top = top(&doc);
 
-    assert_str_eq!(top.name(), "hello");
-}
+        assert_str_eq!(top.name(), "hello");
+    }
 
-#[test]
-fn an_element_with_an_attribute() {
-    let doc = quick_parse("<hello scope='world'/>");
-    let top = top(&doc);
+    #[test]
+    fn an_element_with_an_attribute() {
+        let doc = quick_parse("<hello scope='world'/>");
+        let top = top(&doc);
 
-    assert_str_eq!(top.get_attribute("scope").unwrap(), "world");
-}
+        assert_str_eq!(top.get_attribute("scope").unwrap(), "world");
+    }
 
-#[test]
-fn an_element_with_an_attribute_using_double_quotes() {
-    let doc = quick_parse("<hello scope=\"world\"/>");
-    let top = top(&doc);
+    #[test]
+    fn an_element_with_an_attribute_using_double_quotes() {
+        let doc = quick_parse("<hello scope=\"world\"/>");
+        let top = top(&doc);
 
-    assert_str_eq!(top.get_attribute("scope").unwrap(), "world");
-}
+        assert_str_eq!(top.get_attribute("scope").unwrap(), "world");
+    }
 
-#[test]
-fn an_element_with_multiple_attributes() {
-    let doc = quick_parse("<hello scope='world' happy='true'/>");
-    let top = top(&doc);
+    #[test]
+    fn an_element_with_multiple_attributes() {
+        let doc = quick_parse("<hello scope='world' happy='true'/>");
+        let top = top(&doc);
 
-    assert_str_eq!(top.get_attribute("scope").unwrap(), "world");
-    assert_str_eq!(top.get_attribute("happy").unwrap(), "true");
-}
+        assert_str_eq!(top.get_attribute("scope").unwrap(), "world");
+        assert_str_eq!(top.get_attribute("happy").unwrap(), "true");
+    }
 
-#[test]
-fn an_attribute_with_references() {
-    let doc = quick_parse("<log msg='I &lt;3 math' />");
-    let top = top(&doc);
+    #[test]
+    fn an_attribute_with_references() {
+        let doc = quick_parse("<log msg='I &lt;3 math' />");
+        let top = top(&doc);
 
-    assert_str_eq!(top.get_attribute("msg").unwrap(), "I <3 math");
-}
+        assert_str_eq!(top.get_attribute("msg").unwrap(), "I <3 math");
+    }
 
-#[test]
-fn an_element_that_is_not_self_closing() {
-    let doc = quick_parse("<hello></hello>");
-    let top = top(&doc);
+    #[test]
+    fn an_element_that_is_not_self_closing() {
+        let doc = quick_parse("<hello></hello>");
+        let top = top(&doc);
 
-    assert_str_eq!(top.name(), "hello");
-}
+        assert_str_eq!(top.name(), "hello");
+    }
 
-#[test]
-fn nested_elements() {
-    let doc = quick_parse("<hello><world/></hello>");
-    let hello = top(&doc);
-    let world = hello.children()[0].element().unwrap();
+    #[test]
+    fn nested_elements() {
+        let doc = quick_parse("<hello><world/></hello>");
+        let hello = top(&doc);
+        let world = hello.children()[0].element().unwrap();
 
-    assert_str_eq!(world.name(), "world");
-}
+        assert_str_eq!(world.name(), "world");
+    }
 
-#[test]
-fn multiply_nested_elements() {
-    let doc = quick_parse("<hello><awesome><world/></awesome></hello>");
-    let hello = top(&doc);
-    let awesome = hello.children()[0].element().unwrap();
-    let world = awesome.children()[0].element().unwrap();
+    #[test]
+    fn multiply_nested_elements() {
+        let doc = quick_parse("<hello><awesome><world/></awesome></hello>");
+        let hello = top(&doc);
+        let awesome = hello.children()[0].element().unwrap();
+        let world = awesome.children()[0].element().unwrap();
 
-    assert_str_eq!(world.name(), "world");
-}
+        assert_str_eq!(world.name(), "world");
+    }
 
-#[test]
-fn nested_elements_with_attributes() {
-    let doc = quick_parse("<hello><world name='Earth'/></hello>");
-    let hello = top(&doc);
-    let world = hello.children()[0].element().unwrap();
+    #[test]
+    fn nested_elements_with_attributes() {
+        let doc = quick_parse("<hello><world name='Earth'/></hello>");
+        let hello = top(&doc);
+        let world = hello.children()[0].element().unwrap();
 
-    assert_str_eq!(world.get_attribute("name").unwrap(), "Earth");
-}
+        assert_str_eq!(world.get_attribute("name").unwrap(), "Earth");
+    }
 
-#[test]
-fn element_with_text() {
-    let doc = quick_parse("<hello>world</hello>");
-    let hello = top(&doc);
-    let text = hello.children()[0].text().unwrap();
+    #[test]
+    fn element_with_text() {
+        let doc = quick_parse("<hello>world</hello>");
+        let hello = top(&doc);
+        let text = hello.children()[0].text().unwrap();
 
-    assert_str_eq!(text.text(), "world");
-}
+        assert_str_eq!(text.text(), "world");
+    }
 
-#[test]
-fn element_with_cdata() {
-    let doc = quick_parse("<words><![CDATA[I have & and < !]]></words>");
-    let words = top(&doc);
-    let text = words.children()[0].text().unwrap();
+    #[test]
+    fn element_with_cdata() {
+        let doc = quick_parse("<words><![CDATA[I have & and < !]]></words>");
+        let words = top(&doc);
+        let text = words.children()[0].text().unwrap();
 
-    assert_str_eq!(text.text(), "I have & and < !");
-}
+        assert_str_eq!(text.text(), "I have & and < !");
+    }
 
-#[test]
-fn element_with_comment() {
-    let doc = quick_parse("<hello><!-- A comment --></hello>");
-    let words = top(&doc);
-    let comment = words.children()[0].comment().unwrap();
+    #[test]
+    fn element_with_comment() {
+        let doc = quick_parse("<hello><!-- A comment --></hello>");
+        let words = top(&doc);
+        let comment = words.children()[0].comment().unwrap();
 
-    assert_str_eq!(comment.text(), " A comment ");
-}
+        assert_str_eq!(comment.text(), " A comment ");
+    }
 
-#[test]
-fn comment_before_top_element() {
-    let doc = quick_parse("<!-- A comment --><hello />");
-    let comment = doc.root().children()[0].comment().unwrap();
+    #[test]
+    fn comment_before_top_element() {
+        let doc = quick_parse("<!-- A comment --><hello />");
+        let comment = doc.root().children()[0].comment().unwrap();
 
-    assert_str_eq!(comment.text(), " A comment ");
-}
+        assert_str_eq!(comment.text(), " A comment ");
+    }
 
-#[test]
-fn multiple_comments_before_top_element() {
-    let xml = r"
+    #[test]
+    fn multiple_comments_before_top_element() {
+        let xml = r"
 <!--Comment 1-->
 <!--Comment 2-->
 <hello />";
-    let doc = quick_parse(xml);
-    let comment1 = doc.root().children()[0].comment().unwrap();
-    let comment2 = doc.root().children()[1].comment().unwrap();
+        let doc = quick_parse(xml);
+        let comment1 = doc.root().children()[0].comment().unwrap();
+        let comment2 = doc.root().children()[1].comment().unwrap();
 
-    assert_str_eq!(comment1.text(), "Comment 1");
-    assert_str_eq!(comment2.text(), "Comment 2");
-}
+        assert_str_eq!(comment1.text(), "Comment 1");
+        assert_str_eq!(comment2.text(), "Comment 2");
+    }
 
-#[test]
-fn multiple_comments_after_top_element() {
-    let xml = r"
+    #[test]
+    fn multiple_comments_after_top_element() {
+        let xml = r"
 <hello />
 <!--Comment 1-->
 <!--Comment 2-->";
-    let doc = quick_parse(xml);
-    let comment1 = doc.root().children()[1].comment().unwrap();
-    let comment2 = doc.root().children()[2].comment().unwrap();
+        let doc = quick_parse(xml);
+        let comment1 = doc.root().children()[1].comment().unwrap();
+        let comment2 = doc.root().children()[2].comment().unwrap();
 
-    assert_str_eq!(comment1.text(), "Comment 1");
-    assert_str_eq!(comment2.text(), "Comment 2");
-}
+        assert_str_eq!(comment1.text(), "Comment 1");
+        assert_str_eq!(comment2.text(), "Comment 2");
+    }
 
-#[test]
-fn element_with_processing_instruction() {
-    let doc = quick_parse("<hello><?device?></hello>");
-    let hello = top(&doc);
-    let pi = hello.children()[0].processing_instruction().unwrap();
+    #[test]
+    fn element_with_processing_instruction() {
+        let doc = quick_parse("<hello><?device?></hello>");
+        let hello = top(&doc);
+        let pi = hello.children()[0].processing_instruction().unwrap();
 
-    assert_str_eq!(pi.target(), "device");
-    assert_eq!(pi.value(), None);
-}
+        assert_str_eq!(pi.target(), "device");
+        assert_eq!(pi.value(), None);
+    }
 
-#[test]
-fn top_level_processing_instructions() {
-    let xml = r"
+    #[test]
+    fn top_level_processing_instructions() {
+        let xml = r"
 <?output printer?>
 <hello />
 <?validated?>";
 
-    let doc = quick_parse(xml);
-    let pi1 = doc.root().children()[0].processing_instruction().unwrap();
-    let pi2 = doc.root().children()[2].processing_instruction().unwrap();
+        let doc = quick_parse(xml);
+        let pi1 = doc.root().children()[0].processing_instruction().unwrap();
+        let pi2 = doc.root().children()[2].processing_instruction().unwrap();
 
-    assert_str_eq!(pi1.target(), "output");
-    assert_str_eq!(pi1.value().unwrap(), "printer");
+        assert_str_eq!(pi1.target(), "output");
+        assert_str_eq!(pi1.value().unwrap(), "printer");
 
-    assert_str_eq!(pi2.target(), "validated");
-    assert_eq!(pi2.value(), None);
-}
+        assert_str_eq!(pi2.target(), "validated");
+        assert_eq!(pi2.value(), None);
+    }
 
-#[test]
-fn element_with_decimal_char_reference() {
-    let doc = quick_parse("<math>2 &#62; 1</math>");
-    let math = top(&doc);
-    let text1 = math.children()[0].text().unwrap();
-    let text2 = math.children()[1].text().unwrap();
-    let text3 = math.children()[2].text().unwrap();
+    #[test]
+    fn element_with_decimal_char_reference() {
+        let doc = quick_parse("<math>2 &#62; 1</math>");
+        let math = top(&doc);
+        let text1 = math.children()[0].text().unwrap();
+        let text2 = math.children()[1].text().unwrap();
+        let text3 = math.children()[2].text().unwrap();
 
-    assert_str_eq!(text1.text(), "2 ");
-    assert_str_eq!(text2.text(), ">");
-    assert_str_eq!(text3.text(), " 1");
-}
+        assert_str_eq!(text1.text(), "2 ");
+        assert_str_eq!(text2.text(), ">");
+        assert_str_eq!(text3.text(), " 1");
+    }
 
-#[test]
-fn element_with_hexidecimal_char_reference() {
-    let doc = quick_parse("<math>1 &#x3c; 2</math>");
-    let math = top(&doc);
-    let text1 = math.children()[0].text().unwrap();
-    let text2 = math.children()[1].text().unwrap();
-    let text3 = math.children()[2].text().unwrap();
+    #[test]
+    fn element_with_hexidecimal_char_reference() {
+        let doc = quick_parse("<math>1 &#x3c; 2</math>");
+        let math = top(&doc);
+        let text1 = math.children()[0].text().unwrap();
+        let text2 = math.children()[1].text().unwrap();
+        let text3 = math.children()[2].text().unwrap();
 
-    assert_str_eq!(text1.text(), "1 ");
-    assert_str_eq!(text2.text(), "<");
-    assert_str_eq!(text3.text(), " 2");
-}
+        assert_str_eq!(text1.text(), "1 ");
+        assert_str_eq!(text2.text(), "<");
+        assert_str_eq!(text3.text(), " 2");
+    }
 
-#[test]
-fn element_with_entity_reference() {
-    let doc = quick_parse("<math>I &lt;3 math</math>");
-    let math = top(&doc);
-    let text1 = math.children()[0].text().unwrap();
-    let text2 = math.children()[1].text().unwrap();
-    let text3 = math.children()[2].text().unwrap();
+    #[test]
+    fn element_with_entity_reference() {
+        let doc = quick_parse("<math>I &lt;3 math</math>");
+        let math = top(&doc);
+        let text1 = math.children()[0].text().unwrap();
+        let text2 = math.children()[1].text().unwrap();
+        let text3 = math.children()[2].text().unwrap();
 
-    assert_str_eq!(text1.text(), "I ");
-    assert_str_eq!(text2.text(), "<");
-    assert_str_eq!(text3.text(), "3 math");
-}
+        assert_str_eq!(text1.text(), "I ");
+        assert_str_eq!(text2.text(), "<");
+        assert_str_eq!(text3.text(), "3 math");
+    }
 
-#[test]
-fn element_with_mixed_children() {
-    let doc = quick_parse("<hello>to <!--fixme--><a><![CDATA[the]]></a><?world?></hello>");
-    let hello = top(&doc);
+    #[test]
+    fn element_with_mixed_children() {
+        let doc = quick_parse("<hello>to <!--fixme--><a><![CDATA[the]]></a><?world?></hello>");
+        let hello = top(&doc);
 
-    let text    = hello.children()[0].text().unwrap();
-    let comment = hello.children()[1].comment().unwrap();
-    let element = hello.children()[2].element().unwrap();
-    let pi      = hello.children()[3].processing_instruction().unwrap();
+        let text    = hello.children()[0].text().unwrap();
+        let comment = hello.children()[1].comment().unwrap();
+        let element = hello.children()[2].element().unwrap();
+        let pi      = hello.children()[3].processing_instruction().unwrap();
 
-    assert_str_eq!(text.text(),    "to ");
-    assert_str_eq!(comment.text(), "fixme");
-    assert_str_eq!(element.name(), "a");
-    assert_str_eq!(pi.target(),    "world");
-}
+        assert_str_eq!(text.text(),    "to ");
+        assert_str_eq!(comment.text(), "fixme");
+        assert_str_eq!(element.name(), "a");
+        assert_str_eq!(pi.target(),    "world");
+    }
 
-#[test]
-fn failure_no_open_brace() {
-    let r = full_parse("hi />");
+    #[test]
+    fn failure_no_open_brace() {
+        let r = full_parse("hi />");
 
-    assert_eq!(r, Err(0));
-}
+        assert_eq!(r, Err(0));
+    }
 
-#[test]
-fn failure_unclosed_tag() {
-    let r = full_parse("<hi");
+    #[test]
+    fn failure_unclosed_tag() {
+        let r = full_parse("<hi");
 
-    assert_eq!(r, Err(3));
-}
+        assert_eq!(r, Err(3));
+    }
 
-#[test]
-fn failure_unexpected_space() {
-    let r = full_parse("<hi / >");
+    #[test]
+    fn failure_unexpected_space() {
+        let r = full_parse("<hi / >");
 
-    assert_eq!(r, Err(4));
-}
+        assert_eq!(r, Err(4));
+    }
 
-#[test]
-fn failure_attribute_without_open_quote() {
-    let r = full_parse("<hi oops=value' />");
-    assert_eq!(r, Err(9));
-}
+    #[test]
+    fn failure_attribute_without_open_quote() {
+        let r = full_parse("<hi oops=value' />");
+        assert_eq!(r, Err(9));
+    }
 
-#[test]
-fn failure_attribute_without_close_quote() {
-    let r = full_parse("<hi oops='value />");
+    #[test]
+    fn failure_attribute_without_close_quote() {
+        let r = full_parse("<hi oops='value />");
 
-    assert_eq!(r, Err(18));
-}
+        assert_eq!(r, Err(18));
+    }
 
-#[test]
-fn failure_unclosed_attribute_and_tag() {
-    let r = full_parse("<hi oops='value");
+    #[test]
+    fn failure_unclosed_attribute_and_tag() {
+        let r = full_parse("<hi oops='value");
 
-    assert_eq!(r, Err(15));
-}
+        assert_eq!(r, Err(15));
+    }
 
-#[test]
-fn failure_nested_unclosed_tag() {
-    let r = full_parse("<hi><oops</hi>");
+    #[test]
+    fn failure_nested_unclosed_tag() {
+        let r = full_parse("<hi><oops</hi>");
 
-    assert_eq!(r, Err(9));
-}
+        assert_eq!(r, Err(9));
+    }
 
-#[test]
-fn failure_nested_unexpected_space() {
-    let r = full_parse("<hi><oops / ></hi>");
+    #[test]
+    fn failure_nested_unexpected_space() {
+        let r = full_parse("<hi><oops / ></hi>");
 
-    assert_eq!(r, Err(10));
-}
+        assert_eq!(r, Err(10));
+    }
 
-#[test]
-fn failure_malformed_entity_reference() {
-    let r = full_parse("<hi>Entity: &;</hi>");
+    #[test]
+    fn failure_malformed_entity_reference() {
+        let r = full_parse("<hi>Entity: &;</hi>");
 
-    assert_eq!(r, Err(13));
-}
+        assert_eq!(r, Err(13));
+    }
 
-#[test]
-fn failure_nested_malformed_entity_reference() {
-    let r = full_parse("<hi><bye>Entity: &;</bye></hi>");
+    #[test]
+    fn failure_nested_malformed_entity_reference() {
+        let r = full_parse("<hi><bye>Entity: &;</bye></hi>");
 
-    assert_eq!(r, Err(18));
-}
+        assert_eq!(r, Err(18));
+    }
 
-#[test]
-fn failure_nested_attribute_without_open_quote() {
-    let r = full_parse("<hi><bye oops=value' /></hi>");
-    assert_eq!(r, Err(14));
-}
+    #[test]
+    fn failure_nested_attribute_without_open_quote() {
+        let r = full_parse("<hi><bye oops=value' /></hi>");
+        assert_eq!(r, Err(14));
+    }
 
-#[test]
-fn failure_nested_attribute_without_close_quote() {
-    let r = full_parse("<hi><bye oops='value /></hi>");
+    #[test]
+    fn failure_nested_attribute_without_close_quote() {
+        let r = full_parse("<hi><bye oops='value /></hi>");
 
-    assert_eq!(r, Err(23));
-}
+        assert_eq!(r, Err(23));
+    }
 
-#[test]
-fn failure_nested_unclosed_attribute_and_tag() {
-    let r = full_parse("<hi><bye oops='value</hi>");
+    #[test]
+    fn failure_nested_unclosed_attribute_and_tag() {
+        let r = full_parse("<hi><bye oops='value</hi>");
 
-    assert_eq!(r, Err(20));
-}
-
+        assert_eq!(r, Err(20));
+    }
 }
