@@ -649,13 +649,13 @@ impl Element {
 
     pub fn attribute(&self, name: &str) -> Option<Attribute> {
         let inner = self.inner.borrow();
-        inner.attributes.find(&name.to_string()).map(|x| x.clone())
+        inner.attributes.get(&name.to_string()).map(|x| x.clone())
     }
 
     // TODO: look into equiv
     pub fn get_attribute(&self, name: &str) -> Option<String> {
         let inner = self.inner.borrow();
-        let attr = inner.attributes.find(&name.to_string());
+        let attr = inner.attributes.get(&name.to_string());
         attr.map(|x| x.inner.borrow().value.clone())
     }
 }
