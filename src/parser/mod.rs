@@ -69,9 +69,36 @@ enum Reference<'a> {
     HexCharReference(&'a str),
 }
 
-fn best_failure<'a>(mut errors: Vec<ParseFailure<'a>>) -> ParseFailure<'a> {
-    errors.sort_by(|l, r| l.point.offset.cmp(&r.point.offset));
-    errors.pop().expect("Called without any errors")
+struct BestFailure<'a> {
+    failure: Option<ParseFailure<'a>>
+}
+
+impl<'a> BestFailure<'a> {
+    fn new() -> BestFailure<'a> {
+        BestFailure {
+            failure: None,
+        }
+    }
+
+    fn with(failure: ParseFailure<'a>) -> BestFailure<'a> {
+        BestFailure {
+            failure: Some(failure),
+        }
+    }
+
+    fn push(&mut self, failure: ParseFailure<'a>) {
+        if let Some(old) = self.failure {
+            if failure.point.offset <= old.point.offset {
+                return;
+            }
+        }
+
+        self.failure = Some(failure)
+    }
+
+    fn pop(&self) -> ParseFailure<'a> {
+        self.failure.expect("No errors found")
+    }
 }
 
 macro_rules! try_parse(
@@ -87,8 +114,8 @@ macro_rules! try_parse(
 macro_rules! try_partial_parse(
     ($e:expr) => ({
         match $e {
-            Success((v, xml)) => (v, vec![], xml),
-            Partial((v, pf, xml)) => (v, vec![pf], xml),
+            Success((v, xml)) => (v, BestFailure::new(), xml),
+            Partial((v, pf, xml)) => (v, BestFailure::with(pf), xml),
             Failure(pf) => return Failure(pf),
         }
     })
@@ -102,7 +129,7 @@ macro_rules! try_resume_after_partial_failure(
             Failure(pf) => {
                 let mut partial = $partial;
                 partial.push(pf);
-                return Failure(best_failure(partial))
+                return Failure(partial.pop())
             },
         }
     });
@@ -122,7 +149,7 @@ macro_rules! parse_optional(
 // Pattern: alternate
 macro_rules! parse_alternate_rec(
     ($start:expr, $errors:expr, {}) => ({
-        Failure(best_failure($errors))
+        Failure($errors.pop())
     });
     ($start:expr, $errors:expr, {
         [$parser:expr -> $transformer:expr],
@@ -145,7 +172,7 @@ macro_rules! parse_alternate(
     ($start:expr, {
         $([$parser_rest:expr -> $transformer_rest:expr],)*
     }) => ({
-        let mut errors = Vec::new();
+        let mut errors = BestFailure::new();
         parse_alternate_rec!($start, errors, {
             $([$parser_rest -> $transformer_rest],)*
         })
