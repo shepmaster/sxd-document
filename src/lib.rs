@@ -33,7 +33,7 @@
 use std::fmt;
 use std::rc::{Rc,Weak};
 use std::cell::RefCell;
-use std::collections::hashmap::HashMap;
+use std::collections::HashMap;
 
 pub mod parser;
 pub mod writer;
