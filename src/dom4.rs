@@ -787,4 +787,24 @@ mod test {
         assert_eq!(pi.target(), "output");
         assert_eq!(pi.value(), Some("full-screen"));
     }
+
+    #[test]
+    fn can_return_a_populated_package() {
+        fn populate() -> Package {
+            let package = Package::new();
+            {
+                let doc = package.as_document();
+
+                let element = doc.create_element("hello");
+                doc.root().append_child(element);
+            }
+
+            package
+        }
+
+        let package = populate();
+        let doc = package.as_document();
+        let element = doc.root().children()[0].element().unwrap();
+        assert_eq!(element.name(), "hello");
+    }
 }

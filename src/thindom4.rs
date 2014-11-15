@@ -743,4 +743,25 @@ mod test {
         assert_eq!(pi.target(), "output");
         assert_eq!(pi.value(), Some("full-screen"));
     }
+
+    #[test]
+    fn can_return_a_populated_package() {
+        fn populate() -> Package {
+            let package = Package::new();
+            {
+                let (s, mut c) = package.as_thin_document();
+
+                let element = s.create_element("hello");
+                c.append_root_child(element);
+            }
+
+            package
+        }
+
+        let package = populate();
+        let (_, c) = package.as_thin_document();
+        let children: Vec<_> = c.root_children().collect();
+        let element = children[0].element().unwrap();
+        assert_eq!(element.name(), "hello");
+    }
 }
