@@ -35,6 +35,10 @@
 //! - Should we restart from both the failure point and the original start point?
 //! - Should we preserve a tree of all the failures?
 //!
+//! ### Known issues
+//!
+//! - `panic!` is used in recoverable situations.
+//!
 //! ### Influences
 //!
 //! - http://www.scheidecker.net/2012/12/03/parser-combinators/
@@ -688,7 +692,7 @@ impl Hydrator {
 #[cfg(test)]
 mod test {
     use super::Parser;
-    use super::super::{Package,Document,Element};
+    use super::super::Package;
     use super::super::dom4;
 
     macro_rules! assert_str_eq(
