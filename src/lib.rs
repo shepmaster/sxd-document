@@ -70,6 +70,18 @@ impl Package {
     }
 }
 
+impl PartialEq for Package {
+    fn eq(&self, other: &Package) -> bool {
+        self as *const Package == other as *const Package
+    }
+}
+
+impl fmt::Show for Package {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Package")
+    }
+}
+
 struct DocumentInner {
     // We will always have a root, but during construction we have to
     // pick one first
