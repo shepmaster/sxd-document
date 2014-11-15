@@ -764,4 +764,16 @@ mod test {
         let element = children[0].element().unwrap();
         assert_eq!(element.name(), "hello");
     }
+
+    // #[test]
+    // #[compile_failure]
+    // fn nodes_cannot_live_outside_of_the_document() {
+    //     let package = Package::new();
+
+    //     let _ = {
+    //         let (s, _) = package.as_thin_document();
+
+    //         s.create_element("hello")
+    //     };
+    // }
 }

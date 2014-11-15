@@ -807,4 +807,16 @@ mod test {
         let element = doc.root().children()[0].element().unwrap();
         assert_eq!(element.name(), "hello");
     }
+
+    // #[test]
+    // #[compile_failure]
+    // fn nodes_cannot_live_outside_of_the_document() {
+    //     let package = Package::new();
+
+    //     let _ = {
+    //         let doc = package.as_document();
+
+    //         doc.create_element("hello")
+    //     };
+    // }
 }
