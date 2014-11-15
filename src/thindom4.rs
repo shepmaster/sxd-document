@@ -407,6 +407,17 @@ conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
     ProcessingInstruction => ProcessingInstructionCOE
 })
 
+
+impl<'d> ToChildOfElement<'d> for ChildOfRoot<'d> {
+    fn to_child_of_element(self) -> ChildOfElement<'d> {
+        match self {
+            ElementCOR(n) => ElementCOE(n),
+            CommentCOR(n) => CommentCOE(n),
+            ProcessingInstructionCOR(n) => ProcessingInstructionCOE(n),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::super::Package;
