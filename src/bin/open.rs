@@ -20,14 +20,9 @@ fn main() {
     let path = Path::new(filename);
     let mut file = File::open(&path);
 
-    let data = match file.read_to_end() {
+    let data = match file.read_to_string() {
         Ok(x) => x,
         Err(x) => panic!("Can't read: {}", x),
-    };
-
-    let data = match String::from_utf8(data) {
-        Ok(x) => x,
-        Err(x) => panic!("Unable to convert to UTF-8: {}", x),
     };
 
     let p = Parser::new();
