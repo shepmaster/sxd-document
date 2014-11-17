@@ -242,6 +242,12 @@ impl<'d> Attribute<'d> {
     pub fn value(&self) -> &str { self.node().value() }
 }
 
+impl<'d> fmt::Show for Attribute<'d> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Attribute {{ name: {}, value: {} }}", self.name(), self.value())
+    }
+}
+
 node!(Text, raw::Text)
 
 impl<'d> Text<'d> {

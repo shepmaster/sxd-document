@@ -222,6 +222,12 @@ impl<'d> Attribute<'d> {
     }
 }
 
+impl<'d> fmt::Show for Attribute<'d> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Attribute {{ name: {}, value: {} }}", self.name(), self.value())
+    }
+}
+
 node!(Text, raw::Text)
 
 impl<'d> Text<'d> {
