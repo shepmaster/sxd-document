@@ -366,6 +366,58 @@ pub enum ParentOfChild<'d> {
     ElementPOC(Element<'d>),
 }
 
+#[deriving(PartialEq,Show)]
+pub enum Node<'d> {
+    RootNode(Root<'d>),
+    ElementNode(Element<'d>),
+    AttributeNode(Attribute<'d>),
+    TextNode(Text<'d>),
+    CommentNode(Comment<'d>),
+    ProcessingInstructionNode(ProcessingInstruction<'d>),
+}
+
+unpack!(Node, root, RootNode, Root)
+unpack!(Node, element, ElementNode, Element)
+unpack!(Node, attribute, AttributeNode, Attribute)
+unpack!(Node, text, TextNode, Text)
+unpack!(Node, comment, CommentNode, Comment)
+unpack!(Node, processing_instruction, ProcessingInstructionNode, ProcessingInstruction)
+
+impl<'d> Node<'d> {
+    pub fn document(&self) -> &'d Document<'d> {
+        match self {
+            &RootNode(n)                  => n.document(),
+            &ElementNode(n)               => n.document(),
+            &AttributeNode(n)             => n.document(),
+            &TextNode(n)                  => n.document(),
+            &CommentNode(n)               => n.document(),
+            &ProcessingInstructionNode(n) => n.document(),
+        }
+    }
+
+    pub fn parent(&self) -> Option<Node<'d>> {
+        match self {
+            &RootNode(_)                  => None,
+            &ElementNode(n)               => n.parent().map(|n| n.to_node()),
+            &AttributeNode(n)             => n.parent().map(|n| n.to_node()),
+            &TextNode(n)                  => n.parent().map(|n| n.to_node()),
+            &CommentNode(n)               => n.parent().map(|n| n.to_node()),
+            &ProcessingInstructionNode(n) => n.parent().map(|n| n.to_node()),
+        }
+    }
+
+    pub fn children(&self) -> Vec<Node<'d>> {
+        match self {
+            &RootNode(n)                  => n.children().iter().map(|n| n.to_node()).collect(),
+            &ElementNode(n)               => n.children().iter().map(|n| n.to_node()).collect(),
+            &AttributeNode(_)             => Vec::new(),
+            &TextNode(_)                  => Vec::new(),
+            &CommentNode(_)               => Vec::new(),
+            &ProcessingInstructionNode(_) => Vec::new(),
+        }
+    }
+}
+
 macro_rules! conversion_trait(
     ($tr_name:ident, $method:ident, $res_type:ident,
         { $($leaf_type:ident => $variant:ident),* }
@@ -407,6 +459,45 @@ impl<'d> ToChildOfElement<'d> for ChildOfRoot<'d> {
             ElementCOR(n) => ElementCOE(n),
             CommentCOR(n) => CommentCOE(n),
             ProcessingInstructionCOR(n) => ProcessingInstructionCOE(n),
+        }
+    }
+}
+
+conversion_trait!(ToNode, to_node, Node, {
+    Root => RootNode,
+    Element => ElementNode,
+    Attribute => AttributeNode,
+    Text => TextNode,
+    Comment => CommentNode,
+    ProcessingInstruction => ProcessingInstructionNode
+})
+
+impl<'d> ToNode<'d> for ChildOfRoot<'d> {
+    fn to_node(self) -> Node<'d> {
+        match self {
+            ElementCOR(n)               => ElementNode(n),
+            CommentCOR(n)               => CommentNode(n),
+            ProcessingInstructionCOR(n) => ProcessingInstructionNode(n),
+        }
+    }
+}
+
+impl<'d> ToNode<'d> for ChildOfElement<'d> {
+    fn to_node(self) -> Node<'d> {
+        match self {
+            ElementCOE(n)               => ElementNode(n),
+            TextCOE(n)                  => TextNode(n),
+            CommentCOE(n)               => CommentNode(n),
+            ProcessingInstructionCOE(n) => ProcessingInstructionNode(n),
+        }
+    }
+}
+
+impl<'d> ToNode<'d> for ParentOfChild<'d> {
+    fn to_node(self) -> Node<'d> {
+        match self {
+            RootPOC(n)    => RootNode(n),
+            ElementPOC(n) => ElementNode(n),
         }
     }
 }
