@@ -92,6 +92,8 @@ impl<'d> fmt::Show for Document<'d> {
 
 macro_rules! node(
     ($name:ident, $raw:ty) => (
+        #[allow(raw_pointer_deriving)]
+        #[deriving(Clone)]
         pub struct $name<'d> {
             document: &'d Document<'d>,
             node: *mut $raw,
@@ -366,7 +368,7 @@ pub enum ParentOfChild<'d> {
     ElementPOC(Element<'d>),
 }
 
-#[deriving(PartialEq,Show)]
+#[deriving(Clone,PartialEq,Show)]
 pub enum Node<'d> {
     RootNode(Root<'d>),
     ElementNode(Element<'d>),

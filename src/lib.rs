@@ -34,6 +34,7 @@ mod string_pool;
 mod raw;
 pub mod thindom4;
 pub mod dom4;
+pub mod nodeset;
 pub mod parser;
 pub mod writer;
 
