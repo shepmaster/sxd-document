@@ -23,6 +23,7 @@
 #![feature(macro_rules)]
 #![feature(if_let)]
 #![feature(default_type_params)]
+#![feature(globs)]
 
 extern crate arena;
 extern crate test;

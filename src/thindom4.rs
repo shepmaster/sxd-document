@@ -1,4 +1,9 @@
+use self::ParentOfChild::*;
+use self::ChildOfRoot::*;
+use self::ChildOfElement::*;
+
 use super::raw;
+
 use std::fmt;
 use std::kinds::marker::InvariantLifetime;
 
@@ -312,17 +317,17 @@ unpack!(ChildOfRoot, processing_instruction, ProcessingInstructionCOR, Processin
 impl<'d> ChildOfRoot<'d> {
     pub fn wrap(node: raw::ChildOfRoot) -> ChildOfRoot<'d> {
         match node {
-            raw::ElementCOR(n) => ElementCOR(Element::wrap(n)),
-            raw::CommentCOR(n) => CommentCOR(Comment::wrap(n)),
-            raw::ProcessingInstructionCOR(n) => ProcessingInstructionCOR(ProcessingInstruction::wrap(n)),
+            raw::ChildOfRoot::ElementCOR(n)               => ElementCOR(Element::wrap(n)),
+            raw::ChildOfRoot::CommentCOR(n)               => CommentCOR(Comment::wrap(n)),
+            raw::ChildOfRoot::ProcessingInstructionCOR(n) => ProcessingInstructionCOR(ProcessingInstruction::wrap(n)),
         }
     }
 
     pub fn as_raw(&self) -> raw::ChildOfRoot {
         match self {
-            &ElementCOR(n) => raw::ElementCOR(n.node),
-            &CommentCOR(n) => raw::CommentCOR(n.node),
-            &ProcessingInstructionCOR(n) => raw::ProcessingInstructionCOR(n.node),
+            &ElementCOR(n)               => raw::ChildOfRoot::ElementCOR(n.node),
+            &CommentCOR(n)               => raw::ChildOfRoot::CommentCOR(n.node),
+            &ProcessingInstructionCOR(n) => raw::ChildOfRoot::ProcessingInstructionCOR(n.node),
         }
     }
 }
@@ -343,19 +348,19 @@ unpack!(ChildOfElement, processing_instruction, ProcessingInstructionCOE, Proces
 impl<'d> ChildOfElement<'d> {
     pub fn wrap(node: raw::ChildOfElement) -> ChildOfElement<'d> {
         match node {
-            raw::ElementCOE(n) => ElementCOE(Element::wrap(n)),
-            raw::TextCOE(n) => TextCOE(Text::wrap(n)),
-            raw::CommentCOE(n) => CommentCOE(Comment::wrap(n)),
-            raw::ProcessingInstructionCOE(n) => ProcessingInstructionCOE(ProcessingInstruction::wrap(n)),
+            raw::ChildOfElement::ElementCOE(n)               => ElementCOE(Element::wrap(n)),
+            raw::ChildOfElement::TextCOE(n)                  => TextCOE(Text::wrap(n)),
+            raw::ChildOfElement::CommentCOE(n)               => CommentCOE(Comment::wrap(n)),
+            raw::ChildOfElement::ProcessingInstructionCOE(n) => ProcessingInstructionCOE(ProcessingInstruction::wrap(n)),
         }
     }
 
     pub fn as_raw(&self) -> raw::ChildOfElement {
         match self {
-            &ElementCOE(n) => raw::ElementCOE(n.node),
-            &TextCOE(n) => raw::TextCOE(n.node),
-            &CommentCOE(n) => raw::CommentCOE(n.node),
-            &ProcessingInstructionCOE(n) => raw::ProcessingInstructionCOE(n.node),
+            &ElementCOE(n)               => raw::ChildOfElement::ElementCOE(n.node),
+            &TextCOE(n)                  => raw::ChildOfElement::TextCOE(n.node),
+            &CommentCOE(n)               => raw::ChildOfElement::CommentCOE(n.node),
+            &ProcessingInstructionCOE(n) => raw::ChildOfElement::ProcessingInstructionCOE(n.node),
         }
     }
 }
@@ -372,8 +377,8 @@ unpack!(ParentOfChild, element, ElementPOC, Element)
 impl<'d> ParentOfChild<'d> {
     pub fn wrap(node: raw::ParentOfChild) -> ParentOfChild<'d> {
         match node {
-            raw::RootPOC(n) => RootPOC(Root::wrap(n)),
-            raw::ElementPOC(n) => ElementPOC(Element::wrap(n)),
+            raw::ParentOfChild::RootPOC(n) => RootPOC(Root::wrap(n)),
+            raw::ParentOfChild::ElementPOC(n) => ElementPOC(Element::wrap(n)),
         }
     }
 }
@@ -427,9 +432,10 @@ impl<'d> ToChildOfElement<'d> for ChildOfRoot<'d> {
 #[cfg(test)]
 mod test {
     use super::super::Package;
-    use super::{ChildOfRoot,ElementCOR,CommentCOR,ProcessingInstructionCOR};
-    use super::{ChildOfElement,ElementCOE,TextCOE,CommentCOE,ProcessingInstructionCOE};
-    use super::{RootPOC,ElementPOC};
+    use super::{ChildOfRoot,ChildOfElement};
+    use super::ChildOfRoot::*;
+    use super::ChildOfElement::*;
+    use super::ParentOfChild::*;
     use super::Attribute;
 
     #[test]

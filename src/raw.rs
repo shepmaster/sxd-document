@@ -1,3 +1,7 @@
+use self::ParentOfChild::*;
+use self::ChildOfRoot::*;
+use self::ChildOfElement::*;
+
 use arena::TypedArena;
 use string_pool::{StringPool,InternedString};
 

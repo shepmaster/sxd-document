@@ -44,7 +44,7 @@ impl<'d> Nodeset<'d> {
 #[cfg(test)]
 mod test {
     use super::super::Package;
-    use super::super::dom4::{
+    use super::super::dom4::Node::{
         AttributeNode,
         CommentNode,
         ElementNode,

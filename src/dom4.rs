@@ -1,4 +1,10 @@
+use self::ChildOfRoot::*;
+use self::ChildOfElement::*;
+use self::ParentOfChild::*;
+use self::Node::*;
+
 use super::raw;
+
 use std::fmt;
 use std::cell::RefCell;
 
@@ -35,25 +41,25 @@ impl<'d> Document<'d> {
 
     fn wrap_parent_of_child(&'d self, node: raw::ParentOfChild) -> ParentOfChild<'d> {
         match node {
-            raw::RootPOC(n) => RootPOC(self.wrap_root(n)),
-            raw::ElementPOC(n) => ElementPOC(self.wrap_element(n)),
+            raw::ParentOfChild::RootPOC(n) => RootPOC(self.wrap_root(n)),
+            raw::ParentOfChild::ElementPOC(n) => ElementPOC(self.wrap_element(n)),
         }
     }
 
     fn wrap_child_of_root(&'d self, node: raw::ChildOfRoot) -> ChildOfRoot<'d> {
         match node {
-            raw::ElementCOR(n) => ElementCOR(self.wrap_element(n)),
-            raw::CommentCOR(n) => CommentCOR(self.wrap_comment(n)),
-            raw::ProcessingInstructionCOR(n) => ProcessingInstructionCOR(self.wrap_pi(n)),
+            raw::ChildOfRoot::ElementCOR(n) => ElementCOR(self.wrap_element(n)),
+            raw::ChildOfRoot::CommentCOR(n) => CommentCOR(self.wrap_comment(n)),
+            raw::ChildOfRoot::ProcessingInstructionCOR(n) => ProcessingInstructionCOR(self.wrap_pi(n)),
         }
     }
 
     fn wrap_child_of_element(&'d self, node: raw::ChildOfElement) -> ChildOfElement<'d> {
         match node {
-            raw::ElementCOE(n) => ElementCOE(self.wrap_element(n)),
-            raw::TextCOE(n) => TextCOE(self.wrap_text(n)),
-            raw::CommentCOE(n) => CommentCOE(self.wrap_comment(n)),
-            raw::ProcessingInstructionCOE(n) => ProcessingInstructionCOE(self.wrap_pi(n)),
+            raw::ChildOfElement::ElementCOE(n) => ElementCOE(self.wrap_element(n)),
+            raw::ChildOfElement::TextCOE(n) => TextCOE(self.wrap_text(n)),
+            raw::ChildOfElement::CommentCOE(n) => CommentCOE(self.wrap_comment(n)),
+            raw::ChildOfElement::ProcessingInstructionCOE(n) => ProcessingInstructionCOE(self.wrap_pi(n)),
         }
     }
 
@@ -331,9 +337,9 @@ unpack!(ChildOfRoot, processing_instruction, ProcessingInstructionCOR, Processin
 impl<'d> ChildOfRoot<'d> {
     pub fn as_raw(&self) -> raw::ChildOfRoot {
         match self {
-            &ElementCOR(n) => raw::ElementCOR(n.node),
-            &CommentCOR(n) => raw::CommentCOR(n.node),
-            &ProcessingInstructionCOR(n) => raw::ProcessingInstructionCOR(n.node),
+            &ElementCOR(n) => raw::ChildOfRoot::ElementCOR(n.node),
+            &CommentCOR(n) => raw::ChildOfRoot::CommentCOR(n.node),
+            &ProcessingInstructionCOR(n) => raw::ChildOfRoot::ProcessingInstructionCOR(n.node),
         }
     }
 }
@@ -354,10 +360,10 @@ unpack!(ChildOfElement, processing_instruction, ProcessingInstructionCOE, Proces
 impl<'d> ChildOfElement<'d> {
     pub fn as_raw(&self) -> raw::ChildOfElement {
         match self {
-            &ElementCOE(n) => raw::ElementCOE(n.node),
-            &TextCOE(n) => raw::TextCOE(n.node),
-            &CommentCOE(n) => raw::CommentCOE(n.node),
-            &ProcessingInstructionCOE(n) => raw::ProcessingInstructionCOE(n.node),
+            &ElementCOE(n) => raw::ChildOfElement::ElementCOE(n.node),
+            &TextCOE(n) => raw::ChildOfElement::TextCOE(n.node),
+            &CommentCOE(n) => raw::ChildOfElement::CommentCOE(n.node),
+            &ProcessingInstructionCOE(n) => raw::ChildOfElement::ProcessingInstructionCOE(n.node),
         }
     }
 }
@@ -507,9 +513,9 @@ impl<'d> ToNode<'d> for ParentOfChild<'d> {
 #[cfg(test)]
 mod test {
     use super::super::Package;
-    use super::{ElementCOR,CommentCOR,ProcessingInstructionCOR};
-    use super::{ElementCOE,TextCOE,CommentCOE,ProcessingInstructionCOE};
-    use super::{RootPOC,ElementPOC};
+    use super::ChildOfRoot::*;
+    use super::ChildOfElement::*;
+    use super::ParentOfChild::*;
 
     #[test]
     fn the_root_belongs_to_a_document() {

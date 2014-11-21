@@ -48,6 +48,9 @@ use std::char::from_u32;
 use std::num::from_str_radix;
 use std::cell::RefCell;
 
+use self::AttributeValue::*;
+use self::Reference::*;
+use self::ParseResult::*;
 use self::xmlstr::XmlStr;
 
 use super::dom4;

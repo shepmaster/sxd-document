@@ -29,9 +29,11 @@
 
 use std::io::IoResult;
 
+use self::Content::*;
+
 use super::dom4;
-use super::dom4::{ElementCOE,TextCOE,CommentCOE,ProcessingInstructionCOE};
-use super::dom4::{ElementCOR,CommentCOR,ProcessingInstructionCOR};
+use super::dom4::ChildOfElement::*;
+use super::dom4::ChildOfRoot::*;
 
 enum Content<'d> {
     Element(dom4::Element<'d>),
