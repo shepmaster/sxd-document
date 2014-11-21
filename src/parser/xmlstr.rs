@@ -24,8 +24,7 @@ impl<'a> XmlStr for &'a str {
             return None;
         }
 
-        let (quote_char, _) = quote.slice_shift_char();
-        let quote_char = quote_char.expect("Cant have null quote");
+        let (quote_char, _) = quote.slice_shift_char().expect("Cant have null quote");
 
         let mut positions = self.char_indices().skip_while(|&(_, c)| c != '&' && c != '<' && c != quote_char);
 
