@@ -131,7 +131,7 @@ mod test {
     fn format_xml<'d>(doc: &'d dom4::Document<'d>) -> String {
         let mut w = MemWriter::new();
         format_document(doc, &mut w).ok().expect("Not formatted");
-        String::from_utf8(w.unwrap()).ok().expect("Not a string")
+        String::from_utf8(w.into_inner()).ok().expect("Not a string")
     }
 
     #[test]
