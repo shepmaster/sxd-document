@@ -349,7 +349,9 @@ impl Connections {
         child_r.parent
     }
 
-    pub fn append_root_child<C : ToChildOfRoot>(&self, child: C) {
+    pub fn append_root_child<C>(&self, child: C) where
+        C: ToChildOfRoot
+    {
         let child = child.to_child_of_root();
         let parent_r = unsafe { &mut *self.root };
 
@@ -357,7 +359,9 @@ impl Connections {
         parent_r.children.push(child);
     }
 
-    pub fn append_element_child<C : ToChildOfElement>(&self, parent: *mut Element, child: C) {
+    pub fn append_element_child<C>(&self, parent: *mut Element, child: C)
+        where C: ToChildOfElement
+    {
         let child = child.to_child_of_element();
         let parent_r = unsafe { &mut *parent };
 

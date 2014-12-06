@@ -93,7 +93,9 @@ impl PartialEq for InternedString {
 
 impl Eq for InternedString {}
 
-impl<S: hash::Writer> hash::Hash<S> for InternedString {
+impl<S> hash::Hash<S> for InternedString
+    where S: hash::Writer
+{
     fn hash(&self, state: &mut S) {
         self.as_slice().hash(state)
     }

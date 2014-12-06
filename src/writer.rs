@@ -43,7 +43,10 @@ enum Content<'d> {
     ProcessingInstruction(dom4::ProcessingInstruction<'d>),
 }
 
-fn format_element<'d, W : Writer>(element: dom4::Element<'d>, todo: &mut Vec<Content<'d>>, writer: &mut W) -> IoResult<()> {
+fn format_element<'d, W>(element: dom4::Element<'d>, todo: &mut Vec<Content<'d>>, writer: &mut W)
+                         -> IoResult<()>
+    where W: Writer
+{
     try!(write!(writer, "<{}", element.name()));
 
     for attr in element.attributes().iter() {
@@ -70,18 +73,25 @@ fn format_element<'d, W : Writer>(element: dom4::Element<'d>, todo: &mut Vec<Con
     }
 }
 
-fn format_comment<W : Writer>(comment: dom4::Comment, writer: &mut W) -> IoResult<()> {
+fn format_comment<W>(comment: dom4::Comment, writer: &mut W) -> IoResult<()>
+    where W: Writer
+{
     write!(writer, "<!--{}-->", comment.text())
 }
 
-fn format_processing_instruction<W : Writer>(pi: dom4::ProcessingInstruction, writer: &mut W) -> IoResult<()> {
+fn format_processing_instruction<W>(pi: dom4::ProcessingInstruction, writer: &mut W) -> IoResult<()>
+    where W: Writer
+{
     match pi.value() {
         None    => write!(writer, "<?{}?>", pi.target()),
         Some(v) => write!(writer, "<?{} {}?>", pi.target(), v),
     }
 }
 
-fn format_one<'d, W : Writer>(content: Content<'d>, todo: &mut Vec<Content<'d>>, writer: &mut W) -> IoResult<()> {
+fn format_one<'d, W>(content: Content<'d>, todo: &mut Vec<Content<'d>>, writer: &mut W)
+                     -> IoResult<()>
+    where W: Writer
+{
     match content {
         Element(e)               => format_element(e, todo, writer),
         ElementEnd(e)            => write!(writer, "</{}>", e.name()),
@@ -91,7 +101,9 @@ fn format_one<'d, W : Writer>(content: Content<'d>, todo: &mut Vec<Content<'d>>,
     }
 }
 
-fn format_body<W : Writer>(element: dom4::Element, writer: &mut W) -> IoResult<()> {
+fn format_body<W>(element: dom4::Element, writer: &mut W) -> IoResult<()>
+    where W: Writer
+{
     let mut todo = vec![Element(element)];
 
     while ! todo.is_empty() {
@@ -102,7 +114,9 @@ fn format_body<W : Writer>(element: dom4::Element, writer: &mut W) -> IoResult<(
 }
 
 /// Formats a document into a Writer
-pub fn format_document<'d, W : Writer>(doc: &'d dom4::Document<'d>, writer: &mut W) -> IoResult<()> {
+pub fn format_document<'d, W>(doc: &'d dom4::Document<'d>, writer: &mut W) -> IoResult<()>
+    where W: Writer
+{
     try!(writer.write_str("<?xml version='1.0'?>"));
 
     for child in doc.root().children().into_iter() {

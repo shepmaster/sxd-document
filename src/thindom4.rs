@@ -98,12 +98,16 @@ impl<'d> Connections<'d> {
         })
     }
 
-    pub fn append_root_child<C : ToChildOfRoot<'d>>(&mut self, child: C) {
+    pub fn append_root_child<C>(&mut self, child: C)
+        where C: ToChildOfRoot<'d>
+    {
         let child = child.to_child_of_root();
         self.connections.append_root_child(child.as_raw())
     }
 
-    pub fn append_element_child<C : ToChildOfElement<'d>>(&mut self, parent: Element<'d>, child: C) {
+    pub fn append_element_child<C>(&mut self, parent: Element<'d>, child: C)
+        where C: ToChildOfElement<'d>
+    {
         let child = child.to_child_of_element();
         self.connections.append_element_child(parent.node, child.as_raw())
     }

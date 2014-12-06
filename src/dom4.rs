@@ -122,7 +122,9 @@ macro_rules! node(
 node!(Root, raw::Root)
 
 impl<'d> Root<'d> {
-    pub fn append_child<C : ToChildOfRoot<'d>>(&self, child: C) {
+    pub fn append_child<C>(&self, child: C)
+        where C: ToChildOfRoot<'d>
+    {
         let child = child.to_child_of_root();
         let connections = self.document.connections.borrow_mut();
         connections.append_root_child(child.as_raw())
@@ -164,7 +166,9 @@ impl<'d> Element<'d> {
         })
     }
 
-    pub fn append_child<C : ToChildOfElement<'d>>(&self, child: C) {
+    pub fn append_child<C>(&self, child: C)
+        where C: ToChildOfElement<'d>
+    {
         let child = child.to_child_of_element();
         let connections = self.document.connections.borrow_mut();
         connections.append_element_child(self.node, child.as_raw())
