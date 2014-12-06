@@ -37,6 +37,46 @@ pub mod dom4;
 pub mod parser;
 pub mod writer;
 
+#[deriving(Show,PartialEq,Eq,PartialOrd)]
+pub struct QName<'s> {
+    namespace_uri: Option<&'s str>,
+    local_part: &'s str,
+}
+
+impl<'s> QName<'s> {
+    pub fn new(local_part: &'s str) -> QName<'s> {
+        QName::with_namespace_uri(None, local_part)
+    }
+
+    pub fn with_namespace_uri(namespace_uri: Option<&'s str>, local_part: &'s str) -> QName<'s> {
+        QName {
+            namespace_uri: namespace_uri,
+            local_part: local_part,
+        }
+    }
+
+    pub fn namespace_uri(&self) -> Option<&'s str> { self.namespace_uri }
+    pub fn local_part(&self) -> &'s str { self.local_part }
+}
+
+impl<'s> Ord for QName<'s> {
+    fn cmp(&self, other: &QName<'s>) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+pub trait ToQName<'s> {
+    fn to_qname(self) -> QName<'s>;
+}
+
+impl<'s> ToQName<'s> for QName<'s> {
+    fn to_qname(self) -> QName<'s> { self }
+}
+
+impl<'s> ToQName<'s> for &'s str {
+    fn to_qname(self) -> QName<'s> { QName { namespace_uri: None, local_part: self } }
+}
+
 pub struct Package {
     storage: raw::Storage,
     connections: raw::Connections,

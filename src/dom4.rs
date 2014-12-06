@@ -2,6 +2,7 @@ use self::ChildOfRoot::*;
 use self::ChildOfElement::*;
 use self::ParentOfChild::*;
 
+use super::{QName,ToQName};
 use super::raw;
 
 use std::fmt;
@@ -66,7 +67,9 @@ impl<'d> Document<'d> {
         self.wrap_root(self.connections.borrow().root())
     }
 
-    pub fn create_element(&'d self, name: &str) -> Element<'d> {
+    pub fn create_element<'n, N>(&'d self, name: N) -> Element<'d>
+        where N: ToQName<'n>
+    {
         self.wrap_element(self.storage.create_element(name))
     }
 
@@ -152,9 +155,11 @@ impl<'d> fmt::Show for Root<'d> {
 node!(Element, raw::Element)
 
 impl<'d> Element<'d> {
-    pub fn name(&self) -> &str { self.node().name() }
+    pub fn name(&self) -> QName<'d> { self.node().name() }
 
-    pub fn set_name(&self, name: &str) {
+    pub fn set_name<'n, N>(&self, name: N)
+        where N: ToQName<'n>
+    {
         self.document.storage.element_set_name(self.node, name)
     }
 
@@ -186,7 +191,9 @@ impl<'d> Element<'d> {
         }
     }
 
-    pub fn attribute(&self, name: &str) -> Option<Attribute<'d>> {
+    pub fn attribute<'n, N>(&self, name: N) -> Option<Attribute<'d>>
+        where N: ToQName<'n>
+    {
         let connections = self.document.connections.borrow();
         connections.attribute(self.node, name).map(|n| {
             self.document.wrap_attribute(n)
@@ -204,14 +211,18 @@ impl<'d> Element<'d> {
         }
     }
 
-    pub fn set_attribute_value(&self, name: &str, value: &str) -> Attribute<'d> {
+    pub fn set_attribute_value<'n, N>(&self, name: N, value: &str) -> Attribute<'d>
+        where N: ToQName<'n>
+    {
         let attr = self.document.storage.create_attribute(name, value);
         let connections = self.document.connections.borrow_mut();
         connections.set_attribute(self.node, attr);
         self.document.wrap_attribute(attr)
     }
 
-    pub fn attribute_value(&self, name: &str) -> Option<&'d str> {
+    pub fn attribute_value<'n, N>(&self, name: N) -> Option<&'d str>
+        where N: ToQName<'n>
+    {
         let connections = self.document.connections.borrow();
         connections.attribute(self.node, name).map(|a| {
             let a_r = unsafe { &*a };
@@ -229,7 +240,7 @@ impl<'d> fmt::Show for Element<'d> {
 node!(Attribute, raw::Attribute)
 
 impl<'d> Attribute<'d> {
-    pub fn name(&self)  -> &str { self.node().name() }
+    pub fn name(&self)  -> QName<'d> { self.node().name() }
     pub fn value(&self) -> &str { self.node().value() }
 
     pub fn parent(&self) -> Option<Element<'d>> {
@@ -432,10 +443,14 @@ impl<'d> ToChildOfElement<'d> for ChildOfRoot<'d> {
 
 #[cfg(test)]
 mod test {
-    use super::super::Package;
+    use super::super::{Package,ToQName};
     use super::ChildOfRoot::*;
     use super::ChildOfElement::*;
     use super::ParentOfChild::*;
+
+    macro_rules! assert_qname_eq(
+        ($l:expr, $r:expr) => (assert_eq!($l.to_qname(), $r.to_qname()));
+    )
 
     #[test]
     fn the_root_belongs_to_a_document() {
@@ -601,7 +616,7 @@ mod test {
 
         let alpha = doc.create_element("alpha");
         alpha.set_name("beta");
-        assert_eq!(alpha.name(), "beta");
+        assert_qname_eq!(alpha.name(), "beta");
     }
 
     #[test]
@@ -662,12 +677,12 @@ mod test {
         element.set_attribute_value("name2", "value2");
 
         let mut attrs = element.attributes();
-        attrs.sort_by(|a, b| a.name().cmp(b.name()));
+        attrs.sort_by(|a, b| a.name().cmp(&b.name()));
 
         assert_eq!(2, attrs.len());
-        assert_eq!("name1",  attrs[0].name());
+        assert_qname_eq!("name1",  attrs[0].name());
         assert_eq!("value1", attrs[0].value());
-        assert_eq!("name2",  attrs[1].name());
+        assert_qname_eq!("name2",  attrs[1].name());
         assert_eq!("value2", attrs[1].value());
     }
 
@@ -840,7 +855,7 @@ mod test {
         let package = populate();
         let doc = package.as_document();
         let element = doc.root().children()[0].element().unwrap();
-        assert_eq!(element.name(), "hello");
+        assert_qname_eq!(element.name(), "hello");
     }
 
     // #[test]

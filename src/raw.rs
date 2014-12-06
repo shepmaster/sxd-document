@@ -1,3 +1,5 @@
+use super::{QName,ToQName};
+
 use self::ParentOfChild::*;
 use self::ChildOfRoot::*;
 use self::ChildOfElement::*;
@@ -5,29 +7,45 @@ use self::ChildOfElement::*;
 use arena::TypedArena;
 use string_pool::{StringPool,InternedString};
 
+struct InternedQName {
+    namespace_uri: Option<InternedString>,
+    local_part: InternedString,
+}
+
+impl InternedQName {
+    fn as_qname(&self) -> QName {
+        QName {
+            namespace_uri: self.namespace_uri.map(|n| n.as_slice()),
+            local_part: self.local_part.as_slice(),
+        }
+    }
+}
+
 pub struct Root {
     children: Vec<ChildOfRoot>,
 }
 
 pub struct Element {
-    name: InternedString,
+    name: InternedQName,
+    preferred_prefix: Option<InternedString>,
     children: Vec<ChildOfElement>,
     parent: Option<ParentOfChild>,
     attributes: Vec<*mut Attribute>,
 }
 
 impl Element {
-    pub fn name(&self) -> &str { self.name.as_slice() }
+    pub fn name(&self) -> QName { self.name.as_qname() }
 }
 
 pub struct Attribute {
-    name: InternedString,
+    name: InternedQName,
+    preferred_prefix: Option<InternedString>,
     value: InternedString,
     parent: Option<*mut Element>,
 }
 
 impl Attribute {
-    pub fn name(&self)  -> &str { self.name.as_slice() }
+    pub fn name(&self)  -> QName { self.name.as_qname() }
     pub fn value(&self) -> &str { self.value.as_slice() }
 }
 
@@ -227,29 +245,44 @@ impl Storage {
         InternedString::from_str(interned)
     }
 
+    fn intern_qname(&self, q: QName) -> InternedQName {
+        InternedQName {
+            namespace_uri: q.namespace_uri.map(|p| self.intern(p)),
+            local_part: self.intern(q.local_part),
+        }
+    }
+
     pub fn create_root(&self) -> *mut Root {
         self.roots.alloc(Root {
             children: Vec::new(),
         })
     }
 
-    pub fn create_element(&self, name: &str) -> *mut Element {
-        let name = self.intern(name);
+    pub fn create_element<'n, N>(&self, name: N) -> *mut Element
+        where N: ToQName<'n>
+    {
+        let name = name.to_qname();
+        let name = self.intern_qname(name);
 
         self.elements.alloc(Element {
             name: name,
+            preferred_prefix: None,
             children: Vec::new(),
             parent: None,
             attributes: Vec::new(),
         })
     }
 
-    pub fn create_attribute(&self, name: &str, value: &str) -> *mut Attribute {
-        let name = self.intern(name);
+    pub fn create_attribute<'n, N>(&self, name: N, value: &str) -> *mut Attribute
+        where N: ToQName<'n>
+    {
+        let name = name.to_qname();
+        let name = self.intern_qname(name);
         let value = self.intern(value);
 
         self.attributes.alloc(Attribute {
             name: name,
+            preferred_prefix: None,
             value: value,
             parent: None,
         })
@@ -285,8 +318,11 @@ impl Storage {
         })
     }
 
-    pub fn element_set_name(&self, element: *mut Element, name: &str) {
-        let name = self.intern(name);
+    pub fn element_set_name<'n, N>(&self, element: *mut Element, name: N)
+        where N: ToQName<'n>
+    {
+        let name = name.to_qname();
+        let name = self.intern_qname(name);
         let element_r = unsafe { &mut * element };
         element_r.name = name;
     }
@@ -391,11 +427,14 @@ impl Connections {
         parent_r.attributes.as_slice()
     }
 
-    pub fn attribute(&self, element: *mut Element, name: &str) -> Option<*mut Attribute> {
+    pub fn attribute<'n, N>(&self, element: *mut Element, name: N) -> Option<*mut Attribute>
+        where N: ToQName<'n>
+    {
+        let name = name.to_qname();
         let element_r = unsafe { &*element };
         element_r.attributes.iter().find(|a| {
             let a_r: &Attribute = unsafe { &***a };
-            a_r.name.as_slice() == name
+            a_r.name.as_qname() == name
         }).map(|a| *a)
     }
 
@@ -405,7 +444,7 @@ impl Connections {
 
         parent_r.attributes.retain(|a| {
             let a_r: &Attribute = unsafe { &**a };
-            a_r.name != attr_r.name
+            a_r.name.as_qname() != attr_r.name.as_qname()
         });
         parent_r.attributes.push(attribute);
         attr_r.parent = Some(parent);

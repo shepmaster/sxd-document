@@ -53,12 +53,23 @@ use self::Reference::*;
 use self::ParseResult::*;
 use self::xmlstr::XmlStr;
 
+use super::QName;
 use super::dom4;
 
 mod xmlstr;
 
 #[allow(missing_copy_implementations)]
 pub struct Parser;
+
+// TODO: It is proper to compare simply on the prefix?
+// Should this work:
+// <a xmlns:x1="x" xmlns:x2="x"> <x1:b></x2:b> </a>
+// xmllint reports it as an error...
+#[deriving(PartialEq,Copy,Show)]
+struct PrefixedName<'a> {
+    prefix: Option<&'a str>,
+    local_part: &'a str,
+}
 
 #[deriving(Show,Copy)]
 enum AttributeValue<'a> {
@@ -242,6 +253,10 @@ impl<'a> StartPoint<'a> {
         self.consume_to(self.s.end_of_name())
     }
 
+    fn consume_ncname(&self) -> ParseResult<'a, &'a str> {
+        self.consume_to(self.s.end_of_ncname())
+    }
+
     fn consume_version_num(&self) -> ParseResult<'a, &'a str> {
         self.consume_to(self.s.end_of_version_num())
     }
@@ -289,6 +304,23 @@ enum ParseResult<'a, T> {
 impl Parser {
     pub fn new() -> Parser {
         Parser
+    }
+
+    fn parse_prefixed_name<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, PrefixedName<'a>> {
+        fn parse_local<'a>(xml: StartPoint<'a>) -> ParseResult<'a, &'a str> {
+            let (_, xml) = try_parse!(xml.consume_literal(":"));
+            xml.consume_ncname()
+        }
+
+        let (prefix, xml) = try_parse!(xml.consume_ncname());
+        let (local, xml)  = parse_optional!(parse_local(xml), xml);
+
+        let name = match local {
+            Some(local) => PrefixedName { prefix: Some(prefix), local_part: local },
+            None        => PrefixedName { prefix: None, local_part: prefix },
+        };
+
+        Success((name, xml))
     }
 
     fn parse_eq<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, ()> {
@@ -385,7 +417,7 @@ impl Parser {
     {
         let (_, xml) = try_parse!(xml.consume_space());
 
-        let (name, xml) = try_parse!(xml.consume_name());
+        let (name, xml) = try_parse!(self.parse_prefixed_name(xml));
 
         sink.attribute_start(name);
 
@@ -407,9 +439,9 @@ impl Parser {
         parse_zero_or_more!(xml, |xml| self.parse_attribute(xml, sink))
     }
 
-    fn parse_element_end<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, &'a str> {
+    fn parse_element_end<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, PrefixedName<'a>> {
         let (_, xml) = try_parse!(xml.consume_literal("</"));
-        let (name, xml) = try_parse!(xml.consume_name());
+        let (name, xml) = try_parse!(self.parse_prefixed_name(xml));
         let (_, xml) = parse_optional!(xml.consume_space(), xml);
         let (_, xml) = try_parse!(xml.consume_literal(">"));
         Success((name, xml))
@@ -539,7 +571,7 @@ impl Parser {
         Success(((), xml))
     }
 
-    fn parse_non_empty_element_tail<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S, start_name: &str)
+    fn parse_non_empty_element_tail<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S, start_name: PrefixedName<'a>)
                                                -> ParseResult<'a, ()>
         where S: ParserSink<'a>
     {
@@ -560,7 +592,7 @@ impl Parser {
         where S: ParserSink<'a>
     {
         let (_, xml) = try_parse!(xml.consume_start_tag());
-        let (name, xml) = try_parse!(xml.consume_name());
+        let (name, xml) = try_parse!(self.parse_prefixed_name(xml));
 
         sink.element_start(name);
 
@@ -613,15 +645,15 @@ impl Parser {
 }
 
 trait ParserSink<'x> {
-    fn element_start(&mut self, name: &'x str);
-    fn element_end(&mut self, name: &'x str);
+    fn element_start(&mut self, name: PrefixedName<'x>);
+    fn element_end(&mut self, name: PrefixedName<'x>);
     fn comment(&mut self, text: &'x str);
     fn processing_instruction(&mut self, target: &'x str, value: Option<&'x str>);
     fn text(&mut self, text: &'x str);
     fn reference(&mut self, reference: Reference<'x>);
-    fn attribute_start(&mut self, name: &'x str);
+    fn attribute_start(&mut self, name: PrefixedName<'x>);
     fn attribute_value(&mut self, value: AttributeValue<'x>);
-    fn attribute_end(&mut self, name: &'x str);
+    fn attribute_end(&mut self, name: PrefixedName<'x>);
 }
 
 struct SaxHydrator<'d> {
@@ -686,13 +718,14 @@ impl<'d> SaxHydrator<'d> {
 }
 
 impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d> {
-    fn element_start(&mut self, name: &str) {
+    fn element_start(&mut self, name: PrefixedName) {
+        let name = QName { namespace_uri: None, local_part: name.local_part };
         let element = self.doc.create_element(name);
         self.append_to_either(element);
         self.stack.push(element);
     }
 
-    fn element_end(&mut self, _name: &str) {
+    fn element_end(&mut self, _name: PrefixedName) {
         self.stack.pop();
     }
 
@@ -716,7 +749,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d> {
         self.append_text(text);
     }
 
-    fn attribute_start(&mut self, _name: &str) {
+    fn attribute_start(&mut self, _name: PrefixedName) {
         self.attr_value.borrow_mut().clear();
     }
 
@@ -727,7 +760,8 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d> {
         }
     }
 
-    fn attribute_end(&mut self, name: &str) {
+    fn attribute_end(&mut self, name: PrefixedName) {
+        let name = QName { namespace_uri: None, local_part: name.local_part };
         self.current_element().set_attribute_value(name, self.attr_value.borrow().as_slice());
     }
 }
@@ -735,8 +769,12 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d> {
 #[cfg(test)]
 mod test {
     use super::Parser;
-    use super::super::Package;
+    use super::super::{Package,ToQName};
     use super::super::dom4;
+
+    macro_rules! assert_qname_eq(
+        ($l:expr, $r:expr) => (assert_eq!($l.to_qname(), $r.to_qname()));
+    )
 
     macro_rules! assert_str_eq(
         ($l:expr, $r:expr) => (assert_eq!($l.as_slice(), $r.as_slice()));
@@ -763,7 +801,7 @@ mod test {
         let doc = package.as_document();
         let top = top(&doc);
 
-        assert_str_eq!(top.name(), "hello");
+        assert_qname_eq!(top.name(), "hello");
     }
 
     #[test]
@@ -772,7 +810,7 @@ mod test {
         let doc = package.as_document();
         let top = top(&doc);
 
-        assert_str_eq!(top.name(), "hello");
+        assert_qname_eq!(top.name(), "hello");
     }
 
     #[test]
@@ -781,7 +819,7 @@ mod test {
         let doc = package.as_document();
         let top = top(&doc);
 
-        assert_str_eq!(top.name(), "hello");
+        assert_qname_eq!(top.name(), "hello");
     }
 
     #[test]
@@ -827,7 +865,7 @@ mod test {
         let doc = package.as_document();
         let top = top(&doc);
 
-        assert_str_eq!(top.name(), "hello");
+        assert_qname_eq!(top.name(), "hello");
     }
 
     #[test]
@@ -837,7 +875,7 @@ mod test {
         let hello = top(&doc);
         let world = hello.children()[0].element().unwrap();
 
-        assert_str_eq!(world.name(), "world");
+        assert_qname_eq!(world.name(), "world");
     }
 
     #[test]
@@ -848,7 +886,7 @@ mod test {
         let awesome = hello.children()[0].element().unwrap();
         let world = awesome.children()[0].element().unwrap();
 
-        assert_str_eq!(world.name(), "world");
+        assert_qname_eq!(world.name(), "world");
     }
 
     #[test]
@@ -1015,7 +1053,7 @@ mod test {
 
         assert_str_eq!(text.text(),    "to ");
         assert_str_eq!(comment.text(), "fixme");
-        assert_str_eq!(element.name(), "a");
+        assert_qname_eq!(element.name(), "a");
         assert_str_eq!(pi.target(),    "world");
     }
 

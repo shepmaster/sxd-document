@@ -2,6 +2,7 @@ use self::ParentOfChild::*;
 use self::ChildOfRoot::*;
 use self::ChildOfElement::*;
 
+use super::{QName,ToQName};
 use super::raw;
 
 use std::fmt;
@@ -18,11 +19,15 @@ impl<'d> Storage<'d> {
         }
     }
 
-    pub fn create_element(&'d self, name: &str) -> Element<'d> {
+    pub fn create_element<'n, N>(&'d self, name: N) -> Element<'d>
+        where N: ToQName<'n>
+    {
         Element::wrap(self.storage.create_element(name))
     }
 
-    pub fn create_attribute(&'d self, name: &str, value: &str) -> Attribute<'d> {
+    pub fn create_attribute<'n, N>(&'d self, name: N, value: &str) -> Attribute<'d>
+        where N: ToQName<'n>
+    {
         Attribute::wrap(self.storage.create_attribute(name, value))
     }
 
@@ -38,7 +43,9 @@ impl<'d> Storage<'d> {
         ProcessingInstruction::wrap(self.storage.create_processing_instruction(target, value))
     }
 
-    pub fn element_set_name(&self, element: &Element, name: &str) {
+    pub fn element_set_name<'n, N>(&self, element: &Element, name: N)
+        where N: ToQName<'n>
+    {
         self.storage.element_set_name(element.node, name)
     }
 
@@ -237,7 +244,7 @@ impl<'d> fmt::Show for Root<'d> {
 node!(Element, raw::Element)
 
 impl<'d> Element<'d> {
-    pub fn name(&self) -> &'d str { self.node().name() }
+    pub fn name(&self) -> QName<'d> { self.node().name() }
 }
 
 impl<'d> fmt::Show for Element<'d> {
@@ -249,7 +256,7 @@ impl<'d> fmt::Show for Element<'d> {
 node!(Attribute, raw::Attribute)
 
 impl<'d> Attribute<'d> {
-    pub fn name(&self)  -> &str { self.node().name() }
+    pub fn name(&self)  -> QName { self.node().name() }
     pub fn value(&self) -> &str { self.node().value() }
 }
 
@@ -437,12 +444,16 @@ impl<'d> ToChildOfElement<'d> for ChildOfRoot<'d> {
 
 #[cfg(test)]
 mod test {
-    use super::super::Package;
+    use super::super::{Package,ToQName};
     use super::{ChildOfRoot,ChildOfElement};
     use super::ChildOfRoot::*;
     use super::ChildOfElement::*;
     use super::ParentOfChild::*;
     use super::Attribute;
+
+    macro_rules! assert_qname_eq(
+        ($l:expr, $r:expr) => (assert_eq!($l.to_qname(), $r.to_qname()));
+    )
 
     #[test]
     fn root_can_have_element_children() {
@@ -583,7 +594,7 @@ mod test {
 
         let alpha = s.create_element("alpha");
         s.element_set_name(&alpha, "beta");
-        assert_eq!(alpha.name(), "beta");
+        assert_qname_eq!(alpha.name(), "beta");
     }
 
     #[test]
@@ -640,12 +651,12 @@ mod test {
         c.set_attribute(element, attr2);
 
         let mut attrs: Vec<Attribute> = c.attributes(element).collect();
-        attrs.sort_by(|a, b| a.name().cmp(b.name()));
+        attrs.sort_by(|a, b| a.name().cmp(&b.name()));
 
         assert_eq!(2, attrs.len());
-        assert_eq!("name1",  attrs[0].name());
+        assert_qname_eq!("name1",  attrs[0].name());
         assert_eq!("value1", attrs[0].value());
-        assert_eq!("name2",  attrs[1].name());
+        assert_qname_eq!("name2",  attrs[1].name());
         assert_eq!("value2", attrs[1].value());
     }
 
@@ -791,7 +802,7 @@ mod test {
         let (_, c) = package.as_thin_document();
         let children: Vec<_> = c.root_children().collect();
         let element = children[0].element().unwrap();
-        assert_eq!(element.name(), "hello");
+        assert_qname_eq!(element.name(), "hello");
     }
 
     // #[test]

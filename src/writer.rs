@@ -31,6 +31,8 @@ use std::io::IoResult;
 
 use self::Content::*;
 
+use super::QName;
+
 use super::dom4;
 use super::dom4::ChildOfElement::*;
 use super::dom4::ChildOfRoot::*;
@@ -43,14 +45,23 @@ enum Content<'d> {
     ProcessingInstruction(dom4::ProcessingInstruction<'d>),
 }
 
+fn format_qname<'d, W>(q: QName, writer: &mut W) -> IoResult<()>
+    where W: Writer
+{
+    writer.write_str(q.local_part)
+}
+
 fn format_element<'d, W>(element: dom4::Element<'d>, todo: &mut Vec<Content<'d>>, writer: &mut W)
                          -> IoResult<()>
     where W: Writer
 {
-    try!(write!(writer, "<{}", element.name()));
+    try!(writer.write_str("<"));
+    try!(format_qname(element.name(), writer));
 
     for attr in element.attributes().iter() {
-        try!(write!(writer, " {}='{}'", attr.name(), attr.value()));
+        try!(writer.write_str(" "));
+        try!(format_qname(attr.name(), writer));
+        try!(write!(writer, "='{}'", attr.value()));
     }
 
     let mut children = element.children();
@@ -71,6 +82,15 @@ fn format_element<'d, W>(element: dom4::Element<'d>, todo: &mut Vec<Content<'d>>
 
         Ok(())
     }
+}
+
+fn format_element_end<'d, W>(element: dom4::Element<'d>, writer: &mut W)
+                             -> IoResult<()>
+    where W: Writer
+{
+    try!(writer.write_str("</"));
+    try!(format_qname(element.name(), writer));
+    writer.write_str(">")
 }
 
 fn format_comment<W>(comment: dom4::Comment, writer: &mut W) -> IoResult<()>
@@ -94,7 +114,7 @@ fn format_one<'d, W>(content: Content<'d>, todo: &mut Vec<Content<'d>>, writer: 
 {
     match content {
         Element(e)               => format_element(e, todo, writer),
-        ElementEnd(e)            => write!(writer, "</{}>", e.name()),
+        ElementEnd(e)            => format_element_end(e, writer),
         Text(t)                  => writer.write_str(t.text().as_slice()),
         Comment(c)               => format_comment(c, writer),
         ProcessingInstruction(p) => format_processing_instruction(p, writer),
