@@ -195,3 +195,47 @@
 [82]    NotationDecl       ::= '<!NOTATION' S Name S (ExternalID | PublicID) S? '>'
 
 [83]    PublicID           ::= 'PUBLIC' S PubidLiteral
+
+# Extensions for namespaces
+
+[1]     NSAttName          ::= PrefixedAttName
+                             | DefaultAttName
+
+[2]     PrefixedAttName    ::= 'xmlns:' NCName
+
+[3]     DefaultAttName     ::= 'xmlns'
+
+[4]     NCName             ::= Name - (Char* ':' Char*)
+
+[7]     QName              ::= PrefixedName
+                             | UnprefixedName
+
+[8]     PrefixedName       ::= Prefix ':' LocalPart
+
+[9]     UnprefixedName     ::= LocalPart
+
+[10]    Prefix             ::= NCName
+
+[11]    LocalPart          ::= NCName
+
+[12]    STag               ::= '<' QName (S Attribute)* S? '>'
+
+[13]    ETag               ::= '</' QName S? '>'
+
+[14]    EmptyElemTag       ::= '<' QName (S Attribute)* S? '/>'
+
+[15]    Attribute          ::= NSAttName Eq AttValue
+                             | QName Eq AttValue
+
+[16]    doctypedecl        ::= '<!DOCTYPE' S QName (S ExternalID)? S? ('[' (markupdecl | PEReference | S)* ']' S?)? '>'
+
+[17]    elementdecl        ::= '<!ELEMENT' S QName S contentspec S? '>'
+
+[18]    cp                 ::= (QName | choice | seq) ('?' | '*' | '+')?
+
+[19]    Mixed              ::= '(' S? '#PCDATA' (S? '|' S? QName)* S? ')*'
+                             | '(' S? '#PCDATA' S? ')'
+
+[20]    AttlistDecl        ::= '<!ATTLIST' S QName AttDef* S? '>'
+
+[21]    AttDef             ::= S (QName | NSAttName) S AttType S DefaultDecl
