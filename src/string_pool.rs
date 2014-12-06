@@ -74,7 +74,7 @@ impl InternedString {
     pub fn as_slice<'s>(&self) -> &'s str {
         unsafe {
             let bytes: &[u8] = mem::transmute(self.slice);
-            str::raw::from_utf8(bytes)
+            str::from_utf8_unchecked(bytes)
         }
     }
 }
