@@ -28,7 +28,8 @@
 //! - Fixed ordering of attributes
 
 use std::collections::HashMap;
-use std::collections::hash_map::Entry::{Occupied,Vacant};
+use std::collections::hash_map;
+use std::collections::hash_map::Entry;
 use std::io::IoResult;
 
 use self::Content::*;
@@ -40,30 +41,56 @@ use super::dom4::ChildOfElement::*;
 use super::dom4::ChildOfRoot::*;
 
 struct PrefixMapping<'a> {
-    defined_prefixes: HashMap<&'a str, String>,
+    defined_prefixes: Vec<HashMap<&'a str, String>>,
     generated_prefix_count: uint,
 }
 
 impl<'a> PrefixMapping<'a> {
     fn new() -> PrefixMapping<'a> {
         PrefixMapping {
-            defined_prefixes: HashMap::new(),
+            defined_prefixes: vec![HashMap::new()],
             generated_prefix_count: 0,
         }
     }
 
-    fn prefix_for_uri(&mut self, namespace_uri: &'a str) -> &str {
-        let prefix = match self.defined_prefixes.entry(namespace_uri) {
-            Occupied(entry) => entry.into_mut(),
-            Vacant(entry) => {
-                let prefix = format!("autons{}", self.generated_prefix_count);
-                // TODO: Make sure doesn't already exist
-                self.generated_prefix_count += 1;
-                entry.set(prefix)
-            },
-        };
+    fn push_scope(&mut self) {
+        self.defined_prefixes.push(HashMap::new());
+    }
 
-        prefix.as_slice()
+    fn pop_scope(&mut self) {
+        self.defined_prefixes.pop();
+    }
+
+    fn prefixes_in_current_scope(&self) -> hash_map::Entries<&'a str, String> {
+        self.defined_prefixes.last().unwrap().iter()
+    }
+
+    fn recursive_lookup(&self, namespace_uri: &'a str) -> Option<&str> {
+        for scope in self.defined_prefixes.iter().rev() {
+            if let Some(prefix) = scope.get(namespace_uri) {
+                return Some(prefix.as_slice());
+            }
+        }
+
+        None
+    }
+
+    fn prefix_for_uri(&mut self, namespace_uri: &'a str) -> &str {
+        if let None = self.recursive_lookup(namespace_uri) {
+            let current_scope = self.defined_prefixes.last_mut().unwrap();
+
+            let prefix = format!("autons{}", self.generated_prefix_count);
+            self.generated_prefix_count += 1;
+
+            match current_scope.entry(namespace_uri) {
+                Entry::Occupied(_) => panic!("Duplicate prefix"),
+                Entry::Vacant(entry) => entry.set(prefix),
+            };
+        }
+
+        // This is inefficient, but the current borrow checker doesn't
+        // understand early returns well enough.
+        self.recursive_lookup(namespace_uri).unwrap().as_slice()
     }
 }
 
@@ -102,7 +129,7 @@ fn format_element<'d, W>(element: dom4::Element<'d>,
         try!(write!(writer, "='{}'", attr.value()));
     }
 
-    for (ns_uri, prefix) in mapping.defined_prefixes.iter() {
+    for (ns_uri, prefix) in mapping.prefixes_in_current_scope() {
         try!(writer.write_str(" xmlns:"));
         try!(writer.write_str(prefix.as_slice()));
         try!(write!(writer, "='{}'", *ns_uri));
@@ -162,8 +189,15 @@ fn format_one<'d, W>(content: Content<'d>,
     where W: Writer
 {
     match content {
-        Element(e)               => format_element(e, todo, mapping, writer),
-        ElementEnd(e)            => format_element_end(e, mapping, writer),
+        Element(e)               => {
+            mapping.push_scope();
+            format_element(e, todo, mapping, writer)
+        },
+        ElementEnd(e)            => {
+            let r = format_element_end(e, mapping, writer);
+            mapping.pop_scope();
+            r
+        },
         Text(t)                  => writer.write_str(t.text().as_slice()),
         Comment(c)               => format_comment(c, writer),
         ProcessingInstruction(p) => format_processing_instruction(p, writer),
@@ -277,6 +311,36 @@ mod test {
 
         let xml = format_xml(&d);
         assert_str_eq!(xml, "<?xml version='1.0'?><hello><world/></hello>");
+    }
+
+    #[test]
+    fn nested_element_with_namespaces() {
+        let p = Package::new();
+        let d = p.as_document();
+        let outer_name = QName::with_namespace_uri(Some("outer"), "hello");
+        let inner_name = QName::with_namespace_uri(Some("inner"), "world");
+        let hello = d.create_element(outer_name);
+        let world = d.create_element(inner_name);
+        hello.append_child(world);
+        d.root().append_child(hello);
+
+        let xml = format_xml(&d);
+        assert_str_eq!(xml, "<?xml version='1.0'?><autons0:hello xmlns:autons0='outer'><autons1:world xmlns:autons1='inner'/></autons0:hello>");
+    }
+
+    #[test]
+    fn nested_element_with_namespaces_with_reused_namespaces() {
+        let p = Package::new();
+        let d = p.as_document();
+        let outer_name = QName::with_namespace_uri(Some("ns"), "hello");
+        let inner_name = QName::with_namespace_uri(Some("ns"), "world");
+        let hello = d.create_element(outer_name);
+        let world = d.create_element(inner_name);
+        hello.append_child(world);
+        d.root().append_child(hello);
+
+        let xml = format_xml(&d);
+        assert_str_eq!(xml, "<?xml version='1.0'?><autons0:hello xmlns:autons0='ns'><autons0:world/></autons0:hello>");
     }
 
     #[test]
