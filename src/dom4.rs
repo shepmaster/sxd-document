@@ -106,7 +106,7 @@ macro_rules! node(
 
         impl<'d> $name<'d> {
             #[allow(dead_code)]
-            fn node(&self) -> &$raw { unsafe { &*self.node } }
+            fn node(&self) -> &'d $raw { unsafe { &*self.node } }
 
             pub fn document(&self) -> &'d Document<'d> { self.document }
         }
