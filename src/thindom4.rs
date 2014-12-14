@@ -199,6 +199,8 @@ impl<'d> Iterator<Attribute<'d>> for Attributes<'d> {
 
 macro_rules! node(
     ($name:ident, $raw:ty) => (
+        #[allow(raw_pointer_deriving)]
+        #[deriving(Copy)]
         pub struct $name<'d> {
             lifetime: InvariantLifetime<'d>,
             node: *mut $raw,
@@ -307,7 +309,7 @@ macro_rules! unpack(
     )
 )
 
-#[deriving(PartialEq,Show)]
+#[deriving(PartialEq,Show,Copy)]
 pub enum ChildOfRoot<'d> {
     ElementCOR(Element<'d>),
     CommentCOR(Comment<'d>),
@@ -336,7 +338,7 @@ impl<'d> ChildOfRoot<'d> {
     }
 }
 
-#[deriving(PartialEq,Show)]
+#[deriving(PartialEq,Show,Copy)]
 pub enum ChildOfElement<'d> {
     ElementCOE(Element<'d>),
     TextCOE(Text<'d>),
@@ -369,7 +371,7 @@ impl<'d> ChildOfElement<'d> {
     }
 }
 
-#[deriving(PartialEq,Show)]
+#[deriving(PartialEq,Show,Copy)]
 pub enum ParentOfChild<'d> {
     RootPOC(Root<'d>),
     ElementPOC(Element<'d>),

@@ -57,21 +57,23 @@ use super::dom4;
 
 mod xmlstr;
 
+#[allow(missing_copy_implementations)]
 pub struct Parser;
 
-#[deriving(Show)]
+#[deriving(Show,Copy)]
 enum AttributeValue<'a> {
     ReferenceAttributeValue(Reference<'a>),
     LiteralAttributeValue(&'a str),
 }
 
-#[deriving(Show)]
+#[deriving(Show,Copy)]
 enum Reference<'a> {
     EntityReference(&'a str),
     DecimalCharReference(&'a str),
     HexCharReference(&'a str),
 }
 
+#[deriving(Copy)]
 struct BestFailure<'a> {
     failure: Option<ParseFailure<'a>>
 }
@@ -205,7 +207,7 @@ macro_rules! parse_zero_or_more(
     }};
 )
 
-#[deriving(Show,Clone,PartialEq)]
+#[deriving(Show,Clone,PartialEq,Copy)]
 struct StartPoint<'a> {
     offset: uint,
     s: &'a str,
@@ -273,6 +275,7 @@ impl<'a> StartPoint<'a> {
     }
 }
 
+#[deriving(Copy)]
 struct ParseFailure<'a> {
     point: StartPoint<'a>,
 }

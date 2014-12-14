@@ -49,6 +49,7 @@ impl Drop for Chunk {
     }
 }
 
+#[deriving(Copy)]
 pub struct InternedString {
     slice: Slice<u8>,
 }
