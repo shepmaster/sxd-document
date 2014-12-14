@@ -27,6 +27,8 @@
 //! - Single vs double quotes
 //! - Fixed ordering of attributes
 
+use std::collections::HashMap;
+use std::collections::hash_map::Entry::{Occupied,Vacant};
 use std::io::IoResult;
 
 use self::Content::*;
@@ -37,6 +39,34 @@ use super::dom4;
 use super::dom4::ChildOfElement::*;
 use super::dom4::ChildOfRoot::*;
 
+struct PrefixMapping<'a> {
+    defined_prefixes: HashMap<&'a str, String>,
+    generated_prefix_count: uint,
+}
+
+impl<'a> PrefixMapping<'a> {
+    fn new() -> PrefixMapping<'a> {
+        PrefixMapping {
+            defined_prefixes: HashMap::new(),
+            generated_prefix_count: 0,
+        }
+    }
+
+    fn prefix_for_uri(&mut self, namespace_uri: &'a str) -> &str {
+        let prefix = match self.defined_prefixes.entry(namespace_uri) {
+            Occupied(entry) => entry.into_mut(),
+            Vacant(entry) => {
+                let prefix = format!("autons{}", self.generated_prefix_count);
+                // TODO: Make sure doesn't already exist
+                self.generated_prefix_count += 1;
+                entry.set(prefix)
+            },
+        };
+
+        prefix.as_slice()
+    }
+}
+
 enum Content<'d> {
     Element(dom4::Element<'d>),
     ElementEnd(dom4::Element<'d>),
@@ -45,23 +75,37 @@ enum Content<'d> {
     ProcessingInstruction(dom4::ProcessingInstruction<'d>),
 }
 
-fn format_qname<'d, W>(q: QName, writer: &mut W) -> IoResult<()>
+fn format_qname<'d, W>(q: QName<'d>, mapping: &mut PrefixMapping<'d>, writer: &mut W) -> IoResult<()>
     where W: Writer
 {
+    if let Some(namespace_uri) = q.namespace_uri {
+        let prefix = mapping.prefix_for_uri(namespace_uri);
+        try!(writer.write_str(prefix));
+        try!(writer.write_str(":"));
+    }
     writer.write_str(q.local_part)
 }
 
-fn format_element<'d, W>(element: dom4::Element<'d>, todo: &mut Vec<Content<'d>>, writer: &mut W)
+fn format_element<'d, W>(element: dom4::Element<'d>,
+                         todo: &mut Vec<Content<'d>>,
+                         mapping: &mut PrefixMapping<'d>,
+                         writer: &mut W)
                          -> IoResult<()>
     where W: Writer
 {
     try!(writer.write_str("<"));
-    try!(format_qname(element.name(), writer));
+    try!(format_qname(element.name(), mapping, writer));
 
     for attr in element.attributes().iter() {
         try!(writer.write_str(" "));
-        try!(format_qname(attr.name(), writer));
+        try!(format_qname(attr.name(), mapping, writer));
         try!(write!(writer, "='{}'", attr.value()));
+    }
+
+    for (ns_uri, prefix) in mapping.defined_prefixes.iter() {
+        try!(writer.write_str(" xmlns:"));
+        try!(writer.write_str(prefix.as_slice()));
+        try!(write!(writer, "='{}'", *ns_uri));
     }
 
     let mut children = element.children();
@@ -84,12 +128,14 @@ fn format_element<'d, W>(element: dom4::Element<'d>, todo: &mut Vec<Content<'d>>
     }
 }
 
-fn format_element_end<'d, W>(element: dom4::Element<'d>, writer: &mut W)
+fn format_element_end<'d, W>(element: dom4::Element<'d>,
+                             mapping: &mut PrefixMapping<'d>,
+                             writer: &mut W)
                              -> IoResult<()>
     where W: Writer
 {
     try!(writer.write_str("</"));
-    try!(format_qname(element.name(), writer));
+    try!(format_qname(element.name(), mapping, writer));
     writer.write_str(">")
 }
 
@@ -108,13 +154,16 @@ fn format_processing_instruction<W>(pi: dom4::ProcessingInstruction, writer: &mu
     }
 }
 
-fn format_one<'d, W>(content: Content<'d>, todo: &mut Vec<Content<'d>>, writer: &mut W)
+fn format_one<'d, W>(content: Content<'d>,
+                     todo: &mut Vec<Content<'d>>,
+                     mapping: &mut PrefixMapping<'d>,
+                     writer: &mut W)
                      -> IoResult<()>
     where W: Writer
 {
     match content {
-        Element(e)               => format_element(e, todo, writer),
-        ElementEnd(e)            => format_element_end(e, writer),
+        Element(e)               => format_element(e, todo, mapping, writer),
+        ElementEnd(e)            => format_element_end(e, mapping, writer),
         Text(t)                  => writer.write_str(t.text().as_slice()),
         Comment(c)               => format_comment(c, writer),
         ProcessingInstruction(p) => format_processing_instruction(p, writer),
@@ -125,9 +174,10 @@ fn format_body<W>(element: dom4::Element, writer: &mut W) -> IoResult<()>
     where W: Writer
 {
     let mut todo = vec![Element(element)];
+    let mut mapping = PrefixMapping::new();
 
     while ! todo.is_empty() {
-        try!(format_one(todo.pop().unwrap(), &mut todo, writer));
+        try!(format_one(todo.pop().unwrap(), &mut todo, &mut mapping, writer));
     }
 
     Ok(())
@@ -154,7 +204,7 @@ pub fn format_document<'d, W>(doc: &'d dom4::Document<'d>, writer: &mut W) -> Io
 mod test {
     use std::io::MemWriter;
 
-    use super::super::Package;
+    use super::super::{Package,QName};
     use super::super::dom4;
     use super::format_document;
 
@@ -180,6 +230,18 @@ mod test {
     }
 
     #[test]
+    fn element_with_namespace() {
+        let p = Package::new();
+        let d = p.as_document();
+        let name = QName::with_namespace_uri(Some("namespace"), "local-part");
+        let e = d.create_element(name);
+        d.root().append_child(e);
+
+        let xml = format_xml(&d);
+        assert_str_eq!(xml, "<?xml version='1.0'?><autons0:local-part xmlns:autons0='namespace'/>");
+    }
+
+    #[test]
     fn element_with_attributes() {
         let p = Package::new();
         let d = p.as_document();
@@ -189,6 +251,19 @@ mod test {
 
         let xml = format_xml(&d);
         assert_str_eq!(xml, "<?xml version='1.0'?><hello a='b'/>");
+    }
+
+    #[test]
+    fn attribute_with_namespace() {
+        let p = Package::new();
+        let d = p.as_document();
+        let e = d.create_element("hello");
+        let name = QName::with_namespace_uri(Some("namespace"), "a");
+        e.set_attribute_value(name, "b");
+        d.root().append_child(e);
+
+        let xml = format_xml(&d);
+        assert_str_eq!(xml, "<?xml version='1.0'?><hello autons0:a='b' xmlns:autons0='namespace'/>");
     }
 
     #[test]
