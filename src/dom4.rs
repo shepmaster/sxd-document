@@ -163,6 +163,14 @@ impl<'d> Element<'d> {
         self.document.storage.element_set_name(self.node, name)
     }
 
+    pub fn preferred_prefix(&self) -> Option<&str> {
+        self.node().preferred_prefix()
+    }
+
+    pub fn set_preferred_prefix(&self, prefix: Option<&str>) {
+        self.document.storage.element_set_preferred_prefix(self.node, prefix);
+    }
+
     pub fn parent(&self) -> Option<ParentOfChild<'d>> {
         let connections = self.document.connections.borrow();
 
@@ -242,6 +250,14 @@ node!(Attribute, raw::Attribute)
 impl<'d> Attribute<'d> {
     pub fn name(&self)  -> QName<'d> { self.node().name() }
     pub fn value(&self) -> &str { self.node().value() }
+
+    pub fn preferred_prefix(&self) -> Option<&str> {
+        self.node().preferred_prefix()
+    }
+
+    pub fn set_preferred_prefix(&self, prefix: Option<&str>) {
+        self.document.storage.attribute_set_preferred_prefix(self.node, prefix);
+    }
 
     pub fn parent(&self) -> Option<Element<'d>> {
         let connections = self.document.connections.borrow();

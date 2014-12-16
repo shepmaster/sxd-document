@@ -27,9 +27,9 @@
 //! - Single vs double quotes
 //! - Fixed ordering of attributes
 
+use std::num::Int;
 use std::collections::HashMap;
-use std::collections::hash_map;
-use std::collections::hash_map::Entry;
+use std::slice;
 use std::io::IoResult;
 
 use self::Content::*;
@@ -40,57 +40,173 @@ use super::dom4;
 use super::dom4::ChildOfElement::*;
 use super::dom4::ChildOfRoot::*;
 
-struct PrefixMapping<'a> {
-    defined_prefixes: Vec<HashMap<&'a str, String>>,
+// TODO: Duplicating the String seems inefficient...
+struct PrefixScope<'d> {
+    ns_to_prefix: HashMap<&'d str, String>,
+    prefix_to_ns: HashMap<String, &'d str>,
+    defined_prefixes: Vec<(String, &'d str)>,
+}
+
+impl<'d> PrefixScope<'d> {
+    fn new() -> PrefixScope<'d> {
+        PrefixScope {
+            ns_to_prefix: HashMap::new(),
+            prefix_to_ns: HashMap::new(),
+            defined_prefixes: Vec::new(),
+        }
+    }
+
+    fn has_prefix(&self, prefix: &str) -> bool {
+        self.prefix_to_ns.contains_key(prefix)
+    }
+
+    fn has_namespace_uri(&self, namespace_uri: &str) -> bool {
+        self.ns_to_prefix.contains_key(namespace_uri)
+    }
+
+    fn prefix_is(&self, prefix: &str, namespace_uri: &str) -> bool {
+        match self.prefix_to_ns.get(prefix) {
+            Some(ns) => *ns == namespace_uri,
+            _ => false,
+        }
+    }
+
+    fn prefix_for(&self, namespace_uri: &str) -> Option<&str> {
+        self.ns_to_prefix.get(namespace_uri).map(|p| p.as_slice())
+    }
+
+    fn add_mapping(&mut self, prefix: &str, namespace_uri: &'d str) {
+        let prefix = String::from_str(prefix);
+
+        self.prefix_to_ns.insert(prefix.clone(), namespace_uri);
+        self.ns_to_prefix.insert(namespace_uri, prefix);
+    }
+
+    fn define_prefix(&mut self, prefix: String, namespace_uri: &'d str) {
+        self.defined_prefixes.push((prefix, namespace_uri));
+    }
+}
+
+struct PrefixMapping<'d> {
+    scopes: Vec<PrefixScope<'d>>,
     generated_prefix_count: uint,
 }
 
-impl<'a> PrefixMapping<'a> {
-    fn new() -> PrefixMapping<'a> {
+impl<'d> PrefixMapping<'d> {
+    fn new() -> PrefixMapping<'d> {
         PrefixMapping {
-            defined_prefixes: vec![HashMap::new()],
+            scopes: vec![PrefixScope::new()],
             generated_prefix_count: 0,
         }
     }
 
     fn push_scope(&mut self) {
-        self.defined_prefixes.push(HashMap::new());
+        self.scopes.push(PrefixScope::new());
     }
 
     fn pop_scope(&mut self) {
-        self.defined_prefixes.pop();
+        self.scopes.pop();
     }
 
-    fn prefixes_in_current_scope(&self) -> hash_map::Entries<&'a str, String> {
-        self.defined_prefixes.last().unwrap().iter()
+    fn prefixes_in_current_scope(&self) -> slice::Items<(String, &'d str)> {
+        self.scopes.last().unwrap().defined_prefixes.iter()
     }
 
-    fn recursive_lookup(&self, namespace_uri: &'a str) -> Option<&str> {
-        for scope in self.defined_prefixes.iter().rev() {
-            if let Some(prefix) = scope.get(namespace_uri) {
-                return Some(prefix.as_slice());
+    fn populate_scope(&mut self, element: &dom4::Element<'d>, attributes: &[dom4::Attribute<'d>]) {
+        if let Some(prefix) = element.preferred_prefix() {
+            let name = element.name();
+            if let Some(uri) = name.namespace_uri {
+                self.set_prefix(prefix, uri);
             }
         }
 
-        None
+        for attribute in attributes.iter() {
+            if let Some(prefix) = attribute.preferred_prefix() {
+                let name = attribute.name();
+                if let Some(uri) = name.namespace_uri {
+                    self.set_prefix(prefix, uri);
+                }
+            }
+        }
+
+        let name = element.name();
+        if let Some(uri) = name.namespace_uri {
+            self.generate_prefix(uri);
+        }
+
+        for attribute in attributes.iter() {
+            let name = attribute.name();
+            if let Some(uri) = name.namespace_uri {
+                self.generate_prefix(uri);
+            }
+        }
     }
 
-    fn prefix_for_uri(&mut self, namespace_uri: &'a str) -> &str {
-        if let None = self.recursive_lookup(namespace_uri) {
-            let current_scope = self.defined_prefixes.last_mut().unwrap();
+    fn set_prefix(&mut self, prefix: &str, namespace_uri: &'d str) {
+        let idx_of_last = self.scopes.len().saturating_sub(1);
+        let (parents, current_scope) = self.scopes.split_at_mut(idx_of_last);
+        let current_scope = &mut current_scope[0];
 
+        // If we're already using this prefix, we can't redefine it.
+        if current_scope.has_prefix(prefix) {
+            return;
+        }
+
+        // We are definitely going to use this prefix, claim it
+        current_scope.add_mapping(prefix, namespace_uri);
+
+        for parent_scope in parents.iter().rev() {
+            if parent_scope.prefix_is(prefix, namespace_uri) {
+                // A parent defines it as the URI we want.
+                // Prevent redefining it
+                return;
+            }
+        }
+
+        // Defined by us, must be added to the element
+        current_scope.define_prefix(String::from_str(prefix), namespace_uri);
+    }
+
+    fn generate_prefix(&mut self, namespace_uri: &'d str) {
+        let idx_of_last = self.scopes.len().saturating_sub(1);
+        let (parents, current_scope) = self.scopes.split_at_mut(idx_of_last);
+        let current_scope = &mut current_scope[0];
+
+        if current_scope.has_namespace_uri(namespace_uri) {
+            // We already map this namespace to *some* prefix
+            return;
+        }
+
+        // Check if the parent already defined a prefix for this ns
+        for parent_scope in parents.iter().rev() {
+            if let Some(prefix) = parent_scope.prefix_for(namespace_uri) {
+                // A parent happens to have a prefix for this URI.
+                // Prevent redefining it
+                current_scope.add_mapping(prefix.as_slice(), namespace_uri);
+                return;
+            }
+        }
+
+        loop {
             let prefix = format!("autons{}", self.generated_prefix_count);
             self.generated_prefix_count += 1;
 
-            match current_scope.entry(namespace_uri) {
-                Entry::Occupied(_) => panic!("Duplicate prefix"),
-                Entry::Vacant(entry) => entry.set(prefix),
-            };
+            if ! current_scope.has_prefix(prefix.as_slice()) {
+                current_scope.add_mapping(prefix.as_slice(), namespace_uri);
+                current_scope.define_prefix(prefix, namespace_uri);
+                break;
+            }
+        }
+    }
+
+    fn prefix(&self, namespace_uri: &str) -> &str {
+        for scope in self.scopes.iter().rev() {
+            if let Some(prefix) = scope.prefix_for(namespace_uri) {
+                return prefix;
+            }
         }
 
-        // This is inefficient, but the current borrow checker doesn't
-        // understand early returns well enough.
-        self.recursive_lookup(namespace_uri).unwrap().as_slice()
+        panic!("No namespace prefix available for {}", namespace_uri);
     }
 }
 
@@ -106,7 +222,7 @@ fn format_qname<'d, W>(q: QName<'d>, mapping: &mut PrefixMapping<'d>, writer: &m
     where W: Writer
 {
     if let Some(namespace_uri) = q.namespace_uri {
-        let prefix = mapping.prefix_for_uri(namespace_uri);
+        let prefix = mapping.prefix(namespace_uri);
         try!(writer.write_str(prefix));
         try!(writer.write_str(":"));
     }
@@ -120,19 +236,23 @@ fn format_element<'d, W>(element: dom4::Element<'d>,
                          -> IoResult<()>
     where W: Writer
 {
+    let attrs = element.attributes();
+
+    mapping.populate_scope(&element, attrs.as_slice());
+
     try!(writer.write_str("<"));
     try!(format_qname(element.name(), mapping, writer));
 
-    for attr in element.attributes().iter() {
+    for attr in attrs.iter() {
         try!(writer.write_str(" "));
         try!(format_qname(attr.name(), mapping, writer));
         try!(write!(writer, "='{}'", attr.value()));
     }
 
-    for (ns_uri, prefix) in mapping.prefixes_in_current_scope() {
+    for &(ref prefix, ref ns_uri) in mapping.prefixes_in_current_scope() {
         try!(writer.write_str(" xmlns:"));
         try!(writer.write_str(prefix.as_slice()));
-        try!(write!(writer, "='{}'", *ns_uri));
+        try!(write!(writer, "='{}'", ns_uri));
     }
 
     let mut children = element.children();
@@ -276,6 +396,19 @@ mod test {
     }
 
     #[test]
+    fn element_with_preferred_namespace_prefix() {
+        let p = Package::new();
+        let d = p.as_document();
+        let name = QName::with_namespace_uri(Some("namespace"), "local-part");
+        let e = d.create_element(name);
+        e.set_preferred_prefix(Some("prefix"));
+        d.root().append_child(e);
+
+        let xml = format_xml(&d);
+        assert_str_eq!(xml, "<?xml version='1.0'?><prefix:local-part xmlns:prefix='namespace'/>");
+    }
+
+    #[test]
     fn element_with_attributes() {
         let p = Package::new();
         let d = p.as_document();
@@ -298,6 +431,40 @@ mod test {
 
         let xml = format_xml(&d);
         assert_str_eq!(xml, "<?xml version='1.0'?><hello autons0:a='b' xmlns:autons0='namespace'/>");
+    }
+
+    #[test]
+    fn attribute_with_preferred_namespace_prefix() {
+        let p = Package::new();
+        let d = p.as_document();
+        let e = d.create_element("hello");
+        let name = QName::with_namespace_uri(Some("namespace"), "a");
+        let a = e.set_attribute_value(name, "b");
+        a.set_preferred_prefix(Some("p"));
+        d.root().append_child(e);
+
+        let xml = format_xml(&d);
+        assert_str_eq!(xml, "<?xml version='1.0'?><hello p:a='b' xmlns:p='namespace'/>");
+    }
+
+    #[test]
+    fn attributes_with_conflicting_preferred_namespace_prefixes() {
+        let p = Package::new();
+        let d = p.as_document();
+        let e = d.create_element("hello");
+
+        let name = QName::with_namespace_uri(Some("namespace1"), "a1");
+        let a = e.set_attribute_value(name, "b1");
+        a.set_preferred_prefix(Some("p"));
+
+        let name = QName::with_namespace_uri(Some("namespace2"), "a2");
+        let a = e.set_attribute_value(name, "b2");
+        a.set_preferred_prefix(Some("p"));
+
+        d.root().append_child(e);
+
+        let xml = format_xml(&d);
+        assert_str_eq!(xml, "<?xml version='1.0'?><hello p:a1='b1' autons0:a2='b2' xmlns:p='namespace1' xmlns:autons0='namespace2'/>");
     }
 
     #[test]
@@ -341,6 +508,23 @@ mod test {
 
         let xml = format_xml(&d);
         assert_str_eq!(xml, "<?xml version='1.0'?><autons0:hello xmlns:autons0='ns'><autons0:world/></autons0:hello>");
+    }
+
+    #[test]
+    fn nested_element_with_with_conflicting_preferred_namespace_prefixes() {
+        let p = Package::new();
+        let d = p.as_document();
+        let outer_name = QName::with_namespace_uri(Some("outer"), "hello");
+        let inner_name = QName::with_namespace_uri(Some("inner"), "world");
+        let hello = d.create_element(outer_name);
+        let world = d.create_element(inner_name);
+        hello.set_preferred_prefix(Some("p"));
+        world.set_preferred_prefix(Some("p"));
+        hello.append_child(world);
+        d.root().append_child(hello);
+
+        let xml = format_xml(&d);
+        assert_str_eq!(xml, "<?xml version='1.0'?><p:hello xmlns:p='outer'><p:world xmlns:p='inner'/></p:hello>");
     }
 
     #[test]

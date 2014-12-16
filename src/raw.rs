@@ -35,6 +35,7 @@ pub struct Element {
 
 impl Element {
     pub fn name(&self) -> QName { self.name.as_qname() }
+    pub fn preferred_prefix(&self) -> Option<&str> { self.preferred_prefix.map(|p| p.as_slice()) }
 }
 
 pub struct Attribute {
@@ -47,6 +48,7 @@ pub struct Attribute {
 impl Attribute {
     pub fn name(&self)  -> QName { self.name.as_qname() }
     pub fn value(&self) -> &str { self.value.as_slice() }
+    pub fn preferred_prefix(&self) -> Option<&str> { self.preferred_prefix.map(|p| p.as_slice()) }
 }
 
 pub struct Text {
@@ -325,6 +327,18 @@ impl Storage {
         let name = self.intern_qname(name);
         let element_r = unsafe { &mut * element };
         element_r.name = name;
+    }
+
+    pub fn element_set_preferred_prefix(&self, element: *mut Element, prefix: Option<&str>) {
+        let prefix = prefix.map(|p| self.intern(p));
+        let element_r = unsafe { &mut * element };
+        element_r.preferred_prefix = prefix;
+    }
+
+    pub fn attribute_set_preferred_prefix(&self, attribute: *mut Attribute, prefix: Option<&str>) {
+        let prefix = prefix.map(|p| self.intern(p));
+        let attribute_r = unsafe { &mut * attribute };
+        attribute_r.preferred_prefix = prefix;
     }
 
     pub fn text_set_text(&self, text: *mut Text, new_text: &str) {
