@@ -2,6 +2,7 @@
 /// Differs in growth strategy (non-doubling)
 /// And only for variable-sized strings
 
+use std::borrow::BorrowFrom;
 use std::cell::{Cell,RefCell};
 use std::cmp::max;
 use std::collections::DList;
@@ -99,6 +100,12 @@ impl<S> hash::Hash<S> for InternedString
 {
     fn hash(&self, state: &mut S) {
         self.as_slice().hash(state)
+    }
+}
+
+impl BorrowFrom<InternedString> for str {
+    fn borrow_from(owned: &InternedString) -> &str {
+        owned.as_slice()
     }
 }
 

@@ -163,6 +163,15 @@ impl<'d> Element<'d> {
         self.document.storage.element_set_name(self.node, name)
     }
 
+    pub fn register_prefix(&self, prefix: &str, namespace_uri: &str) {
+        self.document.storage.element_register_prefix(self.node, prefix, namespace_uri);
+    }
+
+    pub fn namespace_uri_for_prefix(&self, prefix: &str) -> Option<&str> {
+        let connections = self.document.connections.borrow();
+        connections.element_namespace_uri_for_prefix(self.node, prefix)
+    }
+
     pub fn preferred_prefix(&self) -> Option<&str> {
         self.node().preferred_prefix()
     }

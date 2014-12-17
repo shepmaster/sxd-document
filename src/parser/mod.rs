@@ -755,6 +755,10 @@ impl<'d, 'x> SaxHydrator<'d, 'x> {
         self.stack.last().expect("No element to append to")
     }
 
+    fn namespace_uri_for_prefix(&self, prefix: &str) -> Option<&str> {
+        self.stack.last().and_then(|e| e.namespace_uri_for_prefix(prefix))
+    }
+
     fn append_text(&self, text: dom4::Text<'d>) {
         self.current_element().append_child(text);
     }
@@ -818,8 +822,8 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         let new_prefix_mappings = new_prefix_mappings;
 
         let element = if let Some(prefix) = deferred_element.prefix {
-            if let Some(ns_uri) = new_prefix_mappings.get(prefix) {
-                let name = QName::with_namespace_uri(Some(ns_uri.as_slice()),
+            if let Some(ns_uri) = new_prefix_mappings.get(prefix).map(|p| p.as_slice()).or_else(|| self.namespace_uri_for_prefix(prefix)) {
+                let name = QName::with_namespace_uri(Some(ns_uri),
                                                      deferred_element.local_part);
                 let element = self.doc.create_element(name);
                 element.set_preferred_prefix(Some(prefix));
@@ -830,6 +834,10 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         } else {
             self.doc.create_element(deferred_element.local_part)
         };
+
+        for (prefix, ns_uri) in new_prefix_mappings.iter() {
+            element.register_prefix(*prefix, ns_uri.as_slice());
+        }
 
         self.append_to_either(element);
         self.stack.push(element);
@@ -842,7 +850,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
             let value = builder.as_slice();
 
             if let Some(prefix) = attribute.name.prefix {
-                if let Some(ns_uri) = new_prefix_mappings.get(prefix) {
+                if let Some(ns_uri) = new_prefix_mappings.get(prefix).map(|p| p.as_slice()).or_else(|| self.namespace_uri_for_prefix(prefix)) {
                     let name = QName::with_namespace_uri(Some(ns_uri.as_slice()),
                                                          attribute.name.local_part);
                     let attr = element.set_attribute_value(name, value);
@@ -1025,6 +1033,17 @@ mod test {
     }
 
     #[test]
+    fn nested_elements_with_inherited_namespaces() {
+        let package = quick_parse("<ns1:hello xmlns:ns1='outer'><ns1:world/></ns1:hello>");
+        let doc = package.as_document();
+        let hello = top(&doc);
+        let world = hello.children()[0].element().unwrap();
+
+        assert_eq!(world.preferred_prefix(), Some("ns1"));
+        assert_eq!(world.name(), QName::with_namespace_uri(Some("outer"), "world"));
+    }
+
+    #[test]
     fn nested_elements_with_attributes() {
         let package = quick_parse("<hello><world name='Earth'/></hello>");
         let doc = package.as_document();
@@ -1032,6 +1051,19 @@ mod test {
         let world = hello.children()[0].element().unwrap();
 
         assert_str_eq!(world.attribute_value("name").unwrap(), "Earth");
+    }
+
+    #[test]
+    fn nested_elements_with_attributes_with_inherited_namespaces() {
+        let package = quick_parse("<hello xmlns:ns1='outer'><world ns1:name='Earth'/></hello>");
+        let doc = package.as_document();
+        let hello = top(&doc);
+        let world = hello.children()[0].element().unwrap();
+
+        let attr = world.attribute(QName::with_namespace_uri(Some("outer"), "name")).unwrap();
+
+        assert_eq!(attr.preferred_prefix(), Some("ns1"));
+        assert_eq!(attr.value(), "Earth");
     }
 
     #[test]

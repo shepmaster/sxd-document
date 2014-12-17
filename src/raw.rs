@@ -6,6 +6,7 @@ use self::ChildOfElement::*;
 
 use arena::TypedArena;
 use string_pool::{StringPool,InternedString};
+use std::collections::HashMap;
 
 struct InternedQName {
     namespace_uri: Option<InternedString>,
@@ -31,6 +32,7 @@ pub struct Element {
     children: Vec<ChildOfElement>,
     parent: Option<ParentOfChild>,
     attributes: Vec<*mut Attribute>,
+    prefix_to_namespace: HashMap<InternedString, InternedString>,
 }
 
 impl Element {
@@ -272,6 +274,7 @@ impl Storage {
             children: Vec::new(),
             parent: None,
             attributes: Vec::new(),
+            prefix_to_namespace: HashMap::new(),
         })
     }
 
@@ -327,6 +330,13 @@ impl Storage {
         let name = self.intern_qname(name);
         let element_r = unsafe { &mut * element };
         element_r.name = name;
+    }
+
+    pub fn element_register_prefix(&self, element: *mut Element, prefix: &str, namespace_uri: &str) {
+        let prefix = self.intern(prefix);
+        let namespace_uri = self.intern(namespace_uri);
+        let element_r = unsafe { &mut * element };
+        element_r.prefix_to_namespace.insert(prefix, namespace_uri);
     }
 
     pub fn element_set_preferred_prefix(&self, element: *mut Element, prefix: Option<&str>) {
@@ -462,5 +472,21 @@ impl Connections {
         });
         parent_r.attributes.push(attribute);
         attr_r.parent = Some(parent);
+    }
+
+    pub fn element_namespace_uri_for_prefix(&self, element: *mut Element, prefix: &str) -> Option<&str> {
+        let mut element = element;
+        loop {
+            let element_r = unsafe { &*element };
+
+            if let Some(ns_uri) = element_r.prefix_to_namespace.get(prefix) {
+                return Some(ns_uri.as_slice());
+            }
+
+            match element_r.parent {
+                Some(ElementPOC(parent)) => element = parent,
+                _ => return None,
+            }
+        }
     }
 }
