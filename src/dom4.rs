@@ -186,6 +186,13 @@ impl<'d> Element<'d> {
         }
     }
 
+    pub fn attribute(&self, name: &str) -> Option<Attribute<'d>> {
+        let connections = self.document.connections.borrow();
+        connections.attribute(self.node, name).map(|n| {
+            self.document.wrap_attribute(n)
+        })
+    }
+
     pub fn attributes(&self) -> Vec<Attribute<'d>> {
         let connections = self.document.connections.borrow();
         // This is safe because we copy of the children, and the
