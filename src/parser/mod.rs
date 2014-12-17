@@ -596,7 +596,9 @@ impl Parser {
 
         sink.element_start(name);
 
+        sink.attributes_start();
         let (_, f, xml) = try_partial_parse!(self.parse_attributes(xml, sink));
+        sink.attributes_end();
 
         let (_, xml) = parse_optional!(xml.consume_space(), xml);
 
@@ -651,6 +653,8 @@ trait ParserSink<'x> {
     fn processing_instruction(&mut self, target: &'x str, value: Option<&'x str>);
     fn text(&mut self, text: &'x str);
     fn reference(&mut self, reference: Reference<'x>);
+    fn attributes_start(&mut self);
+    fn attributes_end(&mut self);
     fn attribute_start(&mut self, name: PrefixedName<'x>);
     fn attribute_value(&mut self, value: AttributeValue<'x>);
     fn attribute_end(&mut self, name: PrefixedName<'x>);
@@ -747,6 +751,14 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d> {
     fn reference(&mut self, reference: Reference) {
         let text = self.decode_reference(reference, |s| self.doc.create_text(s));
         self.append_text(text);
+    }
+
+    fn attributes_start(&mut self) {
+
+    }
+
+    fn attributes_end(&mut self) {
+
     }
 
     fn attribute_start(&mut self, _name: PrefixedName) {
