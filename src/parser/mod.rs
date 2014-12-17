@@ -46,7 +46,8 @@
 use std::ascii::AsciiExt;
 use std::char::from_u32;
 use std::num::from_str_radix;
-use std::cell::RefCell;
+use std::mem::replace;
+use std::collections::HashMap;
 
 use self::AttributeValue::*;
 use self::Reference::*;
@@ -660,18 +661,93 @@ trait ParserSink<'x> {
     fn attribute_end(&mut self, name: PrefixedName<'x>);
 }
 
-struct SaxHydrator<'d> {
-    doc: &'d dom4::Document<'d>,
-    stack: Vec<dom4::Element<'d>>,
-    attr_value: RefCell<String>,
+
+fn decode_reference<T>(ref_data: Reference, cb: |&str| -> T) -> T {
+    match ref_data {
+        DecimalCharReference(d) => {
+            let code: u32 = from_str_radix(d, 10).expect("Not valid decimal");
+            let c: char = from_u32(code).expect("Not a valid codepoint");
+            let s = String::from_char(1, c);
+            cb(s.as_slice())
+        },
+        HexCharReference(h) => {
+            let code: u32 = from_str_radix(h, 16).expect("Not valid hex");
+            let c: char = from_u32(code).expect("Not a valid codepoint");
+            let s = String::from_char(1, c);
+            cb(s.as_slice())
+        },
+        EntityReference(e) => {
+            let s = match e {
+                "amp"  => "&",
+                "lt"   => "<",
+                "gt"   => ">",
+                "apos" => "'",
+                "quot" => "\"",
+                _      => panic!("unknown entity"),
+            };
+            cb(s)
+        }
+    }
 }
 
-impl<'d> SaxHydrator<'d> {
-    fn new(doc: &'d dom4::Document<'d>) -> SaxHydrator<'d> {
+struct AttributeValueBuilder {
+    value: String,
+}
+
+impl AttributeValueBuilder {
+    fn convert(values: &Vec<AttributeValue>) -> String {
+        let mut builder = AttributeValueBuilder::new();
+        builder.ingest(values);
+        builder.implode()
+    }
+
+    fn new() -> AttributeValueBuilder {
+        AttributeValueBuilder {
+            value: String::new(),
+        }
+    }
+
+    fn ingest(&mut self, values: &Vec<AttributeValue>) {
+        for value in values.iter() {
+            match value {
+                &LiteralAttributeValue(v) => self.value.push_str(v),
+                &ReferenceAttributeValue(r) => decode_reference(r, |s| self.value.push_str(s)),
+            }
+        }
+    }
+
+    fn clear(&mut self) {
+        self.value.clear();
+    }
+
+    fn as_slice(&self) -> &str {
+        self.value.as_slice()
+    }
+
+    fn implode(self) -> String {
+        self.value
+    }
+}
+
+struct DeferredAttribute<'d> {
+    name: PrefixedName<'d>,
+    values: Vec<AttributeValue<'d>>,
+}
+
+struct SaxHydrator<'d, 'x> {
+    doc: &'d dom4::Document<'d>,
+    stack: Vec<dom4::Element<'d>>,
+    element: Option<PrefixedName<'x>>,
+    attributes: Vec<DeferredAttribute<'x>>,
+}
+
+impl<'d, 'x> SaxHydrator<'d, 'x> {
+    fn new(doc: &'d dom4::Document<'d>) -> SaxHydrator<'d, 'x> {
         SaxHydrator {
             doc: doc,
             stack: Vec::new(),
-            attr_value: RefCell::new(String::new()),
+            element: None,
+            attributes: Vec::new(),
         }
     }
 
@@ -691,42 +767,11 @@ impl<'d> SaxHydrator<'d> {
             Some(parent) => parent.append_child(child.to_child_of_root()),
         }
     }
-
-    fn decode_reference<T>(&self, ref_data: Reference, cb: |&str| -> T) -> T {
-        match ref_data {
-            DecimalCharReference(d) => {
-                let code: u32 = from_str_radix(d, 10).expect("Not valid decimal");
-                let c: char = from_u32(code).expect("Not a valid codepoint");
-                let s = String::from_char(1, c);
-                cb(s.as_slice())
-            },
-            HexCharReference(h) => {
-                let code: u32 = from_str_radix(h, 16).expect("Not valid hex");
-                let c: char = from_u32(code).expect("Not a valid codepoint");
-                let s = String::from_char(1, c);
-                cb(s.as_slice())
-            },
-            EntityReference(e) => {
-                let s = match e {
-                    "amp"  => "&",
-                    "lt"   => "<",
-                    "gt"   => ">",
-                    "apos" => "'",
-                    "quot" => "\"",
-                    _      => panic!("unknown entity"),
-                };
-                cb(s)
-            }
-        }
-    }
 }
 
-impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d> {
-    fn element_start(&mut self, name: PrefixedName) {
-        let name = QName { namespace_uri: None, local_part: name.local_part };
-        let element = self.doc.create_element(name);
-        self.append_to_either(element);
-        self.stack.push(element);
+impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
+    fn element_start(&mut self, name: PrefixedName<'x>) {
+        self.element = Some(name);
     }
 
     fn element_end(&mut self, _name: PrefixedName) {
@@ -749,39 +794,85 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d> {
     }
 
     fn reference(&mut self, reference: Reference) {
-        let text = self.decode_reference(reference, |s| self.doc.create_text(s));
+        let text = decode_reference(reference, |s| self.doc.create_text(s));
         self.append_text(text);
     }
 
     fn attributes_start(&mut self) {
-
     }
 
     fn attributes_end(&mut self) {
+        let deferred_element = self.element.take().unwrap();
 
-    }
+        let deferred_attributes = replace(&mut self.attributes, Vec::new());
+        let (namespaces, attributes) = deferred_attributes.partition(|attr| {
+            // TODO: Default namespace
+            attr.name.prefix == Some("xmlns")
+        });
 
-    fn attribute_start(&mut self, _name: PrefixedName) {
-        self.attr_value.borrow_mut().clear();
-    }
+        let mut new_prefix_mappings = HashMap::new();
+        for ns in namespaces.iter() {
+            let value = AttributeValueBuilder::convert(&ns.values);
+            new_prefix_mappings.insert(ns.name.local_part, value);
+        }
+        let new_prefix_mappings = new_prefix_mappings;
 
-    fn attribute_value(&mut self, value: AttributeValue) {
-        match value {
-            LiteralAttributeValue(v) => self.attr_value.borrow_mut().push_str(v),
-            ReferenceAttributeValue(r) => self.decode_reference(r, |s| self.attr_value.borrow_mut().push_str(s)),
+        let element = if let Some(prefix) = deferred_element.prefix {
+            if let Some(ns_uri) = new_prefix_mappings.get(prefix) {
+                let name = QName::with_namespace_uri(Some(ns_uri.as_slice()),
+                                                     deferred_element.local_part);
+                let element = self.doc.create_element(name);
+                element.set_preferred_prefix(Some(prefix));
+                element
+            } else {
+                panic!("Unknown namespace prefix '{}'", prefix);
+            }
+        } else {
+            self.doc.create_element(deferred_element.local_part)
+        };
+
+        self.append_to_either(element);
+        self.stack.push(element);
+
+        let mut builder = AttributeValueBuilder::new();
+
+        for attribute in attributes.iter() {
+            builder.clear();
+            builder.ingest(&attribute.values);
+            let value = builder.as_slice();
+
+            if let Some(prefix) = attribute.name.prefix {
+                if let Some(ns_uri) = new_prefix_mappings.get(prefix) {
+                    let name = QName::with_namespace_uri(Some(ns_uri.as_slice()),
+                                                         attribute.name.local_part);
+                    let attr = element.set_attribute_value(name, value);
+                    attr.set_preferred_prefix(Some(prefix));
+                } else {
+                    panic!("Unknown namespace prefix '{}'", prefix);
+                }
+            } else {
+                element.set_attribute_value(attribute.name.local_part, value);
+            }
         }
     }
 
-    fn attribute_end(&mut self, name: PrefixedName) {
-        let name = QName { namespace_uri: None, local_part: name.local_part };
-        self.current_element().set_attribute_value(name, self.attr_value.borrow().as_slice());
+    fn attribute_start(&mut self, name: PrefixedName<'x>) {
+        let attr = DeferredAttribute { name: name, values: Vec::new() };
+        self.attributes.push(attr);
+    }
+
+    fn attribute_value(&mut self, value: AttributeValue<'x>) {
+        self.attributes.last_mut().unwrap().values.push(value);
+    }
+
+    fn attribute_end(&mut self, _name: PrefixedName) {
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::Parser;
-    use super::super::{Package,ToQName};
+    use super::super::{Package,QName,ToQName};
     use super::super::dom4;
 
     macro_rules! assert_qname_eq(
@@ -835,6 +926,16 @@ mod test {
     }
 
     #[test]
+    fn an_element_with_a_namespace() {
+        let package = quick_parse("<ns:hello xmlns:ns='namespace'/>");
+        let doc = package.as_document();
+        let top = top(&doc);
+
+        assert_eq!(top.preferred_prefix(), Some("ns"));
+        assert_eq!(QName::with_namespace_uri(Some("namespace"), "hello"), top.name());
+    }
+
+    #[test]
     fn an_element_with_an_attribute() {
         let package = quick_parse("<hello scope='world'/>");
         let doc = package.as_document();
@@ -860,6 +961,18 @@ mod test {
 
         assert_str_eq!(top.attribute_value("scope").unwrap(), "world");
         assert_str_eq!(top.attribute_value("happy").unwrap(), "true");
+    }
+
+    #[test]
+    fn an_attribute_with_a_namespace() {
+        let package = quick_parse("<hello ns:a='b' xmlns:ns='namespace'/>");
+        let doc = package.as_document();
+        let top = top(&doc);
+
+        let attr = top.attribute(QName::with_namespace_uri(Some("namespace"), "a")).unwrap();
+
+        assert_eq!(attr.preferred_prefix(), Some("ns"));
+        assert_eq!(attr.value(), "b");
     }
 
     #[test]
@@ -899,6 +1012,16 @@ mod test {
         let world = awesome.children()[0].element().unwrap();
 
         assert_qname_eq!(world.name(), "world");
+    }
+
+    #[test]
+    fn nested_elements_with_namespaces() {
+        let package = quick_parse("<ns1:hello xmlns:ns1='outer'><ns2:world xmlns:ns2='inner'/></ns1:hello>");
+        let doc = package.as_document();
+        let hello = top(&doc);
+        let world = hello.children()[0].element().unwrap();
+
+        assert_qname_eq!(world.name(), QName::with_namespace_uri(Some("inner"), "world"));
     }
 
     #[test]
