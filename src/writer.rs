@@ -199,7 +199,14 @@ impl<'d> PrefixMapping<'d> {
         }
     }
 
-    fn prefix(&self, namespace_uri: &str) -> &str {
+    fn prefix<'a : 'c, 'b : 'c, 'c>(&'a self, preferred_prefix: Option<&'b str>, namespace_uri: &str) -> &'c str {
+        if let Some(prefix) = preferred_prefix {
+            let scope = self.scopes.last().unwrap();
+            if scope.prefix_is(prefix, namespace_uri) {
+                return prefix;
+            }
+        }
+
         for scope in self.scopes.iter().rev() {
             if let Some(prefix) = scope.prefix_for(namespace_uri) {
                 return prefix;
@@ -218,11 +225,15 @@ enum Content<'d> {
     ProcessingInstruction(dom4::ProcessingInstruction<'d>),
 }
 
-fn format_qname<'d, W>(q: QName<'d>, mapping: &mut PrefixMapping<'d>, writer: &mut W) -> IoResult<()>
+fn format_qname<'d, W>(q: QName<'d>,
+                       mapping: &mut PrefixMapping<'d>,
+                       preferred_prefix: Option<&str>,
+                       writer: &mut W)
+                       -> IoResult<()>
     where W: Writer
 {
     if let Some(namespace_uri) = q.namespace_uri {
-        let prefix = mapping.prefix(namespace_uri);
+        let prefix = mapping.prefix(preferred_prefix, namespace_uri);
         try!(writer.write_str(prefix));
         try!(writer.write_str(":"));
     }
@@ -241,11 +252,11 @@ fn format_element<'d, W>(element: dom4::Element<'d>,
     mapping.populate_scope(&element, attrs.as_slice());
 
     try!(writer.write_str("<"));
-    try!(format_qname(element.name(), mapping, writer));
+    try!(format_qname(element.name(), mapping, element.preferred_prefix(), writer));
 
     for attr in attrs.iter() {
         try!(writer.write_str(" "));
-        try!(format_qname(attr.name(), mapping, writer));
+        try!(format_qname(attr.name(), mapping, attr.preferred_prefix(), writer));
         try!(write!(writer, "='{}'", attr.value()));
     }
 
@@ -282,7 +293,7 @@ fn format_element_end<'d, W>(element: dom4::Element<'d>,
     where W: Writer
 {
     try!(writer.write_str("</"));
-    try!(format_qname(element.name(), mapping, writer));
+    try!(format_qname(element.name(), mapping, element.preferred_prefix(), writer));
     writer.write_str(">")
 }
 
@@ -465,6 +476,26 @@ mod test {
 
         let xml = format_xml(&d);
         assert_str_eq!(xml, "<?xml version='1.0'?><hello p:a1='b1' autons0:a2='b2' xmlns:p='namespace1' xmlns:autons0='namespace2'/>");
+    }
+
+    #[test]
+    fn attributes_with_different_preferred_namespace_prefixes_for_same_namespace() {
+        let p = Package::new();
+        let d = p.as_document();
+        let e = d.create_element("hello");
+
+        let name = QName::with_namespace_uri(Some("namespace"), "a1");
+        let a = e.set_attribute_value(name, "b1");
+        a.set_preferred_prefix(Some("p1"));
+
+        let name = QName::with_namespace_uri(Some("namespace"), "a2");
+        let a = e.set_attribute_value(name, "b2");
+        a.set_preferred_prefix(Some("p2"));
+
+        d.root().append_child(e);
+
+        let xml = format_xml(&d);
+        assert_str_eq!(xml, "<?xml version='1.0'?><hello p1:a1='b1' p2:a2='b2' xmlns:p1='namespace' xmlns:p2='namespace'/>");
     }
 
     #[test]
