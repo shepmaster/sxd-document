@@ -375,7 +375,7 @@ mod test {
 
     macro_rules! assert_str_eq(
         ($l:expr, $r:expr) => (assert_eq!($l.as_slice(), $r.as_slice()));
-    )
+    );
 
     fn format_xml<'d>(doc: &'d dom4::Document<'d>) -> String {
         let mut w = MemWriter::new();

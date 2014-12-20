@@ -126,7 +126,7 @@ macro_rules! try_parse(
             Failure(pf) => return Failure(pf),
         }
     })
-)
+);
 
 macro_rules! try_partial_parse(
     ($e:expr) => ({
@@ -136,7 +136,7 @@ macro_rules! try_partial_parse(
             Failure(pf) => return Failure(pf),
         }
     })
-)
+);
 
 macro_rules! try_resume_after_partial_failure(
     ($partial:expr, $e:expr) => ({
@@ -150,7 +150,7 @@ macro_rules! try_resume_after_partial_failure(
             },
         }
     });
-)
+);
 
 // Pattern: zero-or-one
 macro_rules! parse_optional(
@@ -161,7 +161,7 @@ macro_rules! parse_optional(
             Failure(_) => (None, $start),
         }
     })
-)
+);
 
 // Pattern: alternate
 macro_rules! parse_alternate_rec(
@@ -183,7 +183,7 @@ macro_rules! parse_alternate_rec(
             },
         }
     );
-)
+);
 
 macro_rules! parse_alternate(
     ($start:expr, {
@@ -194,7 +194,7 @@ macro_rules! parse_alternate(
             $([$parser_rest -> $transformer_rest],)*
         })
     });
-)
+);
 
 // Pattern: zero-or-more
 macro_rules! parse_zero_or_more(
@@ -217,7 +217,7 @@ macro_rules! parse_zero_or_more(
 
         Partial(((), err.unwrap(), start))
     }};
-)
+);
 
 #[deriving(Show,Clone,PartialEq,Copy)]
 struct StartPoint<'a> {
@@ -885,11 +885,11 @@ mod test {
 
     macro_rules! assert_qname_eq(
         ($l:expr, $r:expr) => (assert_eq!($l.to_qname(), $r.to_qname()));
-    )
+    );
 
     macro_rules! assert_str_eq(
         ($l:expr, $r:expr) => (assert_eq!($l.as_slice(), $r.as_slice()));
-    )
+    );
 
     fn full_parse(xml: &str) -> Result<Package, uint> {
         Parser::new()

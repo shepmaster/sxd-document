@@ -210,16 +210,16 @@ macro_rules! conversion_trait(
             }
         })*
     )
-)
+);
 
 conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
     Element => ElementCOE,
     Text => TextCOE
-})
+});
 
 conversion_trait!(ToChildOfRoot, to_child_of_root, ChildOfRoot, {
     Element => ElementCOR
-})
+});
 
 pub struct Storage {
     strings: StringPool,

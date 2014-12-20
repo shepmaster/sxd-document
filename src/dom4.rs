@@ -22,15 +22,15 @@ macro_rules! wrapper(
             }
         }
     )
-)
+);
 
 impl<'d> Document<'d> {
-    wrapper!(wrap_root, Root, raw::Root)
-    wrapper!(wrap_element, Element, raw::Element)
-    wrapper!(wrap_attribute, Attribute, raw::Attribute)
-    wrapper!(wrap_text, Text, raw::Text)
-    wrapper!(wrap_comment, Comment, raw::Comment)
-    wrapper!(wrap_pi, ProcessingInstruction, raw::ProcessingInstruction)
+    wrapper!(wrap_root, Root, raw::Root);
+    wrapper!(wrap_element, Element, raw::Element);
+    wrapper!(wrap_attribute, Attribute, raw::Attribute);
+    wrapper!(wrap_text, Text, raw::Text);
+    wrapper!(wrap_comment, Comment, raw::Comment);
+    wrapper!(wrap_pi, ProcessingInstruction, raw::ProcessingInstruction);
 
     pub fn new(storage: &'d raw::Storage, connections: &'d raw::Connections) -> Document<'d> {
         Document {
@@ -120,9 +120,9 @@ macro_rules! node(
             }
         }
     )
-)
+);
 
-node!(Root, raw::Root)
+node!(Root, raw::Root);
 
 impl<'d> Root<'d> {
     pub fn append_child<C>(&self, child: C)
@@ -152,7 +152,7 @@ impl<'d> fmt::Show for Root<'d> {
     }
 }
 
-node!(Element, raw::Element)
+node!(Element, raw::Element);
 
 impl<'d> Element<'d> {
     pub fn name(&self) -> QName<'d> { self.node().name() }
@@ -254,7 +254,7 @@ impl<'d> fmt::Show for Element<'d> {
     }
 }
 
-node!(Attribute, raw::Attribute)
+node!(Attribute, raw::Attribute);
 
 impl<'d> Attribute<'d> {
     pub fn name(&self)  -> QName<'d> { self.node().name() }
@@ -282,7 +282,7 @@ impl<'d> fmt::Show for Attribute<'d> {
     }
 }
 
-node!(Text, raw::Text)
+node!(Text, raw::Text);
 
 impl<'d> Text<'d> {
     pub fn text(&self) -> &str { self.node().text() }
@@ -305,7 +305,7 @@ impl<'d> fmt::Show for Text<'d> {
     }
 }
 
-node!(Comment, raw::Comment)
+node!(Comment, raw::Comment);
 
 impl<'d> Comment<'d> {
     pub fn text(&self) -> &str { self.node().text() }
@@ -328,7 +328,7 @@ impl<'d> fmt::Show for Comment<'d> {
     }
 }
 
-node!(ProcessingInstruction, raw::ProcessingInstruction)
+node!(ProcessingInstruction, raw::ProcessingInstruction);
 
 impl<'d> ProcessingInstruction<'d> {
     pub fn target(&self) -> &str { self.node().target() }
@@ -367,7 +367,7 @@ macro_rules! unpack(
             }
         }
     )
-)
+);
 
 #[deriving(PartialEq,Show,Copy)]
 pub enum ChildOfRoot<'d> {
@@ -376,9 +376,9 @@ pub enum ChildOfRoot<'d> {
     ProcessingInstructionCOR(ProcessingInstruction<'d>),
 }
 
-unpack!(ChildOfRoot, element, ElementCOR, Element)
-unpack!(ChildOfRoot, comment, CommentCOR, Comment)
-unpack!(ChildOfRoot, processing_instruction, ProcessingInstructionCOR, ProcessingInstruction)
+unpack!(ChildOfRoot, element, ElementCOR, Element);
+unpack!(ChildOfRoot, comment, CommentCOR, Comment);
+unpack!(ChildOfRoot, processing_instruction, ProcessingInstructionCOR, ProcessingInstruction);
 
 impl<'d> ChildOfRoot<'d> {
     pub fn as_raw(&self) -> raw::ChildOfRoot {
@@ -398,10 +398,10 @@ pub enum ChildOfElement<'d> {
     ProcessingInstructionCOE(ProcessingInstruction<'d>),
 }
 
-unpack!(ChildOfElement, element, ElementCOE, Element)
-unpack!(ChildOfElement, text, TextCOE, Text)
-unpack!(ChildOfElement, comment, CommentCOE, Comment)
-unpack!(ChildOfElement, processing_instruction, ProcessingInstructionCOE, ProcessingInstruction)
+unpack!(ChildOfElement, element, ElementCOE, Element);
+unpack!(ChildOfElement, text, TextCOE, Text);
+unpack!(ChildOfElement, comment, CommentCOE, Comment);
+unpack!(ChildOfElement, processing_instruction, ProcessingInstructionCOE, ProcessingInstruction);
 
 impl<'d> ChildOfElement<'d> {
     pub fn as_raw(&self) -> raw::ChildOfElement {
@@ -440,20 +440,20 @@ macro_rules! conversion_trait(
             }
         })*
     )
-)
+);
 
 conversion_trait!(ToChildOfRoot, to_child_of_root, ChildOfRoot, {
     Element => ElementCOR,
     Comment => CommentCOR,
     ProcessingInstruction => ProcessingInstructionCOR
-})
+});
 
 conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
     Element => ElementCOE,
     Text => TextCOE,
     Comment => CommentCOE,
     ProcessingInstruction => ProcessingInstructionCOE
-})
+});
 
 impl<'d> ToChildOfElement<'d> for ChildOfRoot<'d> {
     fn to_child_of_element(self) -> ChildOfElement<'d> {
@@ -475,7 +475,7 @@ mod test {
 
     macro_rules! assert_qname_eq(
         ($l:expr, $r:expr) => (assert_eq!($l.to_qname(), $r.to_qname()));
-    )
+    );
 
     #[test]
     fn the_root_belongs_to_a_document() {
