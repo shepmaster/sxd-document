@@ -51,11 +51,11 @@ use std::collections::HashMap;
 
 use self::AttributeValue::*;
 use self::Reference::*;
-use self::ParseResult::*;
 use self::xmlstr::XmlStr;
 
 use super::QName;
 use super::dom4;
+use super::peresil::{ParseResult,StartPoint};
 
 mod xmlstr;
 
@@ -85,159 +85,23 @@ enum Reference<'a> {
     HexCharReference(&'a str),
 }
 
-#[deriving(Copy)]
-struct BestFailure<'a> {
-    failure: Option<ParseFailure<'a>>
+trait XmlParseExt<'a> {
+    fn consume_space(&self) -> ParseResult<'a, &'a str>;
+    fn consume_attribute_value(&self, quote: &str) -> ParseResult<'a, &'a str>;
+    fn consume_literal(&self, literal: &str) -> ParseResult<'a, &'a str>;
+    fn consume_name(&self) -> ParseResult<'a, &'a str>;
+    fn consume_ncname(&self) -> ParseResult<'a, &'a str>;
+    fn consume_version_num(&self) -> ParseResult<'a, &'a str>;
+    fn consume_decimal_chars(&self) -> ParseResult<'a, &'a str>;
+    fn consume_hex_chars(&self) -> ParseResult<'a, &'a str>;
+    fn consume_char_data(&self) -> ParseResult<'a, &'a str>;
+    fn consume_cdata(&self) -> ParseResult<'a, &'a str>;
+    fn consume_comment(&self) -> ParseResult<'a, &'a str>;
+    fn consume_pi_value(&self) -> ParseResult<'a, &'a str>;
+    fn consume_start_tag(&self) -> ParseResult<'a, &'a str>;
 }
 
-impl<'a> BestFailure<'a> {
-    fn new() -> BestFailure<'a> {
-        BestFailure {
-            failure: None,
-        }
-    }
-
-    fn with(failure: ParseFailure<'a>) -> BestFailure<'a> {
-        BestFailure {
-            failure: Some(failure),
-        }
-    }
-
-    fn push(&mut self, failure: ParseFailure<'a>) {
-        if let Some(old) = self.failure {
-            if failure.point.offset <= old.point.offset {
-                return;
-            }
-        }
-
-        self.failure = Some(failure)
-    }
-
-    fn pop(&self) -> ParseFailure<'a> {
-        self.failure.expect("No errors found")
-    }
-}
-
-macro_rules! try_parse(
-    ($e:expr) => ({
-        match $e {
-            Success(x) => x,
-            Partial((_, pf, _)) |
-            Failure(pf) => return Failure(pf),
-        }
-    })
-);
-
-macro_rules! try_partial_parse(
-    ($e:expr) => ({
-        match $e {
-            Success((v, xml)) => (v, BestFailure::new(), xml),
-            Partial((v, pf, xml)) => (v, BestFailure::with(pf), xml),
-            Failure(pf) => return Failure(pf),
-        }
-    })
-);
-
-macro_rules! try_resume_after_partial_failure(
-    ($partial:expr, $e:expr) => ({
-        match $e {
-            Success(x) => x,
-            Partial((_, pf, _)) |
-            Failure(pf) => {
-                let mut partial = $partial;
-                partial.push(pf);
-                return Failure(partial.pop())
-            },
-        }
-    });
-);
-
-// Pattern: zero-or-one
-macro_rules! parse_optional(
-    ($parser:expr, $start:expr) => ({
-        match $parser {
-            Success((value, next)) => (Some(value), next),
-            Partial((value, _, next)) => (Some(value), next),
-            Failure(_) => (None, $start),
-        }
-    })
-);
-
-// Pattern: alternate
-macro_rules! parse_alternate_rec(
-    ($start:expr, $errors:expr, {}) => ({
-        Failure($errors.pop())
-    });
-    ($start:expr, $errors:expr, {
-        [$parser:expr -> $transformer:expr],
-        $([$parser_rest:expr -> $transformer_rest:expr],)*
-    }) => (
-        match $parser($start) {
-            Success((val, next)) => Success(($transformer(val), next)),
-            Partial((_, pf, _)) |
-            Failure(pf) => {
-                $errors.push(pf);
-                parse_alternate_rec!($start, $errors, {
-                    $([$parser_rest -> $transformer_rest],)*
-                })
-            },
-        }
-    );
-);
-
-macro_rules! parse_alternate(
-    ($start:expr, {
-        $([$parser_rest:expr -> $transformer_rest:expr],)*
-    }) => ({
-        let mut errors = BestFailure::new();
-        parse_alternate_rec!($start, errors, {
-            $([$parser_rest -> $transformer_rest],)*
-        })
-    });
-);
-
-// Pattern: zero-or-more
-macro_rules! parse_zero_or_more(
-    ($start:expr, $parser:expr) => {{
-        let mut err;
-
-        let mut start = $start;
-        loop {
-            let (_, next_start) = match $parser(start) {
-                Success(x) => x,
-                Partial((_, pf, _)) |
-                Failure(pf) => {
-                    err = Some(pf);
-                    break
-                }
-            };
-
-            start = next_start;
-        }
-
-        Partial(((), err.unwrap(), start))
-    }};
-);
-
-#[deriving(Show,Clone,PartialEq,Copy)]
-struct StartPoint<'a> {
-    offset: uint,
-    s: &'a str,
-}
-
-impl<'a> StartPoint<'a> {
-    fn slice_at(&self, position: uint) -> (&'a str, StartPoint<'a>) {
-        (self.s.slice_to(position), StartPoint{offset: self.offset + position,
-                                               s: self.s.slice_from(position)})
-    }
-
-    fn consume_to(&self, l: Option<uint>) -> ParseResult<'a, &'a str> {
-        match l {
-            None => Failure(ParseFailure{point: self.clone()}),
-            Some(position) => Success(self.slice_at(position)),
-        }
-    }
-
+impl<'a> XmlParseExt<'a> for StartPoint<'a> {
     fn consume_space(&self) -> ParseResult<'a, &'a str> {
         self.consume_to(self.s.end_of_space())
     }
@@ -291,17 +155,6 @@ impl<'a> StartPoint<'a> {
     }
 }
 
-#[deriving(Copy)]
-struct ParseFailure<'a> {
-    point: StartPoint<'a>,
-}
-
-enum ParseResult<'a, T> {
-    Success((T, StartPoint<'a>)),
-    Partial((T, ParseFailure<'a>, StartPoint<'a>)),
-    Failure((ParseFailure<'a>)),
-}
-
 impl Parser {
     pub fn new() -> Parser {
         Parser
@@ -321,7 +174,7 @@ impl Parser {
             None        => PrefixedName { prefix: None, local_part: prefix },
         };
 
-        Success((name, xml))
+        ParseResult::Success((name, xml))
     }
 
     fn parse_eq<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, ()> {
@@ -329,7 +182,7 @@ impl Parser {
         let (_, xml) = try_parse!(xml.consume_literal("="));
         let (_, xml) = parse_optional!(xml.consume_space(), xml);
 
-        Success(((), xml))
+        ParseResult::Success(((), xml))
     }
 
     fn parse_version_info<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, &'a str> {
@@ -340,7 +193,7 @@ impl Parser {
             self.parse_quoted_value(xml, |xml, _| xml.consume_version_num())
         );
 
-        Success((version, xml))
+        ParseResult::Success((version, xml))
     }
 
     fn parse_xml_declaration<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, ()> {
@@ -351,7 +204,7 @@ impl Parser {
         let (_, xml) = parse_optional!(xml.consume_space(), xml);
         let (_, xml) = try_parse!(xml.consume_literal("?>"));
 
-        Success(((), xml))
+        ParseResult::Success(((), xml))
     }
 
     fn parse_misc<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
@@ -387,7 +240,7 @@ impl Parser {
         let (value, f, xml) = try_partial_parse!(f(xml));
         let (_, xml) = try_resume_after_partial_failure!(f, xml.consume_literal(quote));
 
-        Success((value, xml))
+        ParseResult::Success((value, xml))
     }
 
     fn parse_quoted_value<'a, T>(&self,
@@ -430,7 +283,7 @@ impl Parser {
 
         sink.attribute_end(name);
 
-        Success(((), xml))
+        ParseResult::Success(((), xml))
     }
 
     fn parse_attributes<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S)
@@ -445,7 +298,7 @@ impl Parser {
         let (name, xml) = try_parse!(self.parse_prefixed_name(xml));
         let (_, xml) = parse_optional!(xml.consume_space(), xml);
         let (_, xml) = try_parse!(xml.consume_literal(">"));
-        Success((name, xml))
+        ParseResult::Success((name, xml))
     }
 
     fn parse_char_data<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S)
@@ -456,7 +309,7 @@ impl Parser {
 
         sink.text(text);
 
-        Success(((), xml))
+        ParseResult::Success(((), xml))
     }
 
     fn parse_cdata<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S)
@@ -469,7 +322,7 @@ impl Parser {
 
         sink.text(text);
 
-        Success(((), xml))
+        ParseResult::Success(((), xml))
     }
 
     fn parse_entity_ref<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
@@ -477,7 +330,7 @@ impl Parser {
         let (name, xml) = try_parse!(xml.consume_name());
         let (_, xml) = try_parse!(xml.consume_literal(";"));
 
-        Success((EntityReference(name), xml))
+        ParseResult::Success((EntityReference(name), xml))
     }
 
     fn parse_decimal_char_ref<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
@@ -485,7 +338,7 @@ impl Parser {
         let (dec, xml) = try_parse!(xml.consume_decimal_chars());
         let (_, xml) = try_parse!(xml.consume_literal(";"));
 
-        Success((DecimalCharReference(dec), xml))
+        ParseResult::Success((DecimalCharReference(dec), xml))
     }
 
     fn parse_hex_char_ref<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
@@ -493,7 +346,7 @@ impl Parser {
         let (hex, xml) = try_parse!(xml.consume_hex_chars());
         let (_, xml) = try_parse!(xml.consume_literal(";"));
 
-        Success((HexCharReference(hex), xml))
+        ParseResult::Success((HexCharReference(hex), xml))
     }
 
     fn parse_reference<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
@@ -513,7 +366,7 @@ impl Parser {
 
         sink.comment(text);
 
-        Success(((), xml))
+        ParseResult::Success(((), xml))
     }
 
     fn parse_pi_value<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, &'a str> {
@@ -535,7 +388,7 @@ impl Parser {
 
         sink.processing_instruction(target, value);
 
-        Success(((), xml))
+        ParseResult::Success(((), xml))
     }
 
     fn parse_content<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
@@ -555,9 +408,9 @@ impl Parser {
             });
 
             let (_, after) = match xxx {
-                Success(x) => x,
-                Partial((_, pf, _)) |
-                Failure(pf) => return Partial(((), pf, start)),
+                ParseResult::Success(x) => x,
+                ParseResult::Partial((_, pf, _)) |
+                ParseResult::Failure(pf) => return ParseResult::Partial(((), pf, start)),
             };
 
             let (_, xml) = parse_optional!(self.parse_char_data(after, sink), after);
@@ -569,7 +422,7 @@ impl Parser {
     fn parse_empty_element_tail<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, ()> {
         let (_, xml) = try_parse!(xml.consume_literal("/>"));
 
-        Success(((), xml))
+        ParseResult::Success(((), xml))
     }
 
     fn parse_non_empty_element_tail<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S, start_name: PrefixedName<'a>)
@@ -586,7 +439,7 @@ impl Parser {
             panic!("tags do not match!");
         }
 
-        Success(((), xml))
+        ParseResult::Success(((), xml))
     }
 
     fn parse_element<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
@@ -612,7 +465,7 @@ impl Parser {
 
         sink.element_end(name);
 
-        Success(((), xml))
+        ParseResult::Success(((), xml))
     }
 
     fn parse_document<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S)
@@ -623,7 +476,7 @@ impl Parser {
         let (_, xml) = try_resume_after_partial_failure!(f, self.parse_element(xml, sink));
         let (_, xml) = parse_optional!(self.parse_miscs(xml, sink), xml);
 
-        Success(((), xml))
+        ParseResult::Success(((), xml))
     }
 
     pub fn parse<'a>(&self, xml: &'a str) -> Result<super::Package, uint> {
@@ -635,9 +488,9 @@ impl Parser {
             let mut hydrator = SaxHydrator::new(&doc);
 
             match self.parse_document(xml, &mut hydrator) {
-                Success(x) => x,
-                Partial((_, pf, _)) |
-                Failure(pf) => return Err(pf.point.offset),
+                ParseResult::Success(x) => x,
+                ParseResult::Partial((_, pf, _)) |
+                ParseResult::Failure(pf) => return Err(pf.point.offset),
             };
         }
 

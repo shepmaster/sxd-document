@@ -32,6 +32,7 @@ use std::fmt;
 
 mod string_pool;
 mod raw;
+mod peresil;
 pub mod thindom4;
 pub mod dom4;
 pub mod parser;
@@ -113,4 +114,9 @@ impl fmt::Show for Package {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Package")
     }
+}
+
+#[doc(hidden)]
+mod document {
+    pub use peresil;
 }
