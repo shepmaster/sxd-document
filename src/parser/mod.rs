@@ -211,9 +211,9 @@ impl Parser {
         where S: ParserSink<'a>
     {
         parse_alternate!(xml, {
-            [|xml: Point<'a>| self.parse_comment(xml, sink) -> |_| ()],
-            [|xml: Point<'a>| self.parse_pi(xml, sink)      -> |_| ()],
-            [|xml: Point<'a>| xml.consume_space()           -> |_| ()],
+            |xml: Point<'a>| self.parse_comment(xml, sink),
+            |xml: Point<'a>| self.parse_pi(xml, sink),
+            |xml: Point<'a>| xml.consume_space().map(|_| ()),
         })
     }
 
@@ -249,19 +249,40 @@ impl Parser {
                                  -> ParseResult<'a, T>
     {
         parse_alternate!(xml, {
-            [|xml| self.parse_one_quoted_value(xml, "'",  |xml| f(xml, "'"))  -> |v| v],
-            [|xml| self.parse_one_quoted_value(xml, "\"", |xml| f(xml, "\"")) -> |v| v],
+            |xml| self.parse_one_quoted_value(xml, "'",  |xml| f(xml, "'")),
+            |xml| self.parse_one_quoted_value(xml, "\"", |xml| f(xml, "\"")),
         })
+    }
+
+    fn parse_attribute_literal<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S, quote: &str)
+                                          -> ParseResult<'a, ()>
+        where S: ParserSink<'a>
+    {
+        let (val, xml) = try_parse!(xml.consume_attribute_value(quote));
+        sink.attribute_value(LiteralAttributeValue(val));
+
+        ParseResult::Success((), xml)
+    }
+
+    fn parse_attribute_reference<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S)
+                                          -> ParseResult<'a, ()>
+        where S: ParserSink<'a>
+    {
+        let (val, xml) = try_parse!(self.parse_reference(xml));
+        sink.attribute_value(ReferenceAttributeValue(val));
+
+        ParseResult::Success((), xml)
     }
 
     fn parse_attribute_values<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S, quote: &str)
                                          -> ParseResult<'a, ()>
         where S: ParserSink<'a>
     {
+
         parse_zero_or_more!(xml, |xml|
             parse_alternate!(xml, {
-                [|xml: Point<'a>| xml.consume_attribute_value(quote) -> |v| sink.attribute_value(LiteralAttributeValue(v))],
-                [|xml: Point<'a>| self.parse_reference(xml)          -> |e| sink.attribute_value(ReferenceAttributeValue(e))],
+                |xml| self.parse_attribute_literal(xml, sink, quote),
+                |xml| self.parse_attribute_reference(xml, sink),
             }))
     }
 
@@ -351,9 +372,9 @@ impl Parser {
 
     fn parse_reference<'a>(&self, xml: Point<'a>) -> ParseResult<'a, Reference<'a>> {
         parse_alternate!(xml, {
-            [|xml| self.parse_entity_ref(xml)       -> |e| e],
-            [|xml| self.parse_decimal_char_ref(xml) -> |d| d],
-            [|xml| self.parse_hex_char_ref(xml)     -> |h| h],
+            |xml| self.parse_entity_ref(xml),
+            |xml| self.parse_decimal_char_ref(xml),
+            |xml| self.parse_hex_char_ref(xml),
         })
     }
 
@@ -391,16 +412,26 @@ impl Parser {
         ParseResult::Success((), xml)
     }
 
+    fn parse_content_reference<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S)
+                                        -> ParseResult<'a, ()>
+        where S: ParserSink<'a>
+    {
+        let (r, xml) = try_parse!(self.parse_reference(xml));
+        sink.reference(r);
+
+        ParseResult::Success((), xml)
+    }
+
     fn parse_rest_of_content<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S)
                                         -> ParseResult<'a, ()>
         where S: ParserSink<'a>
     {
         let (_, xml) = try_parse!(parse_alternate!(xml, {
-            [|xml| self.parse_element(xml, sink) -> |_| ()],
-            [|xml| self.parse_cdata(xml, sink)   -> |_| ()],
-            [|xml| self.parse_reference(xml)     -> |r| sink.reference(r)],
-            [|xml| self.parse_comment(xml, sink) -> |_| ()],
-            [|xml| self.parse_pi(xml, sink)      -> |_| ()],
+            |xml| self.parse_element(xml, sink),
+            |xml| self.parse_cdata(xml, sink),
+            |xml| self.parse_content_reference(xml, sink),
+            |xml| self.parse_comment(xml, sink),
+            |xml| self.parse_pi(xml, sink),
         }));
 
         let (_, xml) = parse_optional!(self.parse_char_data(xml, sink), xml);
@@ -454,8 +485,8 @@ impl Parser {
 
         let (_, xml) = try_resume_after_partial_failure!(f,
             parse_alternate!(xml, {
-                [|xml| self.parse_empty_element_tail(xml)                 -> |_| ()],
-                [|xml| self.parse_non_empty_element_tail(xml, sink, name) -> |_| ()],
+                |xml| self.parse_empty_element_tail(xml),
+                |xml| self.parse_non_empty_element_tail(xml, sink, name),
             })
         );
 

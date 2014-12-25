@@ -67,6 +67,21 @@ pub enum ParseResult<'a, T> {
     Failure(ParseFailure<'a>),
 }
 
+impl<'a, T> ParseResult<'a, T> {
+    pub fn map<F, B>(self, f: F) -> ParseResult<'a, B>
+        where F: Fn(T) -> B
+    {
+        match self {
+            ParseResult::Success(v, point) =>
+                ParseResult::Success(f(v), point),
+            ParseResult::Partial(v, pf, point) =>
+                ParseResult::Partial(f(v), pf, point),
+            ParseResult::Failure(pf) =>
+                ParseResult::Failure(pf),
+        }
+    }
+}
+
 macro_rules! try_parse(
     ($e:expr) => ({
         match $e {
@@ -127,17 +142,17 @@ macro_rules! parse_alternate_rec(
         ::document::peresil::ParseResult::Failure($errors.pop())
     });
     ($start:expr, $errors:expr, {
-        [$parser:expr -> $transformer:expr],
-        $([$parser_rest:expr -> $transformer_rest:expr],)*
+        $parser:expr,
+        $($parser_rest:expr,)*
     }) => (
         match $parser($start) {
             ::document::peresil::ParseResult::Success(val, point) =>
-                ::document::peresil::ParseResult::Success($transformer(val), point),
+                ::document::peresil::ParseResult::Success(val, point),
             ::document::peresil::ParseResult::Partial(_, pf, _) |
             ::document::peresil::ParseResult::Failure(pf) => {
                 $errors.push(pf);
                 parse_alternate_rec!($start, $errors, {
-                    $([$parser_rest -> $transformer_rest],)*
+                    $($parser_rest,)*
                 })
             },
         }
@@ -146,11 +161,11 @@ macro_rules! parse_alternate_rec(
 
 macro_rules! parse_alternate(
     ($start:expr, {
-        $([$parser_rest:expr -> $transformer_rest:expr],)*
+        $($parser_rest:expr,)*
     }) => ({
         let mut errors = ::document::peresil::BestFailure::new();
         parse_alternate_rec!($start, errors, {
-            $([$parser_rest -> $transformer_rest],)*
+            $($parser_rest,)*
         })
     });
 );
