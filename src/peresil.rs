@@ -34,15 +34,15 @@ impl<'a> BestFailure<'a> {
 }
 
 #[deriving(Show,Clone,PartialEq,Copy)]
-pub struct StartPoint<'a> {
+pub struct Point<'a> {
     pub offset: uint,
     pub s: &'a str,
 }
 
-impl<'a> StartPoint<'a> {
-    pub fn slice_at(&self, position: uint) -> (&'a str, StartPoint<'a>) {
-        (self.s.slice_to(position), StartPoint{offset: self.offset + position,
-                                               s: self.s.slice_from(position)})
+impl<'a> Point<'a> {
+    pub fn slice_at(&self, position: uint) -> (&'a str, Point<'a>) {
+        (self.s.slice_to(position), Point{offset: self.offset + position,
+                                          s: self.s.slice_from(position)})
     }
 
     pub fn consume_to(&self, l: Option<uint>) -> ParseResult<'a, &'a str> {
@@ -58,12 +58,12 @@ impl<'a> StartPoint<'a> {
 
 #[deriving(Copy)]
 pub struct ParseFailure<'a> {
-    pub point: StartPoint<'a>,
+    pub point: Point<'a>,
 }
 
 pub enum ParseResult<'a, T> {
-    Success(T, StartPoint<'a>),
-    Partial(T, ParseFailure<'a>, StartPoint<'a>),
+    Success(T, Point<'a>),
+    Partial(T, ParseFailure<'a>, Point<'a>),
     Failure(ParseFailure<'a>),
 }
 
