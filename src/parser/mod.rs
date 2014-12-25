@@ -91,7 +91,6 @@ trait XmlParseExt<'a> {
     fn consume_literal(&self, literal: &str) -> ParseResult<'a, &'a str>;
     fn consume_name(&self) -> ParseResult<'a, &'a str>;
     fn consume_ncname(&self) -> ParseResult<'a, &'a str>;
-    fn consume_version_num(&self) -> ParseResult<'a, &'a str>;
     fn consume_decimal_chars(&self) -> ParseResult<'a, &'a str>;
     fn consume_hex_chars(&self) -> ParseResult<'a, &'a str>;
     fn consume_char_data(&self) -> ParseResult<'a, &'a str>;
@@ -120,10 +119,6 @@ impl<'a> XmlParseExt<'a> for Point<'a> {
 
     fn consume_ncname(&self) -> ParseResult<'a, &'a str> {
         self.consume_to(self.s.end_of_ncname())
-    }
-
-    fn consume_version_num(&self) -> ParseResult<'a, &'a str> {
-        self.consume_to(self.s.end_of_version_num())
     }
 
     fn consume_decimal_chars(&self) -> ParseResult<'a, &'a str> {
@@ -186,11 +181,20 @@ impl Parser {
     }
 
     fn parse_version_info<'a>(&self, xml: Point<'a>) -> ParseResult<'a, &'a str> {
+        fn version_num<'a>(xml: Point<'a>) -> ParseResult<'a, &'a str> {
+            let start_point = xml;
+
+            let (_, xml) = try_parse!(xml.consume_literal("1."));
+            let (_, xml) = try_parse!(xml.consume_decimal_chars());
+
+            ParseResult::Success(start_point.to(xml), xml)
+        }
+
         let (_, xml) = try_parse!(xml.consume_space());
         let (_, xml) = try_parse!(xml.consume_literal("version"));
         let (_, xml) = try_parse!(self.parse_eq(xml));
         let (version, xml) = try_parse!(
-            self.parse_quoted_value(xml, |xml, _| xml.consume_version_num())
+            self.parse_quoted_value(xml, |xml, _| version_num(xml))
         );
 
         ParseResult::Success(version, xml)

@@ -40,6 +40,11 @@ pub struct Point<'a> {
 }
 
 impl<'a> Point<'a> {
+    pub fn to(&self, other: Point<'a>) -> &'a str {
+        let len = other.offset - self.offset;
+        self.s.slice_to(len)
+    }
+
     pub fn slice_at(&self, position: uint) -> (&'a str, Point<'a>) {
         (self.s.slice_to(position), Point{offset: self.offset + position,
                                           s: self.s.slice_from(position)})

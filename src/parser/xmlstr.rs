@@ -1,7 +1,6 @@
 pub trait XmlStr {
     fn end_of_attribute(&self, quote: &str) -> Option<uint>;
     fn end_of_literal(&self, expected: &str) -> Option<uint>;
-    fn end_of_version_num(&self) -> Option<uint>;
     fn end_of_char_data(&self) -> Option<uint>;
     fn end_of_cdata(&self) -> Option<uint>;
     fn end_of_decimal_chars(&self) -> Option<uint>;
@@ -42,29 +41,6 @@ impl<'a> XmlStr for &'a str {
             None
         }
     }
-
-    fn end_of_version_num(&self) -> Option<uint> {
-        if self.starts_with("1.") {
-            let mut positions = self.char_indices().peekable();
-            positions.next();
-            positions.next();
-
-            // Need at least one character
-            match positions.peek() {
-                Some(&(_, c)) if c.is_decimal_char() => {},
-                _ => return None,
-            };
-
-            let mut positions = positions.skip_while(|&(_, c)| c.is_decimal_char());
-            match positions.next() {
-                Some((offset, _)) => Some(offset),
-                None => Some(self.len()),
-            }
-        } else {
-            None
-        }
-    }
-
 
     fn end_of_char_data(&self) -> Option<uint> {
         if self.starts_with("<") ||
