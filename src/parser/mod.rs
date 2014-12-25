@@ -174,7 +174,7 @@ impl Parser {
             None        => PrefixedName { prefix: None, local_part: prefix },
         };
 
-        ParseResult::Success((name, xml))
+        ParseResult::Success(name, xml)
     }
 
     fn parse_eq<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, ()> {
@@ -182,7 +182,7 @@ impl Parser {
         let (_, xml) = try_parse!(xml.consume_literal("="));
         let (_, xml) = parse_optional!(xml.consume_space(), xml);
 
-        ParseResult::Success(((), xml))
+        ParseResult::Success((), xml)
     }
 
     fn parse_version_info<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, &'a str> {
@@ -193,7 +193,7 @@ impl Parser {
             self.parse_quoted_value(xml, |xml, _| xml.consume_version_num())
         );
 
-        ParseResult::Success((version, xml))
+        ParseResult::Success(version, xml)
     }
 
     fn parse_xml_declaration<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, ()> {
@@ -204,7 +204,7 @@ impl Parser {
         let (_, xml) = parse_optional!(xml.consume_space(), xml);
         let (_, xml) = try_parse!(xml.consume_literal("?>"));
 
-        ParseResult::Success(((), xml))
+        ParseResult::Success((), xml)
     }
 
     fn parse_misc<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
@@ -240,7 +240,7 @@ impl Parser {
         let (value, f, xml) = try_partial_parse!(f(xml));
         let (_, xml) = try_resume_after_partial_failure!(f, xml.consume_literal(quote));
 
-        ParseResult::Success((value, xml))
+        ParseResult::Success(value, xml)
     }
 
     fn parse_quoted_value<'a, T>(&self,
@@ -283,7 +283,7 @@ impl Parser {
 
         sink.attribute_end(name);
 
-        ParseResult::Success(((), xml))
+        ParseResult::Success((), xml)
     }
 
     fn parse_attributes<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S)
@@ -298,7 +298,7 @@ impl Parser {
         let (name, xml) = try_parse!(self.parse_prefixed_name(xml));
         let (_, xml) = parse_optional!(xml.consume_space(), xml);
         let (_, xml) = try_parse!(xml.consume_literal(">"));
-        ParseResult::Success((name, xml))
+        ParseResult::Success(name, xml)
     }
 
     fn parse_char_data<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S)
@@ -309,7 +309,7 @@ impl Parser {
 
         sink.text(text);
 
-        ParseResult::Success(((), xml))
+        ParseResult::Success((), xml)
     }
 
     fn parse_cdata<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S)
@@ -322,7 +322,7 @@ impl Parser {
 
         sink.text(text);
 
-        ParseResult::Success(((), xml))
+        ParseResult::Success((), xml)
     }
 
     fn parse_entity_ref<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
@@ -330,7 +330,7 @@ impl Parser {
         let (name, xml) = try_parse!(xml.consume_name());
         let (_, xml) = try_parse!(xml.consume_literal(";"));
 
-        ParseResult::Success((EntityReference(name), xml))
+        ParseResult::Success(EntityReference(name), xml)
     }
 
     fn parse_decimal_char_ref<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
@@ -338,7 +338,7 @@ impl Parser {
         let (dec, xml) = try_parse!(xml.consume_decimal_chars());
         let (_, xml) = try_parse!(xml.consume_literal(";"));
 
-        ParseResult::Success((DecimalCharReference(dec), xml))
+        ParseResult::Success(DecimalCharReference(dec), xml)
     }
 
     fn parse_hex_char_ref<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
@@ -346,7 +346,7 @@ impl Parser {
         let (hex, xml) = try_parse!(xml.consume_hex_chars());
         let (_, xml) = try_parse!(xml.consume_literal(";"));
 
-        ParseResult::Success((HexCharReference(hex), xml))
+        ParseResult::Success(HexCharReference(hex), xml)
     }
 
     fn parse_reference<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, Reference<'a>> {
@@ -366,7 +366,7 @@ impl Parser {
 
         sink.comment(text);
 
-        ParseResult::Success(((), xml))
+        ParseResult::Success((), xml)
     }
 
     fn parse_pi_value<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, &'a str> {
@@ -388,7 +388,7 @@ impl Parser {
 
         sink.processing_instruction(target, value);
 
-        ParseResult::Success(((), xml))
+        ParseResult::Success((), xml)
     }
 
     fn parse_content<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
@@ -408,9 +408,9 @@ impl Parser {
             });
 
             let (_, after) = match xxx {
-                ParseResult::Success(x) => x,
-                ParseResult::Partial((_, pf, _)) |
-                ParseResult::Failure(pf) => return ParseResult::Partial(((), pf, start)),
+                ParseResult::Success(v, xml) => (v, xml),
+                ParseResult::Partial(_, pf, _) |
+                ParseResult::Failure(pf) => return ParseResult::Partial((), pf, start),
             };
 
             let (_, xml) = parse_optional!(self.parse_char_data(after, sink), after);
@@ -422,7 +422,7 @@ impl Parser {
     fn parse_empty_element_tail<'a>(&self, xml: StartPoint<'a>) -> ParseResult<'a, ()> {
         let (_, xml) = try_parse!(xml.consume_literal("/>"));
 
-        ParseResult::Success(((), xml))
+        ParseResult::Success((), xml)
     }
 
     fn parse_non_empty_element_tail<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S, start_name: PrefixedName<'a>)
@@ -439,7 +439,7 @@ impl Parser {
             panic!("tags do not match!");
         }
 
-        ParseResult::Success(((), xml))
+        ParseResult::Success((), xml)
     }
 
     fn parse_element<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
@@ -465,7 +465,7 @@ impl Parser {
 
         sink.element_end(name);
 
-        ParseResult::Success(((), xml))
+        ParseResult::Success((), xml)
     }
 
     fn parse_document<'a, 's, S>(&self, xml: StartPoint<'a>, sink: &'s mut S)
@@ -476,7 +476,7 @@ impl Parser {
         let (_, xml) = try_resume_after_partial_failure!(f, self.parse_element(xml, sink));
         let (_, xml) = parse_optional!(self.parse_miscs(xml, sink), xml);
 
-        ParseResult::Success(((), xml))
+        ParseResult::Success((), xml)
     }
 
     pub fn parse<'a>(&self, xml: &'a str) -> Result<super::Package, uint> {
@@ -488,8 +488,8 @@ impl Parser {
             let mut hydrator = SaxHydrator::new(&doc);
 
             match self.parse_document(xml, &mut hydrator) {
-                ParseResult::Success(x) => x,
-                ParseResult::Partial((_, pf, _)) |
+                ParseResult::Success(v, xml) => (v, xml),
+                ParseResult::Partial(_, pf, _) |
                 ParseResult::Failure(pf) => return Err(pf.point.offset),
             };
         }

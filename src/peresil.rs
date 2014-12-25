@@ -48,7 +48,10 @@ impl<'a> StartPoint<'a> {
     pub fn consume_to(&self, l: Option<uint>) -> ParseResult<'a, &'a str> {
         match l {
             None => ParseResult::Failure(ParseFailure{point: self.clone()}),
-            Some(position) => ParseResult::Success(self.slice_at(position)),
+            Some(position) => {
+                let (v, p) = self.slice_at(position);
+                ParseResult::Success(v, p)
+            },
         }
     }
 }
@@ -59,16 +62,16 @@ pub struct ParseFailure<'a> {
 }
 
 pub enum ParseResult<'a, T> {
-    Success((T, StartPoint<'a>)),
-    Partial((T, ParseFailure<'a>, StartPoint<'a>)),
-    Failure((ParseFailure<'a>)),
+    Success(T, StartPoint<'a>),
+    Partial(T, ParseFailure<'a>, StartPoint<'a>),
+    Failure(ParseFailure<'a>),
 }
 
 macro_rules! try_parse(
     ($e:expr) => ({
         match $e {
-            ::document::peresil::ParseResult::Success(x) => x,
-            ::document::peresil::ParseResult::Partial((_, pf, _)) |
+            ::document::peresil::ParseResult::Success(v, p) => (v, p),
+            ::document::peresil::ParseResult::Partial(_, pf, _) |
             ::document::peresil::ParseResult::Failure(pf) => return ::document::peresil::ParseResult::Failure(pf),
         }
     })
@@ -77,8 +80,8 @@ macro_rules! try_parse(
 macro_rules! try_partial_parse(
     ($e:expr) => ({
         match $e {
-            ::document::peresil::ParseResult::Success((v, xml)) => (v, ::document::peresil::BestFailure::new(), xml),
-            ::document::peresil::ParseResult::Partial((v, pf, xml)) => (v, ::document::peresil::BestFailure::with(pf), xml),
+            ::document::peresil::ParseResult::Success(v, xml) => (v, ::document::peresil::BestFailure::new(), xml),
+            ::document::peresil::ParseResult::Partial(v, pf, xml) => (v, ::document::peresil::BestFailure::with(pf), xml),
             ::document::peresil::ParseResult::Failure(pf) => return ::document::peresil::ParseResult::Failure(pf),
         }
     })
@@ -87,8 +90,8 @@ macro_rules! try_partial_parse(
 macro_rules! try_resume_after_partial_failure(
     ($partial:expr, $e:expr) => ({
         match $e {
-            ::document::peresil::ParseResult::Success(x) => x,
-            ::document::peresil::ParseResult::Partial((_, pf, _)) |
+            ::document::peresil::ParseResult::Success(v, p) => (v, p),
+            ::document::peresil::ParseResult::Partial(_, pf, _) |
             ::document::peresil::ParseResult::Failure(pf) => {
                 let mut partial = $partial;
                 partial.push(pf);
@@ -102,8 +105,8 @@ macro_rules! try_resume_after_partial_failure(
 macro_rules! parse_optional(
     ($parser:expr, $start:expr) => ({
         match $parser {
-            ::document::peresil::ParseResult::Success((value, next)) => (Some(value), next),
-            ::document::peresil::ParseResult::Partial((value, _, next)) => (Some(value), next),
+            ::document::peresil::ParseResult::Success(value, next) => (Some(value), next),
+            ::document::peresil::ParseResult::Partial(value, _, next) => (Some(value), next),
             ::document::peresil::ParseResult::Failure(_) => (None, $start),
         }
     })
@@ -119,8 +122,8 @@ macro_rules! parse_alternate_rec(
         $([$parser_rest:expr -> $transformer_rest:expr],)*
     }) => (
         match $parser($start) {
-            ::document::peresil::ParseResult::Success((val, next)) => ::document::peresil::ParseResult::Success(($transformer(val), next)),
-            ::document::peresil::ParseResult::Partial((_, pf, _)) |
+            ::document::peresil::ParseResult::Success(val, next) => ::document::peresil::ParseResult::Success($transformer(val), next),
+            ::document::peresil::ParseResult::Partial(_, pf, _) |
             ::document::peresil::ParseResult::Failure(pf) => {
                 $errors.push(pf);
                 parse_alternate_rec!($start, $errors, {
@@ -150,8 +153,8 @@ macro_rules! parse_zero_or_more(
         let mut start = $start;
         loop {
             let (_, next_start) = match $parser(start) {
-                ::document::peresil::ParseResult::Success(x) => x,
-                ::document::peresil::ParseResult::Partial((_, pf, _)) |
+                ::document::peresil::ParseResult::Success(v, p) => (v, p),
+                ::document::peresil::ParseResult::Partial(_, pf, _) |
                 ::document::peresil::ParseResult::Failure(pf) => {
                     err = Some(pf);
                     break
@@ -161,6 +164,6 @@ macro_rules! parse_zero_or_more(
             start = next_start;
         }
 
-        ::document::peresil::ParseResult::Partial(((), err.unwrap(), start))
+        ::document::peresil::ParseResult::Partial((), err.unwrap(), start)
     }};
 );
