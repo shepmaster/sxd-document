@@ -391,32 +391,28 @@ impl Parser {
         ParseResult::Success((), xml)
     }
 
+    fn parse_rest_of_content<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S)
+                                        -> ParseResult<'a, ()>
+        where S: ParserSink<'a>
+    {
+        let (_, xml) = try_parse!(parse_alternate!(xml, {
+            [|xml| self.parse_element(xml, sink) -> |_| ()],
+            [|xml| self.parse_cdata(xml, sink)   -> |_| ()],
+            [|xml| self.parse_reference(xml)     -> |r| sink.reference(r)],
+            [|xml| self.parse_comment(xml, sink) -> |_| ()],
+            [|xml| self.parse_pi(xml, sink)      -> |_| ()],
+        }));
+
+        let (_, xml) = parse_optional!(self.parse_char_data(xml, sink), xml);
+
+        ParseResult::Success((), xml)
+    }
+
     fn parse_content<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
         where S: ParserSink<'a>
     {
         let (_, xml) = parse_optional!(self.parse_char_data(xml, sink), xml);
-
-        // Pattern: zero-or-more
-        let mut start = xml;
-        loop {
-            let xxx = parse_alternate!(start, {
-                [|xml| self.parse_element(xml, sink) -> |_| ()],
-                [|xml| self.parse_cdata(xml, sink)   -> |_| ()],
-                [|xml| self.parse_reference(xml)     -> |r| sink.reference(r)],
-                [|xml| self.parse_comment(xml, sink) -> |_| ()],
-                [|xml| self.parse_pi(xml, sink)      -> |_| ()],
-            });
-
-            let (_, after) = match xxx {
-                ParseResult::Success(v, xml) => (v, xml),
-                ParseResult::Partial(_, pf, _) |
-                ParseResult::Failure(pf) => return ParseResult::Partial((), pf, start),
-            };
-
-            let (_, xml) = parse_optional!(self.parse_char_data(after, sink), after);
-
-            start = xml;
-        }
+        parse_zero_or_more!(xml, |xml| self.parse_rest_of_content(xml, sink))
     }
 
     fn parse_empty_element_tail<'a>(&self, xml: Point<'a>) -> ParseResult<'a, ()> {
