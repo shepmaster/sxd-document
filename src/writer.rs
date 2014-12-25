@@ -108,7 +108,7 @@ impl<'d> PrefixMapping<'d> {
         self.scopes.pop();
     }
 
-    fn prefixes_in_current_scope(&self) -> slice::Items<(String, &'d str)> {
+    fn prefixes_in_current_scope(&self) -> slice::Iter<(String, &'d str)> {
         self.scopes.last().unwrap().defined_prefixes.iter()
     }
 

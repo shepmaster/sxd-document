@@ -9,7 +9,7 @@ use document::parser::Parser;
 
 fn pretty_error(xml: &str, position: uint) -> &str {
     let s = xml.slice_from(position);
-    let l = s.char_len();
+    let l = s.chars().count();
     s.slice_chars(0, min(l, 15))
 }
 
