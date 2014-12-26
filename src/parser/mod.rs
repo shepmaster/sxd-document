@@ -169,7 +169,7 @@ impl Parser {
         }
 
         let (prefix, xml) = try_parse!(xml.consume_ncname());
-        let (local, xml)  = parse_optional!(parse_local(xml), xml);
+        let (local, xml)  = parse_local(xml).optional(xml);
 
         let name = match local {
             Some(local) => PrefixedName { prefix: Some(prefix), local_part: local },
@@ -180,9 +180,9 @@ impl Parser {
     }
 
     fn parse_eq<'a>(&self, xml: Point<'a>) -> ParseResult<'a, ()> {
-        let (_, xml) = parse_optional!(xml.consume_space(), xml);
+        let (_, xml) = xml.consume_space().optional(xml);
         let (_, xml) = try_parse!(xml.consume_literal("="));
-        let (_, xml) = parse_optional!(xml.consume_space(), xml);
+        let (_, xml) = xml.consume_space().optional(xml);
 
         success((), xml)
     }
@@ -210,9 +210,9 @@ impl Parser {
     fn parse_xml_declaration<'a>(&self, xml: Point<'a>) -> ParseResult<'a, ()> {
         let (_, xml) = try_parse!(xml.consume_literal("<?xml"));
         let (_version, xml) = try_parse!(self.parse_version_info(xml));
-        // let (encoding, xml) = parse_optional!(self.parse_encoding_declaration(xml));
-        // let (standalone, xml) = parse_optional!(self.parse_standalone_declaration(xml));
-        let (_, xml) = parse_optional!(xml.consume_space(), xml);
+        // let (encoding, xml) = self.parse_encoding_declaration(xml).optional(xml));
+        // let (standalone, xml) = self.parse_standalone_declaration(xml).optional(xml);
+        let (_, xml) = xml.consume_space().optional(xml);
         let (_, xml) = try_parse!(xml.consume_literal("?>"));
 
         success((), xml)
@@ -221,23 +221,21 @@ impl Parser {
     fn parse_misc<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
         where S: ParserSink<'a>
     {
-        parse_alternate!(xml, {
-            |xml: Point<'a>| self.parse_comment(xml, sink),
-            |xml: Point<'a>| self.parse_pi(xml, sink),
-            |xml: Point<'a>| xml.consume_space().map(|_| ()),
-        })
+        self.parse_comment(xml, sink)
+            .or_else(|| self.parse_pi(xml, sink))
+            .or_else(|| xml.consume_space().map(|_| ()))
     }
 
     fn parse_miscs<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
         where S: ParserSink<'a>
     {
-        parse_zero_or_more!(xml, |xml| self.parse_misc(xml, sink))
+        peresil::zero_or_more(xml, |xml| self.parse_misc(xml, sink)).map(|_| ())
     }
 
     fn parse_prolog<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
         where S: ParserSink<'a>
     {
-        let (_, xml) = parse_optional!(self.parse_xml_declaration(xml), xml);
+        let (_, xml) = self.parse_xml_declaration(xml).optional(xml);
         self.parse_miscs(xml, sink)
     }
 
@@ -259,10 +257,8 @@ impl Parser {
                                  f: |Point<'a>, &str| -> ParseResult<'a, T>)
                                  -> ParseResult<'a, T>
     {
-        parse_alternate!(xml, {
-            |xml| self.parse_one_quoted_value(xml, "'",  |xml| f(xml, "'")),
-            |xml| self.parse_one_quoted_value(xml, "\"", |xml| f(xml, "\"")),
-        })
+        self.parse_one_quoted_value(xml, "'",  |xml| f(xml, "'"))
+            .or_else(|| self.parse_one_quoted_value(xml, "\"", |xml| f(xml, "\"")))
     }
 
     fn parse_attribute_literal<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S, quote: &str)
@@ -290,11 +286,10 @@ impl Parser {
         where S: ParserSink<'a>
     {
 
-        parse_zero_or_more!(xml, |xml|
-            parse_alternate!(xml, {
-                |xml| self.parse_attribute_literal(xml, sink, quote),
-                |xml| self.parse_attribute_reference(xml, sink),
-            }))
+        peresil::zero_or_more(xml, |xml| {
+            self.parse_attribute_literal(xml, sink, quote)
+                .or_else(|| self.parse_attribute_reference(xml, sink))
+        }).map(|_| ())
     }
 
     fn parse_attribute<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S)
@@ -322,13 +317,13 @@ impl Parser {
                                    -> ParseResult<'a, ()>
         where S: ParserSink<'a>
     {
-        parse_zero_or_more!(xml, |xml| self.parse_attribute(xml, sink))
+        peresil::zero_or_more(xml, |xml| self.parse_attribute(xml, sink)).map(|_| ())
     }
 
     fn parse_element_end<'a>(&self, xml: Point<'a>) -> ParseResult<'a, PrefixedName<'a>> {
         let (_, xml) = try_parse!(xml.consume_literal("</"));
         let (name, xml) = try_parse!(self.parse_prefixed_name(xml));
-        let (_, xml) = parse_optional!(xml.consume_space(), xml);
+        let (_, xml) = xml.consume_space().optional(xml);
         let (_, xml) = try_parse!(xml.consume_literal(">"));
         success(name, xml)
     }
@@ -382,11 +377,9 @@ impl Parser {
     }
 
     fn parse_reference<'a>(&self, xml: Point<'a>) -> ParseResult<'a, Reference<'a>> {
-        parse_alternate!(xml, {
-            |xml| self.parse_entity_ref(xml),
-            |xml| self.parse_decimal_char_ref(xml),
-            |xml| self.parse_hex_char_ref(xml),
-        })
+        self.parse_entity_ref(xml)
+            .or_else(|| self.parse_decimal_char_ref(xml))
+            .or_else(|| self.parse_hex_char_ref(xml))
     }
 
     fn parse_comment<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
@@ -411,7 +404,7 @@ impl Parser {
     {
         let (_, xml) = try_parse!(xml.consume_literal("<?"));
         let (target, xml) = try_parse!(xml.consume_name());
-        let (value, xml) = parse_optional!(self.parse_pi_value(xml), xml);
+        let (value, xml) = self.parse_pi_value(xml).optional(xml);
         let (_, xml) = try_parse!(xml.consume_literal("?>"));
 
         if target.eq_ignore_ascii_case("xml") {
@@ -437,15 +430,15 @@ impl Parser {
                                         -> ParseResult<'a, ()>
         where S: ParserSink<'a>
     {
-        let (_, xml) = try_parse!(parse_alternate!(xml, {
-            |xml| self.parse_element(xml, sink),
-            |xml| self.parse_cdata(xml, sink),
-            |xml| self.parse_content_reference(xml, sink),
-            |xml| self.parse_comment(xml, sink),
-            |xml| self.parse_pi(xml, sink),
-        }));
+        let (_, xml) = try_parse!({
+            self.parse_element(xml, sink)
+                .or_else(|| self.parse_cdata(xml, sink))
+                .or_else(|| self.parse_content_reference(xml, sink))
+                .or_else(|| self.parse_comment(xml, sink))
+                .or_else(|| self.parse_pi(xml, sink))
+        });
 
-        let (_, xml) = parse_optional!(self.parse_char_data(xml, sink), xml);
+        let (_, xml) = self.parse_char_data(xml, sink).optional(xml);
 
         success((), xml)
     }
@@ -453,8 +446,8 @@ impl Parser {
     fn parse_content<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
         where S: ParserSink<'a>
     {
-        let (_, xml) = parse_optional!(self.parse_char_data(xml, sink), xml);
-        parse_zero_or_more!(xml, |xml| self.parse_rest_of_content(xml, sink))
+        let (_, xml) = self.parse_char_data(xml, sink).optional(xml);
+        peresil::zero_or_more(xml, |xml| self.parse_rest_of_content(xml, sink)).map(|_| ())
     }
 
     fn parse_empty_element_tail<'a>(&self, xml: Point<'a>) -> ParseResult<'a, ()> {
@@ -492,14 +485,12 @@ impl Parser {
         let (_, f, xml) = try_partial_parse!(self.parse_attributes(xml, sink));
         sink.attributes_end();
 
-        let (_, xml) = parse_optional!(xml.consume_space(), xml);
+        let (_, xml) = xml.consume_space().optional(xml);
 
-        let (_, xml) = try_resume_after_partial_failure!(f,
-            parse_alternate!(xml, {
-                |xml| self.parse_empty_element_tail(xml),
-                |xml| self.parse_non_empty_element_tail(xml, sink, name),
-            })
-        );
+        let (_, xml) = try_resume_after_partial_failure!(f, {
+            self.parse_empty_element_tail(xml)
+                .or_else(|| self.parse_non_empty_element_tail(xml, sink, name))
+        });
 
         sink.element_end(name);
 
@@ -512,7 +503,7 @@ impl Parser {
     {
         let (_, f, xml) = try_partial_parse!(self.parse_prolog(xml, sink));
         let (_, xml) = try_resume_after_partial_failure!(f, self.parse_element(xml, sink));
-        let (_, xml) = parse_optional!(self.parse_miscs(xml, sink), xml);
+        let (_, xml) = self.parse_miscs(xml, sink).optional(xml);
 
         success((), xml)
     }

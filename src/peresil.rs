@@ -88,6 +88,37 @@ impl<'a, T, E> Result<'a, T, E> {
         Result::Success(Progress { data: data, point: point })
     }
 
+    // Pattern: zero-or-one
+    pub fn optional(self, point: Point<'a>) -> (Option<T>, Point<'a>) {
+        match self {
+            Result::Success(progress) |
+            Result::Partial{ success: progress, .. } =>
+                (Some(progress.data), progress.point),
+            Result::Failure(_) =>
+                (None, point),
+        }
+    }
+
+    // Pattern: alternate
+    pub fn or_else(self, f: || -> Result<'a, T, E>) -> Result<'a, T, E> {
+        match self {
+            Result::Success(..) => self,
+            Result::Partial{ failure: fail, .. } |
+            Result::Failure(fail) => {
+                let next = f();
+                match next {
+                    Result::Success(..) => next,
+                    Result::Partial{ failure: next_fail, .. } |
+                    Result::Failure(next_fail) => {
+                        let mut bf = BestFailure::with(fail);
+                        bf.push(next_fail);
+                        Result::Failure(bf.pop())
+                    }
+                }
+            },
+        }
+    }
+
     pub fn map<F, B>(self, f: F) -> Result<'a, B, E>
         where F: Fn(T) -> B
     {
@@ -146,81 +177,32 @@ macro_rules! try_resume_after_partial_failure(
     });
 );
 
-// Pattern: zero-or-one
-#[macro_export]
-macro_rules! parse_optional(
-    ($parser:expr, $start:expr) => ({
-        match $parser {
-            ::document::peresil::Result::Success(progress) |
-            ::document::peresil::Result::Partial{ success: progress, .. } =>
-                (Some(progress.data), progress.point),
-            ::document::peresil::Result::Failure(_) =>
-                (None, $start),
-        }
-    })
-);
+// Pattern: zero-or-many
+pub fn zero_or_more<'a, T, E, P>(point: Point<'a>, parser: P) -> Result<'a, Vec<T>, E>
+    where P: FnMut(Point<'a>) -> Result<'a, T, E>
+{
+    let mut err;
+    let mut data = Vec::new();
+    let mut point = point;
+    let mut parser = parser;
 
-// Pattern: alternate
-#[macro_export]
-macro_rules! parse_alternate_rec(
-    ($start:expr, $errors:expr, {}) => ({
-        ::document::peresil::Result::Failure($errors.pop())
-    });
-    ($start:expr, $errors:expr, {
-        $parser:expr,
-        $($parser_rest:expr,)*
-    }) => ({
-        let result = $parser($start);
-        match result {
-            ::document::peresil::Result::Success(..) =>
-                result,
-            ::document::peresil::Result::Partial{ failure: pf, .. } |
-            ::document::peresil::Result::Failure(pf) => {
-                $errors.push(pf);
-                parse_alternate_rec!($start, $errors, {
-                    $($parser_rest,)*
-                })
-            },
-        }
-    });
-);
+    loop {
+        let (d, next_start) = match parser(point) {
+            Result::Success(progress) =>
+                progress.to_tuple(),
+            Result::Partial{ failure: pf, .. } |
+            Result::Failure(pf) => {
+                err = Some(pf);
+                break
+            }
+        };
 
-#[macro_export]
-macro_rules! parse_alternate(
-    ($start:expr, {
-        $($parser_rest:expr,)*
-    }) => ({
-        let mut errors = ::document::peresil::BestFailure::new();
-        parse_alternate_rec!($start, errors, {
-            $($parser_rest,)*
-        })
-    });
-);
+        data.push(d);
+        point = next_start;
+    }
 
-// Pattern: zero-or-more
-#[macro_export]
-macro_rules! parse_zero_or_more(
-    ($start:expr, $parser:expr) => {{
-        let mut err;
-
-        let mut start = $start;
-        loop {
-            let (_, next_start) = match $parser(start) {
-                ::document::peresil::Result::Success(progress) =>
-                    progress.to_tuple(),
-                ::document::peresil::Result::Partial{ failure: pf, ..} |
-                ::document::peresil::Result::Failure(pf) => {
-                    err = Some(pf);
-                    break
-                }
-            };
-
-            start = next_start;
-        }
-
-        ::document::peresil::Result::Partial {
-            success: ::document::peresil::Progress { data: (), point: start },
-            failure: err.unwrap()
-        }
-    }};
-);
+    Result::Partial {
+        success: Progress { data: data, point: point },
+        failure: err.unwrap()
+    }
+}
