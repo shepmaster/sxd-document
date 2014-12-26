@@ -110,7 +110,7 @@ impl<'a, T> Progress<'a, T> {
     }
 
     pub fn map<F, B>(self, f: F) -> Progress<'a, B>
-        where F: Fn(T) -> B
+        where F: FnOnce(T) -> B
     {
         Progress { data: f(self.data), point: self.point }
     }
@@ -159,7 +159,7 @@ impl<'a, T, E> Result<'a, T, E> {
     }
 
     pub fn map<F, B>(self, f: F) -> Result<'a, B, E>
-        where F: Fn(T) -> B
+        where F: FnOnce(T) -> B
     {
         match self {
             Result::Success(prog) =>
