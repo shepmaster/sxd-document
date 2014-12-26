@@ -1,13 +1,13 @@
+use super::super::peresil::StrParseExt;
+
 pub trait XmlStr {
     fn end_of_attribute(&self, quote: &str) -> Option<uint>;
-    fn end_of_literal(&self, expected: &str) -> Option<uint>;
     fn end_of_char_data(&self) -> Option<uint>;
     fn end_of_cdata(&self) -> Option<uint>;
     fn end_of_decimal_chars(&self) -> Option<uint>;
     fn end_of_hex_chars(&self) -> Option<uint>;
     fn end_of_comment(&self) -> Option<uint>;
     fn end_of_pi_value(&self) -> Option<uint>;
-    fn end_of_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> Option<uint>;
     fn end_of_name(&self) -> Option<uint>;
     fn end_of_ncname(&self) -> Option<uint>;
     fn end_of_space(&self) -> Option<uint>;
@@ -31,14 +31,6 @@ impl<'a> XmlStr for &'a str {
         match positions.next() {
             Some((offset, _)) => Some(offset),
             None => Some(self.len())
-        }
-    }
-
-    fn end_of_literal(&self, expected: &str) -> Option<uint> {
-        if self.starts_with(expected) {
-            Some(expected.len())
-        } else {
-            None
         }
     }
 
@@ -102,26 +94,6 @@ impl<'a> XmlStr for &'a str {
         match self.find_str("?>") {
             None => None,
             Some(offset) => Some(offset),
-        }
-    }
-
-    fn end_of_start_rest(&self,
-                         is_first: |char| -> bool,
-                         is_rest: |char| -> bool)
-                         -> Option<uint>
-    {
-        let mut positions = self.char_indices();
-
-        match positions.next() {
-            Some((_, c)) if is_first(c) => (),
-            Some((_, _)) => return None,
-            None => return None,
-        };
-
-        let mut positions = positions.skip_while(|&(_, c)| is_rest(c));
-        match positions.next() {
-            Some((offset, _)) => Some(offset),
-            None => Some(self.len()),
         }
     }
 

@@ -95,7 +95,6 @@ enum Reference<'a> {
 trait XmlParseExt<'a> {
     fn consume_space(&self) -> ParseResult<'a, &'a str>;
     fn consume_attribute_value(&self, quote: &str) -> ParseResult<'a, &'a str>;
-    fn consume_literal(&self, literal: &str) -> ParseResult<'a, &'a str>;
     fn consume_name(&self) -> ParseResult<'a, &'a str>;
     fn consume_ncname(&self) -> ParseResult<'a, &'a str>;
     fn consume_decimal_chars(&self) -> ParseResult<'a, &'a str>;
@@ -114,10 +113,6 @@ impl<'a> XmlParseExt<'a> for Point<'a> {
 
     fn consume_attribute_value(&self, quote: &str) -> ParseResult<'a, &'a str> {
         self.consume_to(self.s.end_of_attribute(quote))
-    }
-
-    fn consume_literal(&self, literal: &str) -> ParseResult<'a, &'a str> {
-        self.consume_to(self.s.end_of_literal(literal))
     }
 
     fn consume_name(&self) -> ParseResult<'a, &'a str> {

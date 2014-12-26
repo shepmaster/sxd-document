@@ -1,5 +1,40 @@
 #![macro_escape]
 
+pub trait StrParseExt {
+    fn end_of_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> Option<uint>;
+    fn end_of_literal(&self, expected: &str) -> Option<uint>;
+}
+
+impl<'a> StrParseExt for &'a str {
+    fn end_of_start_rest(&self,
+                         is_first: |char| -> bool,
+                         is_rest: |char| -> bool)
+                         -> Option<uint>
+    {
+        let mut positions = self.char_indices();
+
+        match positions.next() {
+            Some((_, c)) if is_first(c) => (),
+            Some((_, _)) => return None,
+            None => return None,
+        };
+
+        let mut positions = positions.skip_while(|&(_, c)| is_rest(c));
+        match positions.next() {
+            Some((offset, _)) => Some(offset),
+            None => Some(self.len()),
+        }
+    }
+
+    fn end_of_literal(&self, expected: &str) -> Option<uint> {
+        if self.starts_with(expected) {
+            Some(expected.len())
+        } else {
+            None
+        }
+    }
+}
+
 pub struct BestFailure<'a, E> {
     pub failure: Option<Progress<'a, E>>
 }
@@ -57,6 +92,10 @@ impl<'a> Point<'a> {
             None => Result::Failure(Progress{point: self.clone(), data: None}),
             Some(position) => Result::Success(self.slice_at(position)),
         }
+    }
+
+    pub fn consume_literal<E>(&self, literal: &str) -> Result<'a, &'a str, E> {
+        self.consume_to(self.s.end_of_literal(literal))
     }
 }
 
