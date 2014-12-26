@@ -52,10 +52,10 @@ impl<'a> Point<'a> {
         }
     }
 
-    pub fn consume_to<E>(&self, l: Option<uint>) -> ParseResult<'a, &'a str, E> {
+    pub fn consume_to<E>(&self, l: Option<uint>) -> Result<'a, &'a str, E> {
         match l {
-            None => ParseResult::Failure(Progress{point: self.clone(), data: None}),
-            Some(position) => ParseResult::Success(self.slice_at(position)),
+            None => Result::Failure(Progress{point: self.clone(), data: None}),
+            Some(position) => Result::Success(self.slice_at(position)),
         }
     }
 }
@@ -77,28 +77,28 @@ impl<'a, T> Progress<'a, T> {
     }
 }
 
-pub enum ParseResult<'a, T, E> {
+pub enum Result<'a, T, E> {
     Success(Progress<'a, T>),
     Partial{success: Progress<'a, T>, failure: Progress<'a, Option<E>>},
     Failure(Progress<'a, Option<E>>),
 }
 
-impl<'a, T, E> ParseResult<'a, T, E> {
-    pub fn success(data: T, point: Point<'a>) -> ParseResult<'a, T, E> {
-        ParseResult::Success(Progress { data: data, point: point })
+impl<'a, T, E> Result<'a, T, E> {
+    pub fn success(data: T, point: Point<'a>) -> Result<'a, T, E> {
+        Result::Success(Progress { data: data, point: point })
     }
 
-    pub fn map<F, B>(self, f: F) -> ParseResult<'a, B, E>
+    pub fn map<F, B>(self, f: F) -> Result<'a, B, E>
         where F: Fn(T) -> B
     {
         match self {
-            ParseResult::Success(prog) =>
-                ParseResult::Success(prog.map(f)),
-            ParseResult::Partial{success: s, failure: ff} => {
-                ParseResult::Partial{ success: s.map(f), failure: ff}
+            Result::Success(prog) =>
+                Result::Success(prog.map(f)),
+            Result::Partial{success: s, failure: ff} => {
+                Result::Partial{ success: s.map(f), failure: ff}
             },
-            ParseResult::Failure(pf) =>
-                ParseResult::Failure(pf),
+            Result::Failure(pf) =>
+                Result::Failure(pf),
         }
     }
 }
@@ -106,11 +106,11 @@ impl<'a, T, E> ParseResult<'a, T, E> {
 macro_rules! try_parse(
     ($e:expr) => ({
         match $e {
-            ::document::peresil::ParseResult::Success(progress) =>
+            ::document::peresil::Result::Success(progress) =>
                 progress.to_tuple(),
-            ::document::peresil::ParseResult::Partial{ failure: pf, .. } |
-            ::document::peresil::ParseResult::Failure(pf) =>
-                return ::document::peresil::ParseResult::Failure(pf),
+            ::document::peresil::Result::Partial{ failure: pf, .. } |
+            ::document::peresil::Result::Failure(pf) =>
+                return ::document::peresil::Result::Failure(pf),
         }
     })
 );
@@ -118,12 +118,12 @@ macro_rules! try_parse(
 macro_rules! try_partial_parse(
     ($e:expr) => ({
         match $e {
-            ::document::peresil::ParseResult::Success(progress) =>
+            ::document::peresil::Result::Success(progress) =>
                 (progress.data, ::document::peresil::BestFailure::new(), progress.point),
-            ::document::peresil::ParseResult::Partial{ success: s, failure: pf } =>
+            ::document::peresil::Result::Partial{ success: s, failure: pf } =>
                 (s.data, ::document::peresil::BestFailure::with(pf), s.point),
-            ::document::peresil::ParseResult::Failure(pf) =>
-                return ::document::peresil::ParseResult::Failure(pf),
+            ::document::peresil::Result::Failure(pf) =>
+                return ::document::peresil::Result::Failure(pf),
         }
     })
 );
@@ -131,13 +131,13 @@ macro_rules! try_partial_parse(
 macro_rules! try_resume_after_partial_failure(
     ($partial:expr, $e:expr) => ({
         match $e {
-            ::document::peresil::ParseResult::Success(progress) =>
+            ::document::peresil::Result::Success(progress) =>
                 progress.to_tuple(),
-            ::document::peresil::ParseResult::Partial{ failure: pf, .. } |
-            ::document::peresil::ParseResult::Failure(pf) => {
+            ::document::peresil::Result::Partial{ failure: pf, .. } |
+            ::document::peresil::Result::Failure(pf) => {
                 let mut partial = $partial;
                 partial.push(pf);
-                return ::document::peresil::ParseResult::Failure(partial.pop())
+                return ::document::peresil::Result::Failure(partial.pop())
             },
         }
     });
@@ -147,10 +147,10 @@ macro_rules! try_resume_after_partial_failure(
 macro_rules! parse_optional(
     ($parser:expr, $start:expr) => ({
         match $parser {
-            ::document::peresil::ParseResult::Success(progress) |
-            ::document::peresil::ParseResult::Partial{ success: progress, .. } =>
+            ::document::peresil::Result::Success(progress) |
+            ::document::peresil::Result::Partial{ success: progress, .. } =>
                 (Some(progress.data), progress.point),
-            ::document::peresil::ParseResult::Failure(_) =>
+            ::document::peresil::Result::Failure(_) =>
                 (None, $start),
         }
     })
@@ -159,7 +159,7 @@ macro_rules! parse_optional(
 // Pattern: alternate
 macro_rules! parse_alternate_rec(
     ($start:expr, $errors:expr, {}) => ({
-        ::document::peresil::ParseResult::Failure($errors.pop())
+        ::document::peresil::Result::Failure($errors.pop())
     });
     ($start:expr, $errors:expr, {
         $parser:expr,
@@ -167,10 +167,10 @@ macro_rules! parse_alternate_rec(
     }) => ({
         let result = $parser($start);
         match result {
-            ::document::peresil::ParseResult::Success(..) =>
+            ::document::peresil::Result::Success(..) =>
                 result,
-            ::document::peresil::ParseResult::Partial{ failure: pf, .. } |
-            ::document::peresil::ParseResult::Failure(pf) => {
+            ::document::peresil::Result::Partial{ failure: pf, .. } |
+            ::document::peresil::Result::Failure(pf) => {
                 $errors.push(pf);
                 parse_alternate_rec!($start, $errors, {
                     $($parser_rest,)*
@@ -199,10 +199,10 @@ macro_rules! parse_zero_or_more(
         let mut start = $start;
         loop {
             let (_, next_start) = match $parser(start) {
-                ::document::peresil::ParseResult::Success(progress) =>
+                ::document::peresil::Result::Success(progress) =>
                     progress.to_tuple(),
-                ::document::peresil::ParseResult::Partial{ failure: pf, ..} |
-                ::document::peresil::ParseResult::Failure(pf) => {
+                ::document::peresil::Result::Partial{ failure: pf, ..} |
+                ::document::peresil::Result::Failure(pf) => {
                     err = Some(pf);
                     break
                 }
@@ -211,7 +211,7 @@ macro_rules! parse_zero_or_more(
             start = next_start;
         }
 
-        ::document::peresil::ParseResult::Partial {
+        ::document::peresil::Result::Partial {
             success: ::document::peresil::Progress { data: (), point: start },
             failure: err.unwrap()
         }

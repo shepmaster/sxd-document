@@ -60,10 +60,10 @@ use super::peresil::{Point};
 
 mod xmlstr;
 
-type ParseResult<'a, T> = peresil::ParseResult<'a, T, ()>;
+type ParseResult<'a, T> = peresil::Result<'a, T, ()>;
 
 fn success<'a, T>(data: T, point: Point<'a>) -> ParseResult<'a, T> {
-    peresil::ParseResult::success(data, point)
+    peresil::Result::success(data, point)
 }
 
 #[allow(missing_copy_implementations)]
@@ -526,9 +526,9 @@ impl Parser {
             let mut hydrator = SaxHydrator::new(&doc);
 
             match self.parse_document(xml, &mut hydrator) {
-                peresil::ParseResult::Success(..) => (),
-                peresil::ParseResult::Partial{ failure: pf, .. } |
-                peresil::ParseResult::Failure(pf) => return Err(pf.point.offset),
+                peresil::Result::Success(..) => (),
+                peresil::Result::Partial{ failure: pf, .. } |
+                peresil::Result::Failure(pf) => return Err(pf.point.offset),
             };
         }
 
