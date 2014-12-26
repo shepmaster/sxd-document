@@ -103,6 +103,7 @@ impl<'a, T, E> Result<'a, T, E> {
     }
 }
 
+#[macro_export]
 macro_rules! try_parse(
     ($e:expr) => ({
         match $e {
@@ -115,6 +116,7 @@ macro_rules! try_parse(
     })
 );
 
+#[macro_export]
 macro_rules! try_partial_parse(
     ($e:expr) => ({
         match $e {
@@ -128,6 +130,7 @@ macro_rules! try_partial_parse(
     })
 );
 
+#[macro_export]
 macro_rules! try_resume_after_partial_failure(
     ($partial:expr, $e:expr) => ({
         match $e {
@@ -144,6 +147,7 @@ macro_rules! try_resume_after_partial_failure(
 );
 
 // Pattern: zero-or-one
+#[macro_export]
 macro_rules! parse_optional(
     ($parser:expr, $start:expr) => ({
         match $parser {
@@ -157,6 +161,7 @@ macro_rules! parse_optional(
 );
 
 // Pattern: alternate
+#[macro_export]
 macro_rules! parse_alternate_rec(
     ($start:expr, $errors:expr, {}) => ({
         ::document::peresil::Result::Failure($errors.pop())
@@ -180,6 +185,7 @@ macro_rules! parse_alternate_rec(
     });
 );
 
+#[macro_export]
 macro_rules! parse_alternate(
     ($start:expr, {
         $($parser_rest:expr,)*
@@ -192,6 +198,7 @@ macro_rules! parse_alternate(
 );
 
 // Pattern: zero-or-more
+#[macro_export]
 macro_rules! parse_zero_or_more(
     ($start:expr, $parser:expr) => {{
         let mut err;
