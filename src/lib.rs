@@ -32,7 +32,7 @@ use std::fmt;
 
 mod string_pool;
 mod raw;
-mod peresil;
+pub mod peresil;
 pub mod thindom4;
 pub mod dom4;
 pub mod parser;
