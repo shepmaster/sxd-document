@@ -74,9 +74,9 @@ pub struct Parser;
 // <a xmlns:x1="x" xmlns:x2="x"> <x1:b></x2:b> </a>
 // xmllint reports it as an error...
 #[deriving(PartialEq,Copy,Show)]
-struct PrefixedName<'a> {
-    prefix: Option<&'a str>,
-    local_part: &'a str,
+pub struct PrefixedName<'a> {
+    pub prefix: Option<&'a str>,
+    pub local_part: &'a str,
 }
 
 #[deriving(Show,Copy)]
@@ -92,12 +92,47 @@ enum Reference<'a> {
     HexCharReference(&'a str),
 }
 
-trait XmlParseExt<'a> {
-    fn consume_space(&self) -> ParseResult<'a, &'a str>;
+pub trait XmlParseExt<'a> {
+    fn consume_space(&self) -> peresil::Result<'a, &'a str, ()>;
+    fn consume_decimal_chars<E>(&self) -> peresil::Result<'a, &'a str, E>;
+    fn consume_ncname<E>(&self) -> peresil::Result<'a, &'a str, E>;
+    fn consume_prefixed_name<E>(&self) -> peresil::Result<'a, PrefixedName<'a>, E>;
+}
+
+impl<'a> XmlParseExt<'a> for Point<'a> {
+    fn consume_space(&self) -> peresil::Result<'a, &'a str, ()> {
+        self.consume_to(self.s.end_of_space())
+    }
+
+    fn consume_decimal_chars<E>(&self) -> peresil::Result<'a, &'a str, E> {
+        self.consume_to(self.s.end_of_decimal_chars())
+    }
+
+    fn consume_ncname<E>(&self) -> peresil::Result<'a, &'a str, E> {
+        self.consume_to(self.s.end_of_ncname())
+    }
+
+    fn consume_prefixed_name<E>(&self) -> peresil::Result<'a, PrefixedName<'a>, E> {
+        fn parse_local<'a, E>(xml: Point<'a>) -> peresil::Result<'a, &'a str, E> {
+            let (_, xml) = try_parse!(xml.consume_literal(":"));
+            xml.consume_ncname()
+        }
+
+        let (prefix, xml) = try_parse!(self.consume_ncname());
+        let (local, xml)  = parse_local::<E>(xml).optional(xml);
+
+        let name = match local {
+            Some(local) => PrefixedName { prefix: Some(prefix), local_part: local },
+            None        => PrefixedName { prefix: None, local_part: prefix },
+        };
+
+        peresil::Result::success(name, xml)
+    }
+}
+
+trait PrivateXmlParseExt<'a> {
     fn consume_attribute_value(&self, quote: &str) -> ParseResult<'a, &'a str>;
     fn consume_name(&self) -> ParseResult<'a, &'a str>;
-    fn consume_ncname(&self) -> ParseResult<'a, &'a str>;
-    fn consume_decimal_chars(&self) -> ParseResult<'a, &'a str>;
     fn consume_hex_chars(&self) -> ParseResult<'a, &'a str>;
     fn consume_char_data(&self) -> ParseResult<'a, &'a str>;
     fn consume_cdata(&self) -> ParseResult<'a, &'a str>;
@@ -106,25 +141,13 @@ trait XmlParseExt<'a> {
     fn consume_start_tag(&self) -> ParseResult<'a, &'a str>;
 }
 
-impl<'a> XmlParseExt<'a> for Point<'a> {
-    fn consume_space(&self) -> ParseResult<'a, &'a str> {
-        self.consume_to(self.s.end_of_space())
-    }
-
+impl<'a> PrivateXmlParseExt<'a> for Point<'a> {
     fn consume_attribute_value(&self, quote: &str) -> ParseResult<'a, &'a str> {
         self.consume_to(self.s.end_of_attribute(quote))
     }
 
     fn consume_name(&self) -> ParseResult<'a, &'a str> {
         self.consume_to(self.s.end_of_name())
-    }
-
-    fn consume_ncname(&self) -> ParseResult<'a, &'a str> {
-        self.consume_to(self.s.end_of_ncname())
-    }
-
-    fn consume_decimal_chars(&self) -> ParseResult<'a, &'a str> {
-        self.consume_to(self.s.end_of_decimal_chars())
     }
 
     fn consume_hex_chars(&self) -> ParseResult<'a, &'a str> {
@@ -155,23 +178,6 @@ impl<'a> XmlParseExt<'a> for Point<'a> {
 impl Parser {
     pub fn new() -> Parser {
         Parser
-    }
-
-    fn parse_prefixed_name<'a>(&self, xml: Point<'a>) -> ParseResult<'a, PrefixedName<'a>> {
-        fn parse_local<'a>(xml: Point<'a>) -> ParseResult<'a, &'a str> {
-            let (_, xml) = try_parse!(xml.consume_literal(":"));
-            xml.consume_ncname()
-        }
-
-        let (prefix, xml) = try_parse!(xml.consume_ncname());
-        let (local, xml)  = parse_local(xml).optional(xml);
-
-        let name = match local {
-            Some(local) => PrefixedName { prefix: Some(prefix), local_part: local },
-            None        => PrefixedName { prefix: None, local_part: prefix },
-        };
-
-        success(name, xml)
     }
 
     fn parse_eq<'a>(&self, xml: Point<'a>) -> ParseResult<'a, ()> {
@@ -293,7 +299,7 @@ impl Parser {
     {
         let (_, xml) = try_parse!(xml.consume_space());
 
-        let (name, xml) = try_parse!(self.parse_prefixed_name(xml));
+        let (name, xml) = try_parse!(xml.consume_prefixed_name());
 
         sink.attribute_start(name);
 
@@ -317,7 +323,7 @@ impl Parser {
 
     fn parse_element_end<'a>(&self, xml: Point<'a>) -> ParseResult<'a, PrefixedName<'a>> {
         let (_, xml) = try_parse!(xml.consume_literal("</"));
-        let (name, xml) = try_parse!(self.parse_prefixed_name(xml));
+        let (name, xml) = try_parse!(xml.consume_prefixed_name());
         let (_, xml) = xml.consume_space().optional(xml);
         let (_, xml) = try_parse!(xml.consume_literal(">"));
         success(name, xml)
@@ -472,7 +478,7 @@ impl Parser {
         where S: ParserSink<'a>
     {
         let (_, xml) = try_parse!(xml.consume_start_tag());
-        let (name, xml) = try_parse!(self.parse_prefixed_name(xml));
+        let (name, xml) = try_parse!(xml.consume_prefixed_name());
 
         sink.element_start(name);
 
