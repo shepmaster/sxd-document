@@ -171,6 +171,17 @@ impl<'a, T, E> Result<'a, T, E> {
                 Result::Failure(pf),
         }
     }
+
+    pub fn set_error(self, error: E) -> Result<'a, T, E> {
+        match self {
+            Result::Success(..) =>
+                self,
+            Result::Partial{ success: s, failure: f } =>
+                Result::Partial{ success: s, failure: f.map(move |_| Some(error)) },
+            Result::Failure(f) =>
+                Result::Failure(f.map(move |_| Some(error))),
+        }
+    }
 }
 
 #[macro_export]
@@ -183,7 +194,18 @@ macro_rules! try_parse(
             ::document::peresil::Result::Failure(pf) =>
                 return ::document::peresil::Result::Failure(pf),
         }
-    })
+    });
+    ($e:expr, $err:expr) => ({
+        match $e {
+            ::document::peresil::Result::Success(progress) =>
+                progress.to_tuple(),
+            ::document::peresil::Result::Partial{ failure: pf, .. } |
+            ::document::peresil::Result::Failure(pf) => {
+                let fail = ::document::peresil::Progress{ data: Some($err), ..pf };
+                return ::document::peresil::Result::Failure(fail);
+            },
+        }
+    });
 );
 
 #[macro_export]
