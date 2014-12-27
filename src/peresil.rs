@@ -142,6 +142,10 @@ impl<'a, T, E> Result<'a, T, E> {
         Result::Success(Progress { data: data, point: point })
     }
 
+    pub fn failure(data: Option<E>, point: Point<'a>) -> Result<'a, T, E> {
+        Result::Failure(Progress { data: data, point: point })
+    }
+
     // Pattern: zero-or-one
     pub fn optional(self, point: Point<'a>) -> (Option<T>, Point<'a>) {
         match self {
