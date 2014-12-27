@@ -97,7 +97,22 @@ impl<'a> Point<'a> {
     pub fn consume_literal<E>(&self, literal: &str) -> Result<'a, &'a str, E> {
         self.consume_to(self.s.end_of_literal(literal))
     }
+
+    pub fn consume_identifier<T, E>(&self, identifiers: &[Identifier<T>]) -> Result<'a, T, E>
+        where T: Clone
+    {
+        for &(id_str, ref id_data) in identifiers.iter() {
+            let result = self.consume_literal(id_str);
+            if let Result::Success(..) = result {
+                return result.map(|_| id_data.clone());
+            }
+        }
+
+        Result::Failure(Progress {point: *self, data: None})
+    }
 }
+
+pub type Identifier<'a, T> = (&'a str, T);
 
 pub struct Progress<'a, T> {
     pub point: Point<'a>,
