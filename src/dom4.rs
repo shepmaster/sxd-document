@@ -37,25 +37,25 @@ impl<'d> Document<'d> {
 
     fn wrap_parent_of_child(&'d self, node: raw::ParentOfChild) -> ParentOfChild<'d> {
         match node {
-            raw::ParentOfChild::RootPOC(n) => ParentOfChild::Root(self.wrap_root(n)),
-            raw::ParentOfChild::ElementPOC(n) => ParentOfChild::Element(self.wrap_element(n)),
+            raw::ParentOfChild::Root(n) => ParentOfChild::Root(self.wrap_root(n)),
+            raw::ParentOfChild::Element(n) => ParentOfChild::Element(self.wrap_element(n)),
         }
     }
 
     fn wrap_child_of_root(&'d self, node: raw::ChildOfRoot) -> ChildOfRoot<'d> {
         match node {
-            raw::ChildOfRoot::ElementCOR(n) => ChildOfRoot::Element(self.wrap_element(n)),
-            raw::ChildOfRoot::CommentCOR(n) => ChildOfRoot::Comment(self.wrap_comment(n)),
-            raw::ChildOfRoot::ProcessingInstructionCOR(n) => ChildOfRoot::ProcessingInstruction(self.wrap_pi(n)),
+            raw::ChildOfRoot::Element(n) => ChildOfRoot::Element(self.wrap_element(n)),
+            raw::ChildOfRoot::Comment(n) => ChildOfRoot::Comment(self.wrap_comment(n)),
+            raw::ChildOfRoot::ProcessingInstruction(n) => ChildOfRoot::ProcessingInstruction(self.wrap_pi(n)),
         }
     }
 
     fn wrap_child_of_element(&'d self, node: raw::ChildOfElement) -> ChildOfElement<'d> {
         match node {
-            raw::ChildOfElement::ElementCOE(n) => ChildOfElement::Element(self.wrap_element(n)),
-            raw::ChildOfElement::TextCOE(n) => ChildOfElement::Text(self.wrap_text(n)),
-            raw::ChildOfElement::CommentCOE(n) => ChildOfElement::Comment(self.wrap_comment(n)),
-            raw::ChildOfElement::ProcessingInstructionCOE(n) => ChildOfElement::ProcessingInstruction(self.wrap_pi(n)),
+            raw::ChildOfElement::Element(n) => ChildOfElement::Element(self.wrap_element(n)),
+            raw::ChildOfElement::Text(n) => ChildOfElement::Text(self.wrap_text(n)),
+            raw::ChildOfElement::Comment(n) => ChildOfElement::Comment(self.wrap_comment(n)),
+            raw::ChildOfElement::ProcessingInstruction(n) => ChildOfElement::ProcessingInstruction(self.wrap_pi(n)),
         }
     }
 
@@ -379,9 +379,9 @@ unpack!(ChildOfRoot, processing_instruction, ProcessingInstruction, ProcessingIn
 impl<'d> ChildOfRoot<'d> {
     pub fn as_raw(&self) -> raw::ChildOfRoot {
         match self {
-            &ChildOfRoot::Element(n) => raw::ChildOfRoot::ElementCOR(n.node),
-            &ChildOfRoot::Comment(n) => raw::ChildOfRoot::CommentCOR(n.node),
-            &ChildOfRoot::ProcessingInstruction(n) => raw::ChildOfRoot::ProcessingInstructionCOR(n.node),
+            &ChildOfRoot::Element(n) => raw::ChildOfRoot::Element(n.node),
+            &ChildOfRoot::Comment(n) => raw::ChildOfRoot::Comment(n.node),
+            &ChildOfRoot::ProcessingInstruction(n) => raw::ChildOfRoot::ProcessingInstruction(n.node),
         }
     }
 }
@@ -402,10 +402,10 @@ unpack!(ChildOfElement, processing_instruction, ProcessingInstruction, Processin
 impl<'d> ChildOfElement<'d> {
     pub fn as_raw(&self) -> raw::ChildOfElement {
         match self {
-            &ChildOfElement::Element(n) => raw::ChildOfElement::ElementCOE(n.node),
-            &ChildOfElement::Text(n) => raw::ChildOfElement::TextCOE(n.node),
-            &ChildOfElement::Comment(n) => raw::ChildOfElement::CommentCOE(n.node),
-            &ChildOfElement::ProcessingInstruction(n) => raw::ChildOfElement::ProcessingInstructionCOE(n.node),
+            &ChildOfElement::Element(n) => raw::ChildOfElement::Element(n.node),
+            &ChildOfElement::Text(n) => raw::ChildOfElement::Text(n.node),
+            &ChildOfElement::Comment(n) => raw::ChildOfElement::Comment(n.node),
+            &ChildOfElement::ProcessingInstruction(n) => raw::ChildOfElement::ProcessingInstruction(n.node),
         }
     }
 }

@@ -326,17 +326,17 @@ unpack!(ChildOfRoot, processing_instruction, ProcessingInstruction, ProcessingIn
 impl<'d> ChildOfRoot<'d> {
     pub fn wrap(node: raw::ChildOfRoot) -> ChildOfRoot<'d> {
         match node {
-            raw::ChildOfRoot::ElementCOR(n)               => ChildOfRoot::Element(Element::wrap(n)),
-            raw::ChildOfRoot::CommentCOR(n)               => ChildOfRoot::Comment(Comment::wrap(n)),
-            raw::ChildOfRoot::ProcessingInstructionCOR(n) => ChildOfRoot::ProcessingInstruction(ProcessingInstruction::wrap(n)),
+            raw::ChildOfRoot::Element(n)               => ChildOfRoot::Element(Element::wrap(n)),
+            raw::ChildOfRoot::Comment(n)               => ChildOfRoot::Comment(Comment::wrap(n)),
+            raw::ChildOfRoot::ProcessingInstruction(n) => ChildOfRoot::ProcessingInstruction(ProcessingInstruction::wrap(n)),
         }
     }
 
     pub fn as_raw(&self) -> raw::ChildOfRoot {
         match self {
-            &ChildOfRoot::Element(n)               => raw::ChildOfRoot::ElementCOR(n.node),
-            &ChildOfRoot::Comment(n)               => raw::ChildOfRoot::CommentCOR(n.node),
-            &ChildOfRoot::ProcessingInstruction(n) => raw::ChildOfRoot::ProcessingInstructionCOR(n.node),
+            &ChildOfRoot::Element(n)               => raw::ChildOfRoot::Element(n.node),
+            &ChildOfRoot::Comment(n)               => raw::ChildOfRoot::Comment(n.node),
+            &ChildOfRoot::ProcessingInstruction(n) => raw::ChildOfRoot::ProcessingInstruction(n.node),
         }
     }
 }
@@ -357,19 +357,19 @@ unpack!(ChildOfElement, processing_instruction, ProcessingInstruction, Processin
 impl<'d> ChildOfElement<'d> {
     pub fn wrap(node: raw::ChildOfElement) -> ChildOfElement<'d> {
         match node {
-            raw::ChildOfElement::ElementCOE(n)               => ChildOfElement::Element(Element::wrap(n)),
-            raw::ChildOfElement::TextCOE(n)                  => ChildOfElement::Text(Text::wrap(n)),
-            raw::ChildOfElement::CommentCOE(n)               => ChildOfElement::Comment(Comment::wrap(n)),
-            raw::ChildOfElement::ProcessingInstructionCOE(n) => ChildOfElement::ProcessingInstruction(ProcessingInstruction::wrap(n)),
+            raw::ChildOfElement::Element(n)               => ChildOfElement::Element(Element::wrap(n)),
+            raw::ChildOfElement::Text(n)                  => ChildOfElement::Text(Text::wrap(n)),
+            raw::ChildOfElement::Comment(n)               => ChildOfElement::Comment(Comment::wrap(n)),
+            raw::ChildOfElement::ProcessingInstruction(n) => ChildOfElement::ProcessingInstruction(ProcessingInstruction::wrap(n)),
         }
     }
 
     pub fn as_raw(&self) -> raw::ChildOfElement {
         match self {
-            &ChildOfElement::Element(n)               => raw::ChildOfElement::ElementCOE(n.node),
-            &ChildOfElement::Text(n)                  => raw::ChildOfElement::TextCOE(n.node),
-            &ChildOfElement::Comment(n)               => raw::ChildOfElement::CommentCOE(n.node),
-            &ChildOfElement::ProcessingInstruction(n) => raw::ChildOfElement::ProcessingInstructionCOE(n.node),
+            &ChildOfElement::Element(n)               => raw::ChildOfElement::Element(n.node),
+            &ChildOfElement::Text(n)                  => raw::ChildOfElement::Text(n.node),
+            &ChildOfElement::Comment(n)               => raw::ChildOfElement::Comment(n.node),
+            &ChildOfElement::ProcessingInstruction(n) => raw::ChildOfElement::ProcessingInstruction(n.node),
         }
     }
 }
@@ -386,8 +386,8 @@ unpack!(ParentOfChild, element, Element, Element);
 impl<'d> ParentOfChild<'d> {
     pub fn wrap(node: raw::ParentOfChild) -> ParentOfChild<'d> {
         match node {
-            raw::ParentOfChild::RootPOC(n) => ParentOfChild::Root(Root::wrap(n)),
-            raw::ParentOfChild::ElementPOC(n) => ParentOfChild::Element(Element::wrap(n)),
+            raw::ParentOfChild::Root(n) => ParentOfChild::Root(Root::wrap(n)),
+            raw::ParentOfChild::Element(n) => ParentOfChild::Element(Element::wrap(n)),
         }
     }
 }

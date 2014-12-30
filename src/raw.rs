@@ -1,9 +1,5 @@
 use super::{QName,ToQName};
 
-use self::ParentOfChild::*;
-use self::ChildOfRoot::*;
-use self::ChildOfElement::*;
-
 use arena::TypedArena;
 use string_pool::{StringPool,InternedString};
 use std::collections::HashMap;
@@ -85,42 +81,42 @@ impl ProcessingInstruction {
 #[allow(raw_pointer_deriving)]
 #[deriving(PartialEq,Copy)]
 pub enum ChildOfRoot {
-    ElementCOR(*mut Element),
-    CommentCOR(*mut Comment),
-    ProcessingInstructionCOR(*mut ProcessingInstruction),
+    Element(*mut Element),
+    Comment(*mut Comment),
+    ProcessingInstruction(*mut ProcessingInstruction),
 }
 
 impl ChildOfRoot {
     fn is_element(&self) -> bool {
         match self {
-            &ElementCOR(_) => true,
+            &ChildOfRoot::Element(_) => true,
             _ => false,
         }
     }
 
     fn to_child_of_element(self) -> ChildOfElement {
         match self {
-            ElementCOR(n) => ElementCOE(n),
-            CommentCOR(n) => CommentCOE(n),
-            ProcessingInstructionCOR(n) => ProcessingInstructionCOE(n),
+            ChildOfRoot::Element(n) => ChildOfElement::Element(n),
+            ChildOfRoot::Comment(n) => ChildOfElement::Comment(n),
+            ChildOfRoot::ProcessingInstruction(n) => ChildOfElement::ProcessingInstruction(n),
         }
     }
 
     fn replace_parent(&self, parent: *mut Root) {
         match self {
-            &ElementCOR(n) => {
+            &ChildOfRoot::Element(n) => {
                 let parent_r = unsafe { &mut *parent };
                 let n = unsafe { &mut *n };
                 parent_r.children.retain(|c| !c.is_element());
-                replace_parent(*self, RootPOC(parent), &mut n.parent);
+                replace_parent(*self, ParentOfChild::Root(parent), &mut n.parent);
             },
-            &CommentCOR(n) => {
+            &ChildOfRoot::Comment(n) => {
                 let n = unsafe { &mut *n };
-                replace_parent(*self, RootPOC(parent), &mut n.parent);
+                replace_parent(*self, ParentOfChild::Root(parent), &mut n.parent);
             },
-            &ProcessingInstructionCOR(n) => {
+            &ChildOfRoot::ProcessingInstruction(n) => {
                 let n = unsafe { &mut *n };
-                replace_parent(*self, RootPOC(parent), &mut n.parent);
+                replace_parent(*self, ParentOfChild::Root(parent), &mut n.parent);
             },
         };
     }
@@ -129,20 +125,20 @@ impl ChildOfRoot {
 #[allow(raw_pointer_deriving)]
 #[deriving(PartialEq,Copy)]
 pub enum ChildOfElement {
-    ElementCOE(*mut Element),
-    TextCOE(*mut Text),
-    CommentCOE(*mut Comment),
-    ProcessingInstructionCOE(*mut ProcessingInstruction),
+    Element(*mut Element),
+    Text(*mut Text),
+    Comment(*mut Comment),
+    ProcessingInstruction(*mut ProcessingInstruction),
 }
 
 fn replace_parent(child: ChildOfRoot, parent: ParentOfChild, parent_field: &mut Option<ParentOfChild>) {
     if let &Some(prev_parent) = parent_field {
         match prev_parent {
-            RootPOC(r) => {
+            ParentOfChild::Root(r) => {
                 let r_r = unsafe { &mut *r };
                 r_r.children.retain(|n| *n != child);
             },
-            ElementPOC(e) => {
+            ParentOfChild::Element(e) => {
                 let e_r = unsafe { &mut *e };
                 let as_element_child = child.to_child_of_element();
                 e_r.children.retain(|n| *n != as_element_child);
@@ -157,19 +153,19 @@ fn replace_parent(child: ChildOfRoot, parent: ParentOfChild, parent_field: &mut 
 impl ChildOfElement {
     fn replace_parent(&self, parent: *mut Element) {
         match self {
-            &ElementCOE(n) => {
+            &ChildOfElement::Element(n) => {
                 let n = unsafe { &mut *n };
-                replace_parent(ElementCOR(n), ElementPOC(parent), &mut n.parent);
+                replace_parent(ChildOfRoot::Element(n), ParentOfChild::Element(parent), &mut n.parent);
             },
-            &CommentCOE(n) => {
+            &ChildOfElement::Comment(n) => {
                 let n = unsafe { &mut *n };
-                replace_parent(CommentCOR(n), ElementPOC(parent), &mut n.parent);
+                replace_parent(ChildOfRoot::Comment(n), ParentOfChild::Element(parent), &mut n.parent);
             }
-            &ProcessingInstructionCOE(n) => {
+            &ChildOfElement::ProcessingInstruction(n) => {
                 let n = unsafe { &mut *n };
-                replace_parent(ProcessingInstructionCOR(n), ElementPOC(parent), &mut n.parent);
+                replace_parent(ChildOfRoot::ProcessingInstruction(n), ParentOfChild::Element(parent), &mut n.parent);
             },
-            &TextCOE(n) => {
+            &ChildOfElement::Text(n) => {
                 let n = unsafe { &mut *n };
 
                 if let Some(prev_parent) = n.parent {
@@ -186,13 +182,13 @@ impl ChildOfElement {
 #[allow(raw_pointer_deriving)]
 #[deriving(PartialEq,Copy)]
 pub enum ParentOfChild {
-    RootPOC(*mut Root),
-    ElementPOC(*mut Element),
+    Root(*mut Root),
+    Element(*mut Element),
 }
 
 macro_rules! conversion_trait(
     ($tr_name:ident, $method:ident, $res_type:ident,
-        { $($leaf_type:ident => $variant:ident),* }
+        { $($leaf_type:ident => $variant:expr),* }
     ) => (
         pub trait $tr_name {
             fn $method(self) -> $res_type;
@@ -213,12 +209,12 @@ macro_rules! conversion_trait(
 );
 
 conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
-    Element => ElementCOE,
-    Text => TextCOE
+    Element => ChildOfElement::Element,
+    Text => ChildOfElement::Text
 });
 
 conversion_trait!(ToChildOfRoot, to_child_of_root, ChildOfRoot, {
-    Element => ElementCOR
+    Element => ChildOfRoot::Element
 });
 
 pub struct Storage {
@@ -484,7 +480,7 @@ impl Connections {
             }
 
             match element_r.parent {
-                Some(ElementPOC(parent)) => element = parent,
+                Some(ParentOfChild::Element(parent)) => element = parent,
                 _ => return None,
             }
         }
