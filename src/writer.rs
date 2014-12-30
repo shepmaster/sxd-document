@@ -37,8 +37,7 @@ use self::Content::*;
 use super::QName;
 
 use super::dom4;
-use super::dom4::ChildOfElement::*;
-use super::dom4::ChildOfRoot::*;
+use super::dom4::{ChildOfElement,ChildOfRoot};
 
 // TODO: Duplicating the String seems inefficient...
 struct PrefixScope<'d> {
@@ -275,10 +274,10 @@ fn format_element<'d, W>(element: dom4::Element<'d>,
         todo.push(ElementEnd(element));
         children.reverse();
         let x = children.into_iter().map(|c| match c {
-            ElementCOE(element) => Element(element),
-            TextCOE(t)          => Text(t),
-            CommentCOE(c)       => Comment(c),
-            ProcessingInstructionCOE(p)            => ProcessingInstruction(p),
+            ChildOfElement::Element(element)         => Element(element),
+            ChildOfElement::Text(t)                  => Text(t),
+            ChildOfElement::Comment(c)               => Comment(c),
+            ChildOfElement::ProcessingInstruction(p) => ProcessingInstruction(p),
         });
         todo.extend(x);
 
@@ -356,9 +355,9 @@ pub fn format_document<'d, W>(doc: &'d dom4::Document<'d>, writer: &mut W) -> Io
 
     for child in doc.root().children().into_iter() {
         try!(match child {
-            ElementCOR(e) => format_body(e, writer),
-            CommentCOR(c) => format_comment(c, writer),
-            ProcessingInstructionCOR(p)      => format_processing_instruction(p, writer),
+            ChildOfRoot::Element(e) => format_body(e, writer),
+            ChildOfRoot::Comment(c) => format_comment(c, writer),
+            ChildOfRoot::ProcessingInstruction(p)      => format_processing_instruction(p, writer),
         })
     }
 

@@ -1,7 +1,3 @@
-use self::ChildOfRoot::*;
-use self::ChildOfElement::*;
-use self::ParentOfChild::*;
-
 use super::{QName,ToQName};
 use super::raw;
 
@@ -41,25 +37,25 @@ impl<'d> Document<'d> {
 
     fn wrap_parent_of_child(&'d self, node: raw::ParentOfChild) -> ParentOfChild<'d> {
         match node {
-            raw::ParentOfChild::RootPOC(n) => RootPOC(self.wrap_root(n)),
-            raw::ParentOfChild::ElementPOC(n) => ElementPOC(self.wrap_element(n)),
+            raw::ParentOfChild::RootPOC(n) => ParentOfChild::Root(self.wrap_root(n)),
+            raw::ParentOfChild::ElementPOC(n) => ParentOfChild::Element(self.wrap_element(n)),
         }
     }
 
     fn wrap_child_of_root(&'d self, node: raw::ChildOfRoot) -> ChildOfRoot<'d> {
         match node {
-            raw::ChildOfRoot::ElementCOR(n) => ElementCOR(self.wrap_element(n)),
-            raw::ChildOfRoot::CommentCOR(n) => CommentCOR(self.wrap_comment(n)),
-            raw::ChildOfRoot::ProcessingInstructionCOR(n) => ProcessingInstructionCOR(self.wrap_pi(n)),
+            raw::ChildOfRoot::ElementCOR(n) => ChildOfRoot::Element(self.wrap_element(n)),
+            raw::ChildOfRoot::CommentCOR(n) => ChildOfRoot::Comment(self.wrap_comment(n)),
+            raw::ChildOfRoot::ProcessingInstructionCOR(n) => ChildOfRoot::ProcessingInstruction(self.wrap_pi(n)),
         }
     }
 
     fn wrap_child_of_element(&'d self, node: raw::ChildOfElement) -> ChildOfElement<'d> {
         match node {
-            raw::ChildOfElement::ElementCOE(n) => ElementCOE(self.wrap_element(n)),
-            raw::ChildOfElement::TextCOE(n) => TextCOE(self.wrap_text(n)),
-            raw::ChildOfElement::CommentCOE(n) => CommentCOE(self.wrap_comment(n)),
-            raw::ChildOfElement::ProcessingInstructionCOE(n) => ProcessingInstructionCOE(self.wrap_pi(n)),
+            raw::ChildOfElement::ElementCOE(n) => ChildOfElement::Element(self.wrap_element(n)),
+            raw::ChildOfElement::TextCOE(n) => ChildOfElement::Text(self.wrap_text(n)),
+            raw::ChildOfElement::CommentCOE(n) => ChildOfElement::Comment(self.wrap_comment(n)),
+            raw::ChildOfElement::ProcessingInstructionCOE(n) => ChildOfElement::ProcessingInstruction(self.wrap_pi(n)),
         }
     }
 
@@ -361,7 +357,7 @@ macro_rules! unpack(
         impl<'d> $enum_name<'d> {
             pub fn $name(self) -> Option<$inner<'d>> {
                 match self {
-                    $wrapper(n) => Some(n),
+                    $enum_name::$wrapper(n) => Some(n),
                     _ => None,
                 }
             }
@@ -371,58 +367,58 @@ macro_rules! unpack(
 
 #[deriving(PartialEq,Show,Copy)]
 pub enum ChildOfRoot<'d> {
-    ElementCOR(Element<'d>),
-    CommentCOR(Comment<'d>),
-    ProcessingInstructionCOR(ProcessingInstruction<'d>),
+    Element(Element<'d>),
+    Comment(Comment<'d>),
+    ProcessingInstruction(ProcessingInstruction<'d>),
 }
 
-unpack!(ChildOfRoot, element, ElementCOR, Element);
-unpack!(ChildOfRoot, comment, CommentCOR, Comment);
-unpack!(ChildOfRoot, processing_instruction, ProcessingInstructionCOR, ProcessingInstruction);
+unpack!(ChildOfRoot, element, Element, Element);
+unpack!(ChildOfRoot, comment, Comment, Comment);
+unpack!(ChildOfRoot, processing_instruction, ProcessingInstruction, ProcessingInstruction);
 
 impl<'d> ChildOfRoot<'d> {
     pub fn as_raw(&self) -> raw::ChildOfRoot {
         match self {
-            &ElementCOR(n) => raw::ChildOfRoot::ElementCOR(n.node),
-            &CommentCOR(n) => raw::ChildOfRoot::CommentCOR(n.node),
-            &ProcessingInstructionCOR(n) => raw::ChildOfRoot::ProcessingInstructionCOR(n.node),
+            &ChildOfRoot::Element(n) => raw::ChildOfRoot::ElementCOR(n.node),
+            &ChildOfRoot::Comment(n) => raw::ChildOfRoot::CommentCOR(n.node),
+            &ChildOfRoot::ProcessingInstruction(n) => raw::ChildOfRoot::ProcessingInstructionCOR(n.node),
         }
     }
 }
 
 #[deriving(PartialEq,Show,Copy)]
 pub enum ChildOfElement<'d> {
-    ElementCOE(Element<'d>),
-    TextCOE(Text<'d>),
-    CommentCOE(Comment<'d>),
-    ProcessingInstructionCOE(ProcessingInstruction<'d>),
+    Element(Element<'d>),
+    Text(Text<'d>),
+    Comment(Comment<'d>),
+    ProcessingInstruction(ProcessingInstruction<'d>),
 }
 
-unpack!(ChildOfElement, element, ElementCOE, Element);
-unpack!(ChildOfElement, text, TextCOE, Text);
-unpack!(ChildOfElement, comment, CommentCOE, Comment);
-unpack!(ChildOfElement, processing_instruction, ProcessingInstructionCOE, ProcessingInstruction);
+unpack!(ChildOfElement, element, Element, Element);
+unpack!(ChildOfElement, text, Text, Text);
+unpack!(ChildOfElement, comment, Comment, Comment);
+unpack!(ChildOfElement, processing_instruction, ProcessingInstruction, ProcessingInstruction);
 
 impl<'d> ChildOfElement<'d> {
     pub fn as_raw(&self) -> raw::ChildOfElement {
         match self {
-            &ElementCOE(n) => raw::ChildOfElement::ElementCOE(n.node),
-            &TextCOE(n) => raw::ChildOfElement::TextCOE(n.node),
-            &CommentCOE(n) => raw::ChildOfElement::CommentCOE(n.node),
-            &ProcessingInstructionCOE(n) => raw::ChildOfElement::ProcessingInstructionCOE(n.node),
+            &ChildOfElement::Element(n) => raw::ChildOfElement::ElementCOE(n.node),
+            &ChildOfElement::Text(n) => raw::ChildOfElement::TextCOE(n.node),
+            &ChildOfElement::Comment(n) => raw::ChildOfElement::CommentCOE(n.node),
+            &ChildOfElement::ProcessingInstruction(n) => raw::ChildOfElement::ProcessingInstructionCOE(n.node),
         }
     }
 }
 
 #[deriving(PartialEq,Show,Copy)]
 pub enum ParentOfChild<'d> {
-    RootPOC(Root<'d>),
-    ElementPOC(Element<'d>),
+    Root(Root<'d>),
+    Element(Element<'d>),
 }
 
 macro_rules! conversion_trait(
     ($tr_name:ident, $method:ident, $res_type:ident,
-        { $($leaf_type:ident => $variant:ident),* }
+        { $($leaf_type:ident => $variant:expr),* }
     ) => (
         pub trait $tr_name<'d> {
             fn $method(self) -> $res_type<'d>;
@@ -443,24 +439,24 @@ macro_rules! conversion_trait(
 );
 
 conversion_trait!(ToChildOfRoot, to_child_of_root, ChildOfRoot, {
-    Element => ElementCOR,
-    Comment => CommentCOR,
-    ProcessingInstruction => ProcessingInstructionCOR
+    Element => ChildOfRoot::Element,
+    Comment => ChildOfRoot::Comment,
+    ProcessingInstruction => ChildOfRoot::ProcessingInstruction
 });
 
 conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
-    Element => ElementCOE,
-    Text => TextCOE,
-    Comment => CommentCOE,
-    ProcessingInstruction => ProcessingInstructionCOE
+    Element => ChildOfElement::Element,
+    Text => ChildOfElement::Text,
+    Comment => ChildOfElement::Comment,
+    ProcessingInstruction => ChildOfElement::ProcessingInstruction
 });
 
 impl<'d> ToChildOfElement<'d> for ChildOfRoot<'d> {
     fn to_child_of_element(self) -> ChildOfElement<'d> {
         match self {
-            ElementCOR(n) => ElementCOE(n),
-            CommentCOR(n) => CommentCOE(n),
-            ProcessingInstructionCOR(n) => ProcessingInstructionCOE(n),
+            ChildOfRoot::Element(n) => ChildOfElement::Element(n),
+            ChildOfRoot::Comment(n) => ChildOfElement::Comment(n),
+            ChildOfRoot::ProcessingInstruction(n) => ChildOfElement::ProcessingInstruction(n),
         }
     }
 }
@@ -469,9 +465,7 @@ impl<'d> ToChildOfElement<'d> for ChildOfRoot<'d> {
 #[cfg(test)]
 mod test {
     use super::super::{Package,ToQName};
-    use super::ChildOfRoot::*;
-    use super::ChildOfElement::*;
-    use super::ParentOfChild::*;
+    use super::{ChildOfRoot,ChildOfElement,ParentOfChild};
 
     macro_rules! assert_qname_eq(
         ($l:expr, $r:expr) => (assert_eq!($l.to_qname(), $r.to_qname()));
@@ -499,7 +493,7 @@ mod test {
 
         let children = root.children();
         assert_eq!(1, children.len());
-        assert_eq!(children[0], ElementCOR(element));
+        assert_eq!(children[0], ChildOfRoot::Element(element));
     }
 
     #[test]
@@ -516,7 +510,7 @@ mod test {
 
         let children = root.children();
         assert_eq!(1, children.len());
-        assert_eq!(children[0], ElementCOR(beta));
+        assert_eq!(children[0], ChildOfRoot::Element(beta));
     }
 
     #[test]
@@ -531,7 +525,7 @@ mod test {
 
         let children = root.children();
         assert_eq!(1, children.len());
-        assert_eq!(children[0], CommentCOR(comment));
+        assert_eq!(children[0], ChildOfRoot::Comment(comment));
     }
 
     #[test]
@@ -546,7 +540,7 @@ mod test {
 
         let children = root.children();
         assert_eq!(1, children.len());
-        assert_eq!(children[0], ProcessingInstructionCOR(pi));
+        assert_eq!(children[0], ChildOfRoot::ProcessingInstruction(pi));
     }
 
     #[test]
@@ -559,7 +553,7 @@ mod test {
 
         root.append_child(alpha);
 
-        assert_eq!(Some(RootPOC(root)), alpha.parent());
+        assert_eq!(Some(ParentOfChild::Root(root)), alpha.parent());
     }
 
     #[test]
@@ -584,7 +578,7 @@ mod test {
 
         let children = alpha.children();
 
-        assert_eq!(children[0], ElementCOE(beta));
+        assert_eq!(children[0], ChildOfElement::Element(beta));
     }
 
     #[test]
@@ -601,8 +595,8 @@ mod test {
 
         let children = greek.children();
 
-        assert_eq!(children[0], ElementCOE(alpha));
-        assert_eq!(children[1], ElementCOE(omega));
+        assert_eq!(children[0], ChildOfElement::Element(alpha));
+        assert_eq!(children[1], ChildOfElement::Element(omega));
     }
 
     #[test]
@@ -615,7 +609,7 @@ mod test {
 
         alpha.append_child(beta);
 
-        assert_eq!(Some(ElementPOC(alpha)), beta.parent());
+        assert_eq!(Some(ParentOfChild::Element(alpha)), beta.parent());
     }
 
     #[test]
@@ -733,7 +727,7 @@ mod test {
 
         let children = sentence.children();
         assert_eq!(1, children.len());
-        assert_eq!(children[0], TextCOE(text));
+        assert_eq!(children[0], ChildOfElement::Text(text));
     }
 
     #[test]
@@ -783,7 +777,7 @@ mod test {
 
         let children = sentence.children();
         assert_eq!(1, children.len());
-        assert_eq!(children[0], CommentCOE(comment));
+        assert_eq!(children[0], ChildOfElement::Comment(comment));
     }
 
     #[test]
@@ -796,7 +790,7 @@ mod test {
 
         sentence.append_child(comment);
 
-        assert_eq!(comment.parent(), Some(ElementPOC(sentence)));
+        assert_eq!(comment.parent(), Some(ParentOfChild::Element(sentence)));
     }
 
     #[test]
@@ -833,7 +827,7 @@ mod test {
 
         let children = element.children();
         assert_eq!(1, children.len());
-        assert_eq!(children[0], ProcessingInstructionCOE(pi));
+        assert_eq!(children[0], ChildOfElement::ProcessingInstruction(pi));
     }
 
     #[test]
@@ -846,7 +840,7 @@ mod test {
 
         element.append_child(pi);
 
-        assert_eq!(pi.parent(), Some(ElementPOC(element)));
+        assert_eq!(pi.parent(), Some(ParentOfChild::Element(element)));
     }
 
     #[test]
