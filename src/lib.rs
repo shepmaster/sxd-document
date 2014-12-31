@@ -23,6 +23,7 @@
 #![feature(macro_rules)]
 #![feature(default_type_params)]
 #![feature(globs)]
+#![feature(slicing_syntax)]
 
 extern crate arena;
 extern crate test;

@@ -437,6 +437,39 @@ impl Connections {
         parent_r.children.as_slice()
     }
 
+    /// Returns the sibling nodes that come before this node. The
+    /// nodes are in document order.
+    pub unsafe fn element_preceding_siblings(&self, element: *mut Element) -> SiblingIter {
+        let element_r = &*element;
+        match element_r.parent {
+            Some(ParentOfChild::Root(root_parent)) => {
+                let root_parent_r = &*root_parent;
+                let data = root_parent_r.children.as_slice();
+                let pos = data.iter().position(|c| *c == ChildOfRoot::Element(element)).unwrap();
+
+                SiblingIter {
+                    idx: 0,
+                    data: SiblingData::FromRoot(data[..pos]),
+                }
+            },
+            Some(ParentOfChild::Element(element_parent)) => {
+                let element_parent_r = &*element_parent;
+                let data = element_parent_r.children.as_slice();
+                let pos = data.iter().position(|c| *c == ChildOfElement::Element(element)).unwrap();
+                SiblingIter {
+                    idx: 0,
+                    data: SiblingData::FromElement(data[..pos]),
+                }
+            },
+            None => {
+                SiblingIter {
+                    idx: 0,
+                    data: SiblingData::Dead
+                }
+            }
+        }
+    }
+
     pub fn attribute_parent(&self, attribute: *mut Attribute) -> Option<*mut Element> {
         let attr_r = unsafe { &*attribute };
         attr_r.parent
@@ -483,6 +516,43 @@ impl Connections {
                 Some(ParentOfChild::Element(parent)) => element = parent,
                 _ => return None,
             }
+        }
+    }
+}
+
+enum SiblingData<'a> {
+    FromRoot(&'a [ChildOfRoot]),
+    FromElement(&'a [ChildOfElement]),
+    Dead,
+}
+
+pub struct SiblingIter<'a> {
+    idx: uint,
+    data: SiblingData<'a>
+}
+
+impl<'d> Iterator<ChildOfElement> for SiblingIter<'d> {
+    fn next(&mut self) -> Option<ChildOfElement> {
+        match self.data {
+            SiblingData::FromRoot(children) => {
+                if self.idx >= children.len() {
+                    None
+                } else {
+                    let sib = children[self.idx];
+                    self.idx += 1;
+                    Some(sib.to_child_of_element())
+                }
+            },
+            SiblingData::FromElement(children) => {
+                if self.idx >= children.len() {
+                    None
+                } else {
+                    let sib = children[self.idx];
+                    self.idx += 1;
+                    Some(sib)
+                }
+            },
+            SiblingData::Dead => None
         }
     }
 }
