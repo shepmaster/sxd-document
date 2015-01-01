@@ -442,31 +442,26 @@ impl Connections {
     pub unsafe fn element_preceding_siblings(&self, element: *mut Element) -> SiblingIter {
         let element_r = &*element;
         match element_r.parent {
-            Some(ParentOfChild::Root(root_parent)) => {
-                let root_parent_r = &*root_parent;
-                let data = root_parent_r.children.as_slice();
-                let pos = data.iter().position(|c| *c == ChildOfRoot::Element(element)).unwrap();
+            Some(ParentOfChild::Root(root_parent)) =>
+                SiblingIter::of_root(SiblingDirection::Preceding, root_parent, ChildOfRoot::Element(element)),
+            Some(ParentOfChild::Element(element_parent)) =>
+                SiblingIter::of_element(SiblingDirection::Preceding, element_parent, ChildOfElement::Element(element)),
+            None =>
+                SiblingIter::dead(),
+        }
+    }
 
-                SiblingIter {
-                    idx: 0,
-                    data: SiblingData::FromRoot(data[..pos]),
-                }
-            },
-            Some(ParentOfChild::Element(element_parent)) => {
-                let element_parent_r = &*element_parent;
-                let data = element_parent_r.children.as_slice();
-                let pos = data.iter().position(|c| *c == ChildOfElement::Element(element)).unwrap();
-                SiblingIter {
-                    idx: 0,
-                    data: SiblingData::FromElement(data[..pos]),
-                }
-            },
-            None => {
-                SiblingIter {
-                    idx: 0,
-                    data: SiblingData::Dead
-                }
-            }
+    /// Returns the sibling nodes that come after this node. The
+    /// nodes are in document order.
+    pub unsafe fn element_following_siblings(&self, element: *mut Element) -> SiblingIter {
+        let element_r = &*element;
+        match element_r.parent {
+            Some(ParentOfChild::Root(root_parent)) =>
+                SiblingIter::of_root(SiblingDirection::Following, root_parent, ChildOfRoot::Element(element)),
+            Some(ParentOfChild::Element(element_parent)) =>
+                SiblingIter::of_element(SiblingDirection::Following, element_parent, ChildOfElement::Element(element)),
+            None =>
+                SiblingIter::dead(),
         }
     }
 
@@ -520,6 +515,11 @@ impl Connections {
     }
 }
 
+enum SiblingDirection {
+    Preceding,
+    Following,
+}
+
 enum SiblingData<'a> {
     FromRoot(&'a [ChildOfRoot]),
     FromElement(&'a [ChildOfElement]),
@@ -529,6 +529,47 @@ enum SiblingData<'a> {
 pub struct SiblingIter<'a> {
     idx: uint,
     data: SiblingData<'a>
+}
+
+impl<'a> SiblingIter<'a> {
+    unsafe fn of_root(direction: SiblingDirection, root_parent: *mut Root, child: ChildOfRoot) -> SiblingIter<'a> {
+        let root_parent_r = &*root_parent;
+        let data = root_parent_r.children[];
+        let pos = data.iter().position(|c| *c == child).unwrap();
+
+        let data = match direction {
+            SiblingDirection::Preceding => data[..pos],
+            SiblingDirection::Following => data[pos+1..],
+        };
+
+        SiblingIter {
+            idx: 0,
+            data: SiblingData::FromRoot(data),
+        }
+    }
+
+    unsafe fn of_element(direction: SiblingDirection, element_parent: *mut Element, child: ChildOfElement) -> SiblingIter<'a> {
+        let element_parent_r = &*element_parent;
+        let data = element_parent_r.children[];
+        let pos = data.iter().position(|c| *c == child).unwrap();
+
+        let data = match direction {
+            SiblingDirection::Preceding => data[..pos],
+            SiblingDirection::Following => data[pos+1..],
+        };
+
+        SiblingIter {
+            idx: 0,
+            data: SiblingData::FromElement(data),
+        }
+    }
+
+    fn dead() -> SiblingIter<'a> {
+        SiblingIter {
+            idx: 0,
+            data: SiblingData::Dead
+        }
+    }
 }
 
 impl<'d> Iterator<ChildOfElement> for SiblingIter<'d> {

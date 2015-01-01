@@ -216,6 +216,18 @@ impl<'d> Element<'d> {
         }
     }
 
+    pub fn following_siblings(&self) -> Vec<ChildOfElement<'d>> {
+        let connections = self.document.connections.borrow();
+
+        // This is safe because we don't allow the connection
+        // information to leak outside of this method.
+        unsafe {
+            connections.element_following_siblings(self.node).map(|n| {
+                self.document.wrap_child_of_element(n)
+            }).collect()
+        }
+    }
+
     pub fn attribute<'n, N>(&self, name: N) -> Option<Attribute<'d>>
         where N: ToQName<'n>
     {
@@ -640,6 +652,25 @@ mod test {
         parent.append_child(d);
 
         assert_eq!(vec![ChildOfElement::Element(a), ChildOfElement::Element(b)], c.preceding_siblings());
+    }
+
+    #[test]
+    fn elements_know_following_siblings() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let parent = doc.create_element("parent");
+        let a = doc.create_element("a");
+        let b = doc.create_element("b");
+        let c = doc.create_element("c");
+        let d = doc.create_element("d");
+
+        parent.append_child(a);
+        parent.append_child(b);
+        parent.append_child(c);
+        parent.append_child(d);
+
+        assert_eq!(vec![ChildOfElement::Element(c), ChildOfElement::Element(d)], b.following_siblings());
     }
 
     #[test]
