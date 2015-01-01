@@ -465,6 +465,30 @@ impl Connections {
         }
     }
 
+    /// Returns the sibling nodes that come before this node. The
+    /// nodes are in document order.
+    pub unsafe fn text_preceding_siblings(&self, text: *mut Text) -> SiblingIter {
+        let text_r = &*text;
+        match text_r.parent {
+            Some(element_parent) =>
+                SiblingIter::of_element(SiblingDirection::Preceding, element_parent, ChildOfElement::Text(text)),
+            None =>
+                SiblingIter::dead(),
+        }
+    }
+
+    /// Returns the sibling nodes that come after this node. The
+    /// nodes are in document order.
+    pub unsafe fn text_following_siblings(&self, text: *mut Text) -> SiblingIter {
+        let text_r = &*text;
+        match text_r.parent {
+            Some(element_parent) =>
+                SiblingIter::of_element(SiblingDirection::Following, element_parent, ChildOfElement::Text(text)),
+            None =>
+                SiblingIter::dead(),
+        }
+    }
+
     pub fn attribute_parent(&self, attribute: *mut Attribute) -> Option<*mut Element> {
         let attr_r = unsafe { &*attribute };
         attr_r.parent
