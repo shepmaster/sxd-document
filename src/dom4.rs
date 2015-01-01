@@ -364,6 +364,30 @@ impl<'d> Comment<'d> {
             self.document.wrap_parent_of_child(n)
         })
     }
+
+    pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
+        let connections = self.document.connections.borrow();
+
+        // This is safe because we don't allow the connection
+        // information to leak outside of this method.
+        unsafe {
+            connections.comment_preceding_siblings(self.node).map(|n| {
+                self.document.wrap_child_of_element(n)
+            }).collect()
+        }
+    }
+
+    pub fn following_siblings(&self) -> Vec<ChildOfElement<'d>> {
+        let connections = self.document.connections.borrow();
+
+        // This is safe because we don't allow the connection
+        // information to leak outside of this method.
+        unsafe {
+            connections.comment_following_siblings(self.node).map(|n| {
+                self.document.wrap_child_of_element(n)
+            }).collect()
+        }
+    }
 }
 
 impl<'d> fmt::Show for Comment<'d> {
@@ -906,6 +930,36 @@ mod test {
         sentence.append_child(comment);
 
         assert_eq!(comment.parent(), Some(ParentOfChild::Element(sentence)));
+    }
+
+    #[test]
+    fn comment_knows_preceding_siblings() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let parent = doc.create_element("parent");
+        let a = doc.create_element("a");
+        let b = doc.create_comment("b");
+
+        parent.append_child(a);
+        parent.append_child(b);
+
+        assert_eq!(vec![ChildOfElement::Element(a)], b.preceding_siblings());
+    }
+
+    #[test]
+    fn comment_knows_following_siblings() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let parent = doc.create_element("parent");
+        let a = doc.create_comment("a");
+        let b = doc.create_element("b");
+
+        parent.append_child(a);
+        parent.append_child(b);
+
+        assert_eq!(vec![ChildOfElement::Element(b)], a.following_siblings());
     }
 
     #[test]
