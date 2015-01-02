@@ -693,7 +693,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         let deferred_element = self.element.take().unwrap();
 
         let deferred_attributes = replace(&mut self.attributes, Vec::new());
-        let (namespaces, attributes) = deferred_attributes.partition(|attr| {
+        let (namespaces, attributes): (Vec<_>, Vec<_>) = deferred_attributes.into_iter().partition(|attr| {
             // TODO: Default namespace
             attr.name.prefix == Some("xmlns")
         });
