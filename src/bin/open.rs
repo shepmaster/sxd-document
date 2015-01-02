@@ -17,7 +17,7 @@ fn pretty_error(xml: &str, position: uint) -> &str {
 fn main() {
     let mut args = std::os::args();
 
-    let filename = args.remove(1).expect("File required");
+    let filename = args.remove(1);
     let path = Path::new(filename);
     let mut file = File::open(&path);
 
