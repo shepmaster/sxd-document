@@ -13,6 +13,7 @@ fn pretty_error(xml: &str, position: uint) -> &str {
     s.slice_chars(0, min(l, 15))
 }
 
+#[allow(dead_code)]
 fn main() {
     let mut args = std::os::args();
 
