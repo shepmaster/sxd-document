@@ -48,6 +48,7 @@ use std::char::from_u32;
 use std::num::from_str_radix;
 use std::mem::replace;
 use std::collections::HashMap;
+use std::iter;
 
 use self::AttributeValue::*;
 use self::Reference::*;
@@ -550,13 +551,13 @@ fn decode_reference<T>(ref_data: Reference, cb: |&str| -> T) -> T {
         DecimalCharReference(d) => {
             let code: u32 = from_str_radix(d, 10).expect("Not valid decimal");
             let c: char = from_u32(code).expect("Not a valid codepoint");
-            let s = String::from_char(1, c);
+            let s: String = iter::repeat(c).take(1).collect();
             cb(s.as_slice())
         },
         HexCharReference(h) => {
             let code: u32 = from_str_radix(h, 16).expect("Not valid hex");
             let c: char = from_u32(code).expect("Not a valid codepoint");
-            let s = String::from_char(1, c);
+            let s: String = iter::repeat(c).take(1).collect();
             cb(s.as_slice())
         },
         EntityReference(e) => {
