@@ -416,6 +416,30 @@ impl<'d> ProcessingInstruction<'d> {
             self.document.wrap_parent_of_child(n)
         })
     }
+
+    pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
+        let connections = self.document.connections.borrow();
+
+        // This is safe because we don't allow the connection
+        // information to leak outside of this method.
+        unsafe {
+            connections.processing_instruction_preceding_siblings(self.node).map(|n| {
+                self.document.wrap_child_of_element(n)
+            }).collect()
+        }
+    }
+
+    pub fn following_siblings(&self) -> Vec<ChildOfElement<'d>> {
+        let connections = self.document.connections.borrow();
+
+        // This is safe because we don't allow the connection
+        // information to leak outside of this method.
+        unsafe {
+            connections.processing_instruction_following_siblings(self.node).map(|n| {
+                self.document.wrap_child_of_element(n)
+            }).collect()
+        }
+    }
 }
 
 impl<'d> fmt::Show for ProcessingInstruction<'d> {
@@ -1010,6 +1034,36 @@ mod test {
         element.append_child(pi);
 
         assert_eq!(pi.parent(), Some(ParentOfChild::Element(element)));
+    }
+
+    #[test]
+    fn processing_instruction_knows_preceding_siblings() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let parent = doc.create_element("parent");
+        let a = doc.create_element("a");
+        let b = doc.create_processing_instruction("b", None);
+
+        parent.append_child(a);
+        parent.append_child(b);
+
+        assert_eq!(vec![ChildOfElement::Element(a)], b.preceding_siblings());
+    }
+
+    #[test]
+    fn processing_instruction_knows_following_siblings() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let parent = doc.create_element("parent");
+        let a = doc.create_processing_instruction("a", None);
+        let b = doc.create_element("b");
+
+        parent.append_child(a);
+        parent.append_child(b);
+
+        assert_eq!(vec![ChildOfElement::Element(b)], a.following_siblings());
     }
 
     #[test]

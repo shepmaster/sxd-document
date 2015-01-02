@@ -517,6 +517,34 @@ impl Connections {
         }
     }
 
+    /// Returns the sibling nodes that come before this node. The
+    /// nodes are in document order.
+    pub unsafe fn processing_instruction_preceding_siblings(&self, pi: *mut ProcessingInstruction) -> SiblingIter {
+        let pi_r = &*pi;
+        match pi_r.parent {
+            Some(ParentOfChild::Root(root_parent)) =>
+                SiblingIter::of_root(SiblingDirection::Preceding, root_parent, ChildOfRoot::ProcessingInstruction(pi)),
+            Some(ParentOfChild::Element(element_parent)) =>
+                SiblingIter::of_element(SiblingDirection::Preceding, element_parent, ChildOfElement::ProcessingInstruction(pi)),
+            None =>
+                SiblingIter::dead(),
+        }
+    }
+
+    /// Returns the sibling nodes that come after this node. The
+    /// nodes are in document order.
+    pub unsafe fn processing_instruction_following_siblings(&self, pi: *mut ProcessingInstruction) -> SiblingIter {
+        let pi_r = &*pi;
+        match pi_r.parent {
+            Some(ParentOfChild::Root(root_parent)) =>
+                SiblingIter::of_root(SiblingDirection::Following, root_parent, ChildOfRoot::ProcessingInstruction(pi)),
+            Some(ParentOfChild::Element(element_parent)) =>
+                SiblingIter::of_element(SiblingDirection::Following, element_parent, ChildOfElement::ProcessingInstruction(pi)),
+            None =>
+                SiblingIter::dead(),
+        }
+    }
+
     pub fn attribute_parent(&self, attribute: *mut Attribute) -> Option<*mut Element> {
         let attr_r = unsafe { &*attribute };
         attr_r.parent
