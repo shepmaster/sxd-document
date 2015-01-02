@@ -115,63 +115,53 @@ impl<'d> Connections<'d> {
         self.connections.append_element_child(parent.node, child.as_raw())
     }
 
-    pub fn root_children(&self) -> RootChildren<'d> {
+    pub fn root_children(&self) -> RootChildren {
         // This is safe because we disallow mutation while this borrow is active.
-        // TODO: Test that
         unsafe { RootChildren { x: self.connections.root_children(), idx: 0 } }
     }
 
-    pub fn element_children(&self, parent: Element<'d>) -> ElementChildren<'d> {
+    pub fn element_children(&self, parent: Element) -> ElementChildren {
         // This is safe because we disallow mutation while this borrow is active.
-        // TODO: Test that
         unsafe { ElementChildren { x: self.connections.element_children(parent.node), idx: 0 } }
     }
 
-    pub fn element_preceding_siblings(&self, element: Element<'d>) -> Siblings<'d> {
+    pub fn element_preceding_siblings(&self, element: Element) -> Siblings {
         // This is safe because we disallow mutation while this borrow is active.
-        // TODO: Test that
         unsafe { Siblings { iter: self.connections.element_preceding_siblings(element.node) } }
     }
 
-    pub fn element_following_siblings(&self, element: Element<'d>) -> Siblings<'d> {
+    pub fn element_following_siblings(&self, element: Element) -> Siblings {
         // This is safe because we disallow mutation while this borrow is active.
-        // TODO: Test that
         unsafe { Siblings { iter: self.connections.element_following_siblings(element.node) } }
     }
 
-    pub fn text_preceding_siblings(&self, text: Text<'d>) -> Siblings<'d> {
+    pub fn text_preceding_siblings(&self, text: Text) -> Siblings {
         // This is safe because we disallow mutation while this borrow is active.
-        // TODO: Test that
         unsafe { Siblings { iter: self.connections.text_preceding_siblings(text.node) } }
     }
 
-    pub fn text_following_siblings(&self, text: Text<'d>) -> Siblings<'d> {
+    pub fn text_following_siblings(&self, text: Text) -> Siblings {
         // This is safe because we disallow mutation while this borrow is active.
-        // TODO: Test that
         unsafe { Siblings { iter: self.connections.text_following_siblings(text.node) } }
     }
 
-    pub fn comment_preceding_siblings(&self, comment: Comment<'d>) -> Siblings<'d> {
+    pub fn comment_preceding_siblings(&self, comment: Comment) -> Siblings {
         // This is safe because we disallow mutation while this borrow is active.
-        // TODO: Test that
         unsafe { Siblings { iter: self.connections.comment_preceding_siblings(comment.node) } }
     }
 
-    pub fn comment_following_siblings(&self, comment: Comment<'d>) -> Siblings<'d> {
+    pub fn comment_following_siblings(&self, comment: Comment) -> Siblings {
         // This is safe because we disallow mutation while this borrow is active.
-        // TODO: Test that
         unsafe { Siblings { iter: self.connections.comment_following_siblings(comment.node) } }
     }
 
-    pub fn processing_instruction_preceding_siblings(&self, pi: ProcessingInstruction<'d>) -> Siblings<'d> {
+    pub fn processing_instruction_preceding_siblings(&self, pi: ProcessingInstruction) -> Siblings {
         // This is safe because we disallow mutation while this borrow is active.
-        // TODO: Test that
         unsafe { Siblings { iter: self.connections.processing_instruction_preceding_siblings(pi.node) } }
     }
 
-    pub fn processing_instruction_following_siblings(&self, pi: ProcessingInstruction<'d>) -> Siblings<'d> {
+    pub fn processing_instruction_following_siblings(&self, pi: ProcessingInstruction) -> Siblings {
         // This is safe because we disallow mutation while this borrow is active.
-        // TODO: Test that
         unsafe { Siblings { iter: self.connections.processing_instruction_following_siblings(pi.node) } }
     }
 
@@ -872,15 +862,60 @@ mod test {
         assert_qname_eq!(element.name(), "hello");
     }
 
-    // #[test]
-    // #[compile_failure]
-    // fn nodes_cannot_live_outside_of_the_document() {
-    //     let package = Package::new();
+    #[test]
+    #[cfg(feature = "compile_failure")]
+    //cannot borrow `c` as mutable because it is also borrowed as immutable
+    fn cannot_mutate_connections_while_iterating_over_root_children() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
 
-    //     let _ = {
-    //         let (s, _) = package.as_thin_document();
+        let alpha = s.create_element("alpha");
 
-    //         s.create_element("hello")
-    //     };
-    // }
+        for _ in c.root_children() {
+            c.append_root_child(alpha);
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "compile_failure")]
+    //cannot borrow `c` as mutable because it is also borrowed as immutable
+    fn cannot_mutate_connections_while_iterating_over_element_children() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let alpha = s.create_element("alpha");
+        let beta  = s.create_element("beta");
+
+        for _ in c.element_children(alpha) {
+            c.append_element_child(alpha, beta);
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "compile_failure")]
+    //cannot borrow `c` as mutable because it is also borrowed as immutable
+    fn cannot_mutate_connections_while_iterating_over_siblings() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let alpha = s.create_element("alpha");
+        let beta  = s.create_element("beta");
+
+        for _ in c.element_preceding_siblings(alpha) {
+            c.append_element_child(alpha, beta);
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "compile_failure")]
+    //`s` does not live long enough
+    fn nodes_cannot_live_outside_of_the_document() {
+        let package = Package::new();
+
+        let _ = {
+            let (s, _) = package.as_thin_document();
+
+            s.create_element("hello")
+        };
+    }
 }
