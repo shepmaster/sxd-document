@@ -6,4 +6,5 @@ authors = ["Jake Goulding <jake.goulding@gmail.com>"]
 
 [dependencies.xxhash]
 
-git = "https://github.com/Jurily/rust-xxhash"
+git = "https://github.com/shepmaster/rust-xxhash"
+rev = "ff16980e763cba5cb1b75b05604bc503ba3a41f1"
