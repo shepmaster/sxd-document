@@ -4,6 +4,8 @@ use super::raw;
 use std::fmt;
 use std::cell::RefCell;
 
+type SiblingFn<T> = unsafe fn(&raw::Connections, T) -> raw::SiblingIter;
+
 pub struct Document<'d> {
     storage: &'d raw::Storage,
     connections: RefCell<&'d raw::Connections>,
@@ -79,6 +81,16 @@ impl<'d> Document<'d> {
 
     pub fn create_processing_instruction(&'d self, target: &str, value: Option<&str>) -> ProcessingInstruction<'d> {
         self.wrap_pi(self.storage.create_processing_instruction(target, value))
+    }
+
+    fn siblings<T>(&'d self, f: SiblingFn<T>, node: T) -> Vec<ChildOfElement<'d>> {
+        let connections = self.connections.borrow();
+
+        // This is safe because we don't allow the connection
+        // information to leak outside of this method.
+        unsafe {
+            f(*connections, node).map(|n| self.wrap_child_of_element(n)).collect()
+        }
     }
 }
 
@@ -205,27 +217,11 @@ impl<'d> Element<'d> {
     }
 
     pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        let connections = self.document.connections.borrow();
-
-        // This is safe because we don't allow the connection
-        // information to leak outside of this method.
-        unsafe {
-            connections.element_preceding_siblings(self.node).map(|n| {
-                self.document.wrap_child_of_element(n)
-            }).collect()
-        }
+        self.document.siblings(raw::Connections::element_preceding_siblings, self.node)
     }
 
     pub fn following_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        let connections = self.document.connections.borrow();
-
-        // This is safe because we don't allow the connection
-        // information to leak outside of this method.
-        unsafe {
-            connections.element_following_siblings(self.node).map(|n| {
-                self.document.wrap_child_of_element(n)
-            }).collect()
-        }
+        self.document.siblings(raw::Connections::element_following_siblings, self.node)
     }
 
     pub fn attribute<'n, N>(&self, name: N) -> Option<Attribute<'d>>
@@ -319,27 +315,11 @@ impl<'d> Text<'d> {
     }
 
     pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        let connections = self.document.connections.borrow();
-
-        // This is safe because we don't allow the connection
-        // information to leak outside of this method.
-        unsafe {
-            connections.text_preceding_siblings(self.node).map(|n| {
-                self.document.wrap_child_of_element(n)
-            }).collect()
-        }
+        self.document.siblings(raw::Connections::text_preceding_siblings, self.node)
     }
 
     pub fn following_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        let connections = self.document.connections.borrow();
-
-        // This is safe because we don't allow the connection
-        // information to leak outside of this method.
-        unsafe {
-            connections.text_following_siblings(self.node).map(|n| {
-                self.document.wrap_child_of_element(n)
-            }).collect()
-        }
+        self.document.siblings(raw::Connections::text_following_siblings, self.node)
     }
 }
 
@@ -366,27 +346,11 @@ impl<'d> Comment<'d> {
     }
 
     pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        let connections = self.document.connections.borrow();
-
-        // This is safe because we don't allow the connection
-        // information to leak outside of this method.
-        unsafe {
-            connections.comment_preceding_siblings(self.node).map(|n| {
-                self.document.wrap_child_of_element(n)
-            }).collect()
-        }
+        self.document.siblings(raw::Connections::comment_preceding_siblings, self.node)
     }
 
     pub fn following_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        let connections = self.document.connections.borrow();
-
-        // This is safe because we don't allow the connection
-        // information to leak outside of this method.
-        unsafe {
-            connections.comment_following_siblings(self.node).map(|n| {
-                self.document.wrap_child_of_element(n)
-            }).collect()
-        }
+        self.document.siblings(raw::Connections::comment_following_siblings, self.node)
     }
 }
 
@@ -418,27 +382,11 @@ impl<'d> ProcessingInstruction<'d> {
     }
 
     pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        let connections = self.document.connections.borrow();
-
-        // This is safe because we don't allow the connection
-        // information to leak outside of this method.
-        unsafe {
-            connections.processing_instruction_preceding_siblings(self.node).map(|n| {
-                self.document.wrap_child_of_element(n)
-            }).collect()
-        }
+        self.document.siblings(raw::Connections::processing_instruction_preceding_siblings, self.node)
     }
 
     pub fn following_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        let connections = self.document.connections.borrow();
-
-        // This is safe because we don't allow the connection
-        // information to leak outside of this method.
-        unsafe {
-            connections.processing_instruction_following_siblings(self.node).map(|n| {
-                self.document.wrap_child_of_element(n)
-            }).collect()
-        }
+        self.document.siblings(raw::Connections::processing_instruction_following_siblings, self.node)
     }
 }
 
