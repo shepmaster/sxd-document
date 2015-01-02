@@ -127,6 +127,54 @@ impl<'d> Connections<'d> {
         unsafe { ElementChildren { x: self.connections.element_children(parent.node), idx: 0 } }
     }
 
+    pub fn element_preceding_siblings(&self, element: Element<'d>) -> Siblings<'d> {
+        // This is safe because we disallow mutation while this borrow is active.
+        // TODO: Test that
+        unsafe { Siblings { iter: self.connections.element_preceding_siblings(element.node) } }
+    }
+
+    pub fn element_following_siblings(&self, element: Element<'d>) -> Siblings<'d> {
+        // This is safe because we disallow mutation while this borrow is active.
+        // TODO: Test that
+        unsafe { Siblings { iter: self.connections.element_following_siblings(element.node) } }
+    }
+
+    pub fn text_preceding_siblings(&self, text: Text<'d>) -> Siblings<'d> {
+        // This is safe because we disallow mutation while this borrow is active.
+        // TODO: Test that
+        unsafe { Siblings { iter: self.connections.text_preceding_siblings(text.node) } }
+    }
+
+    pub fn text_following_siblings(&self, text: Text<'d>) -> Siblings<'d> {
+        // This is safe because we disallow mutation while this borrow is active.
+        // TODO: Test that
+        unsafe { Siblings { iter: self.connections.text_following_siblings(text.node) } }
+    }
+
+    pub fn comment_preceding_siblings(&self, comment: Comment<'d>) -> Siblings<'d> {
+        // This is safe because we disallow mutation while this borrow is active.
+        // TODO: Test that
+        unsafe { Siblings { iter: self.connections.comment_preceding_siblings(comment.node) } }
+    }
+
+    pub fn comment_following_siblings(&self, comment: Comment<'d>) -> Siblings<'d> {
+        // This is safe because we disallow mutation while this borrow is active.
+        // TODO: Test that
+        unsafe { Siblings { iter: self.connections.comment_following_siblings(comment.node) } }
+    }
+
+    pub fn processing_instruction_preceding_siblings(&self, pi: ProcessingInstruction<'d>) -> Siblings<'d> {
+        // This is safe because we disallow mutation while this borrow is active.
+        // TODO: Test that
+        unsafe { Siblings { iter: self.connections.processing_instruction_preceding_siblings(pi.node) } }
+    }
+
+    pub fn processing_instruction_following_siblings(&self, pi: ProcessingInstruction<'d>) -> Siblings<'d> {
+        // This is safe because we disallow mutation while this borrow is active.
+        // TODO: Test that
+        unsafe { Siblings { iter: self.connections.processing_instruction_following_siblings(pi.node) } }
+    }
+
     pub fn attribute_parent(&self, attribute: Attribute<'d>) -> Option<Element<'d>> {
         self.connections.attribute_parent(attribute.node).map(|a| Element::wrap(a))
     }
@@ -197,6 +245,16 @@ impl<'d> Iterator<Attribute<'d>> for Attributes<'d> {
             self.idx += 1;
             Some(a)
         }
+    }
+}
+
+pub struct Siblings<'d> {
+    iter: raw::SiblingIter<'d>,
+}
+
+impl<'d> Iterator<ChildOfElement<'d>> for Siblings<'d> {
+    fn next(&mut self) -> Option<ChildOfElement<'d>> {
+        self.iter.next().map(|n| ChildOfElement::wrap(n))
     }
 }
 
@@ -561,6 +619,23 @@ mod test {
         c.append_element_child(alpha, beta);
 
         assert_eq!(Some(ParentOfChild::Element(alpha)), c.element_parent(beta));
+    }
+
+    #[test]
+    fn elements_know_preceding_siblings() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let parent = s.create_element("parent");
+        let a = s.create_element("a");
+        let b = s.create_element("b");
+
+        c.append_element_child(parent, a);
+        c.append_element_child(parent, b);
+
+        let preceding: Vec<_> = c.element_preceding_siblings(b).collect();
+
+        assert_eq!(vec![ChildOfElement::Element(a)], preceding);
     }
 
     #[test]
