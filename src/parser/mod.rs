@@ -74,19 +74,19 @@ pub struct Parser;
 // Should this work:
 // <a xmlns:x1="x" xmlns:x2="x"> <x1:b></x2:b> </a>
 // xmllint reports it as an error...
-#[deriving(PartialEq,Copy,Show)]
+#[derive(PartialEq,Copy,Show)]
 pub struct PrefixedName<'a> {
     pub prefix: Option<&'a str>,
     pub local_part: &'a str,
 }
 
-#[deriving(Show,Copy)]
+#[derive(Show,Copy)]
 enum AttributeValue<'a> {
     ReferenceAttributeValue(Reference<'a>),
     LiteralAttributeValue(&'a str),
 }
 
-#[deriving(Show,Copy)]
+#[derive(Show,Copy)]
 enum Reference<'a> {
     EntityReference(&'a str),
     DecimalCharReference(&'a str),

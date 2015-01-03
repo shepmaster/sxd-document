@@ -79,7 +79,7 @@ impl ProcessingInstruction {
 }
 
 #[allow(raw_pointer_deriving)]
-#[deriving(PartialEq,Copy)]
+#[derive(PartialEq,Copy)]
 pub enum ChildOfRoot {
     Element(*mut Element),
     Comment(*mut Comment),
@@ -123,7 +123,7 @@ impl ChildOfRoot {
 }
 
 #[allow(raw_pointer_deriving)]
-#[deriving(PartialEq,Copy)]
+#[derive(PartialEq,Copy)]
 pub enum ChildOfElement {
     Element(*mut Element),
     Text(*mut Text),
@@ -180,7 +180,7 @@ impl ChildOfElement {
 }
 
 #[allow(raw_pointer_deriving)]
-#[deriving(PartialEq,Copy)]
+#[derive(PartialEq,Copy)]
 pub enum ParentOfChild {
     Root(*mut Root),
     Element(*mut Element),

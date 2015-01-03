@@ -109,7 +109,7 @@ impl<'d> fmt::Show for Document<'d> {
 macro_rules! node(
     ($name:ident, $raw:ty) => (
         #[allow(raw_pointer_deriving)]
-        #[deriving(Clone,Copy)]
+        #[derive(Clone,Copy)]
         pub struct $name<'d> {
             document: &'d Document<'d>,
             node: *mut $raw,
@@ -409,7 +409,7 @@ macro_rules! unpack(
     )
 );
 
-#[deriving(PartialEq,Show,Copy)]
+#[derive(PartialEq,Show,Copy)]
 pub enum ChildOfRoot<'d> {
     Element(Element<'d>),
     Comment(Comment<'d>),
@@ -430,7 +430,7 @@ impl<'d> ChildOfRoot<'d> {
     }
 }
 
-#[deriving(PartialEq,Show,Copy)]
+#[derive(PartialEq,Show,Copy)]
 pub enum ChildOfElement<'d> {
     Element(Element<'d>),
     Text(Text<'d>),
@@ -454,7 +454,7 @@ impl<'d> ChildOfElement<'d> {
     }
 }
 
-#[deriving(PartialEq,Show,Copy)]
+#[derive(PartialEq,Show,Copy)]
 pub enum ParentOfChild<'d> {
     Root(Root<'d>),
     Element(Element<'d>),

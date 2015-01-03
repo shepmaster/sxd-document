@@ -39,7 +39,7 @@ pub mod dom4;
 pub mod parser;
 pub mod writer;
 
-#[deriving(Show,PartialEq,Eq,PartialOrd)]
+#[derive(Show,PartialEq,Eq,PartialOrd)]
 pub struct QName<'s> {
     namespace_uri: Option<&'s str>,
     local_part: &'s str,

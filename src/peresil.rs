@@ -67,7 +67,7 @@ impl<'a, E> BestFailure<'a, E> {
     }
 }
 
-#[deriving(Show,Clone,PartialEq,Copy)]
+#[derive(Show,Clone,PartialEq,Copy)]
 pub struct Point<'a> {
     pub offset: uint,
     pub s: &'a str,
