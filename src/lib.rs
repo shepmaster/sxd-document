@@ -24,6 +24,7 @@
 #![feature(default_type_params)]
 #![feature(globs)]
 #![feature(slicing_syntax)]
+#![feature(old_orphan_check)] // https://github.com/rust-lang/rust/issues/20477
 
 extern crate arena;
 extern crate test;
