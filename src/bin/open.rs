@@ -3,7 +3,7 @@ extern crate document;
 use std::cmp::min;
 use std::io::File;
 use std::io::BufferedWriter;
-use std::io::stdio::stdout_raw;
+use std::io::stdio;
 
 use document::parser::Parser;
 
@@ -13,15 +13,11 @@ fn pretty_error(xml: &str, position: uint) -> &str {
     s.slice_chars(0, min(l, 15))
 }
 
-#[allow(dead_code)]
-fn main() {
-    let mut args = std::os::args();
-
-    let filename = args.remove(1);
-    let path = Path::new(filename);
-    let mut file = File::open(&path);
-
-    let data = match file.read_to_string() {
+fn process_input<R>(input: R)
+    where R: Reader
+{
+    let mut input = input;
+    let data = match input.read_to_string() {
         Ok(x) => x,
         Err(x) => panic!("Can't read: {}", x),
     };
@@ -33,10 +29,23 @@ fn main() {
         Err(point) => panic!("Unable to parse: {}", pretty_error(data.as_slice(), point)),
     };
 
-    let mut out = BufferedWriter::new(stdout_raw());
+    let mut out = BufferedWriter::new(stdio::stdout_raw());
 
     {
         let d = package.as_document();
         document::writer::format_document(&d, &mut out).ok().expect("I can't output");
+    }
+}
+
+#[allow(dead_code)]
+fn main() {
+    let mut args = std::os::args();
+
+    let filename = args.remove(1);
+
+    if filename == "-" {
+        process_input(stdio::stdin_raw());
+    } else {
+        process_input(File::open(&Path::new(filename)))
     }
 }
