@@ -62,7 +62,7 @@ impl<'s> QName<'s> {
 }
 
 impl<'s> Ord for QName<'s> {
-    fn cmp(&self, other: &QName<'s>) -> Ordering {
+    fn cmp(&self, other: &QName<'s>) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
     }
 }
