@@ -2,7 +2,7 @@ use super::{QName,ToQName};
 use super::raw;
 
 use std::fmt;
-use std::kinds::marker::InvariantLifetime;
+use std::marker::InvariantLifetime;
 
 pub struct Storage<'d> {
     storage: &'d raw::Storage,
