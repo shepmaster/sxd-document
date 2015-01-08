@@ -136,7 +136,7 @@ impl StringPool {
 
         let interned_str = match self.index.borrow_mut().entry(search_string) {
             Occupied(entry) => *entry.get(),
-            Vacant(entry) => *entry.set(self.do_intern(s)),
+            Vacant(entry) => *entry.insert(self.do_intern(s)),
         };
 
         // The lifetime is really matched to us
