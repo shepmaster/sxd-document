@@ -258,7 +258,7 @@ impl<'d> Iterator for Siblings<'d> {
 
 macro_rules! node(
     ($name:ident, $raw:ty) => (
-        #[allow(raw_pointer_deriving)]
+        #[allow(raw_pointer_derive)]
         #[derive(Copy)]
         pub struct $name<'d> {
             lifetime: InvariantLifetime<'d>,

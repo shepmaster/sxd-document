@@ -108,7 +108,7 @@ impl<'d> fmt::Show for Document<'d> {
 
 macro_rules! node(
     ($name:ident, $raw:ty) => (
-        #[allow(raw_pointer_deriving)]
+        #[allow(raw_pointer_derive)]
         #[derive(Clone,Copy)]
         pub struct $name<'d> {
             document: &'d Document<'d>,
