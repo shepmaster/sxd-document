@@ -1,13 +1,14 @@
 pub trait StrParseExt {
-    fn end_of_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> Option<uint>;
+    fn end_of_start_rest<F1, F2>(&self, is_first: F1, is_rest: F2) -> Option<uint>
+        where F1: Fn(char) -> bool,
+              F2: Fn(char) -> bool;
     fn end_of_literal(&self, expected: &str) -> Option<uint>;
 }
 
 impl<'a> StrParseExt for &'a str {
-    fn end_of_start_rest(&self,
-                         is_first: |char| -> bool,
-                         is_rest: |char| -> bool)
-                         -> Option<uint>
+    fn end_of_start_rest<F1, F2>(&self, is_first: F1, is_rest: F2) -> Option<uint>
+        where F1: Fn(char) -> bool,
+              F2: Fn(char) -> bool
     {
         let mut positions = self.char_indices();
 
@@ -156,7 +157,10 @@ impl<'a, T, E> Result<'a, T, E> {
     }
 
     // Pattern: alternate
-    pub fn or_else(self, f: || -> Result<'a, T, E>) -> Result<'a, T, E> {
+    pub fn or_else<F>(self, f: F) -> Result<'a, T, E>
+        where F: FnMut() -> Result<'a, T, E>
+    {
+        let mut f = f;
         match self {
             Result::Success(..) => self,
             Result::Partial{ failure: fail, .. } |

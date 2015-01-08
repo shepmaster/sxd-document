@@ -241,12 +241,11 @@ impl Parser {
         self.parse_miscs(xml, sink)
     }
 
-    fn parse_one_quoted_value<'a, T>(&self,
-                                     xml: Point<'a>,
-                                     quote: &str,
-                                     f: |Point<'a>| -> ParseResult<'a, T>)
-                                     -> ParseResult<'a, T>
+    fn parse_one_quoted_value<'a, T, F>(&self, xml: Point<'a>, quote: &str, f: F)
+                                        -> ParseResult<'a, T>
+        where F: FnMut(Point<'a>) -> ParseResult<'a, T>
     {
+        let mut f = f;
         let (_, xml) = try_parse!(xml.consume_literal(quote));
         let (value, f, xml) = try_partial_parse!(f(xml));
         let (_, xml) = try_resume_after_partial_failure!(f, xml.consume_literal(quote));
@@ -254,11 +253,10 @@ impl Parser {
         success(value, xml)
     }
 
-    fn parse_quoted_value<'a, T>(&self,
-                                 xml: Point<'a>,
-                                 f: |Point<'a>, &str| -> ParseResult<'a, T>)
-                                 -> ParseResult<'a, T>
+    fn parse_quoted_value<'a, T, F>(&self, xml: Point<'a>, f: F) -> ParseResult<'a, T>
+        where F: FnMut(Point<'a>, &str) -> ParseResult<'a, T>
     {
+        let mut f = f;
         self.parse_one_quoted_value(xml, "'",  |xml| f(xml, "'"))
             .or_else(|| self.parse_one_quoted_value(xml, "\"", |xml| f(xml, "\"")))
     }
@@ -546,7 +544,10 @@ trait ParserSink<'x> {
 }
 
 
-fn decode_reference<T>(ref_data: Reference, cb: |&str| -> T) -> T {
+fn decode_reference<T, F>(ref_data: Reference, cb: F) -> T
+    where F: FnMut(&str) -> T
+{
+    let mut cb = cb;
     match ref_data {
         DecimalCharReference(d) => {
             let code: u32 = from_str_radix(d, 10).expect("Not valid decimal");
