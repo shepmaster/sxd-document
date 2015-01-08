@@ -1,5 +1,3 @@
-#![macro_escape]
-
 pub trait StrParseExt {
     fn end_of_start_rest(&self, is_first: |char| -> bool, is_rest: |char| -> bool) -> Option<uint>;
     fn end_of_literal(&self, expected: &str) -> Option<uint>;

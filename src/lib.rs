@@ -20,11 +20,7 @@
 
 #![crate_name = "document"]
 #![experimental]
-#![feature(macro_rules)]
-#![feature(default_type_params)]
-#![feature(globs)]
 #![feature(slicing_syntax)]
-#![feature(old_orphan_check)] // https://github.com/rust-lang/rust/issues/20477
 
 extern crate arena;
 extern crate test;
@@ -34,6 +30,8 @@ use std::fmt;
 
 mod string_pool;
 mod raw;
+
+#[macro_use]
 pub mod peresil;
 pub mod thindom4;
 pub mod dom4;
