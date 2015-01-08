@@ -102,7 +102,7 @@ impl<'d> PartialEq for Document<'d> {
 
 impl<'d> fmt::Show for Document<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Document {{ {} }}", self as *const Document)
+        write!(f, "Document {{ {:?} }}", self as *const Document)
     }
 }
 
@@ -266,7 +266,7 @@ impl<'d> Element<'d> {
 
 impl<'d> fmt::Show for Element<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Element {{ name: {} }}", self.name())
+        write!(f, "Element {{ name: {:?} }}", self.name())
     }
 }
 
@@ -294,7 +294,7 @@ impl<'d> Attribute<'d> {
 
 impl<'d> fmt::Show for Attribute<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Attribute {{ name: {}, value: {} }}", self.name(), self.value())
+        write!(f, "Attribute {{ name: {:?}, value: {:?} }}", self.name(), self.value())
     }
 }
 
@@ -325,7 +325,7 @@ impl<'d> Text<'d> {
 
 impl<'d> fmt::Show for Text<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Text {{ text: {} }}", self.text())
+        write!(f, "Text {{ text: {:?} }}", self.text())
     }
 }
 
@@ -356,7 +356,7 @@ impl<'d> Comment<'d> {
 
 impl<'d> fmt::Show for Comment<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Comment {{ text: {} }}", self.text())
+        write!(f, "Comment {{ text: {:?} }}", self.text())
     }
 }
 
@@ -392,7 +392,7 @@ impl<'d> ProcessingInstruction<'d> {
 
 impl<'d> fmt::Show for ProcessingInstruction<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ProcessingInstruction {{ target: {}, value: {} }}", self.target(), self.value())
+        write!(f, "ProcessingInstruction {{ target: {:?}, value: {:?} }}", self.target(), self.value())
     }
 }
 
