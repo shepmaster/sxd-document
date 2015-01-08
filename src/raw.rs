@@ -132,7 +132,7 @@ pub enum ChildOfElement {
 }
 
 fn replace_parent(child: ChildOfRoot, parent: ParentOfChild, parent_field: &mut Option<ParentOfChild>) {
-    if let &Some(prev_parent) = parent_field {
+    if let &mut Some(prev_parent) = parent_field {
         match prev_parent {
             ParentOfChild::Root(r) => {
                 let r_r = unsafe { &mut *r };
