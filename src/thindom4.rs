@@ -192,7 +192,9 @@ pub struct RootChildren<'d> {
     idx: uint,
 }
 
-impl<'d> Iterator<ChildOfRoot<'d>> for RootChildren<'d> {
+impl<'d> Iterator for RootChildren<'d> {
+    type Item = ChildOfRoot<'d>;
+
     fn next(&mut self) -> Option<ChildOfRoot<'d>> {
         if self.idx >= self.x.len() {
             None
@@ -209,7 +211,9 @@ pub struct ElementChildren<'d> {
     idx: uint,
 }
 
-impl<'d> Iterator<ChildOfElement<'d>> for ElementChildren<'d> {
+impl<'d> Iterator for ElementChildren<'d> {
+    type Item = ChildOfElement<'d>;
+
     fn next(&mut self) -> Option<ChildOfElement<'d>> {
         if self.idx >= self.x.len() {
             None
@@ -226,7 +230,9 @@ pub struct Attributes<'d> {
     idx: uint,
 }
 
-impl<'d> Iterator<Attribute<'d>> for Attributes<'d> {
+impl<'d> Iterator for Attributes<'d> {
+    type Item = Attribute<'d>;
+
     fn next(&mut self) -> Option<Attribute<'d>> {
         if self.idx >= self.x.len() {
             None
@@ -242,7 +248,9 @@ pub struct Siblings<'d> {
     iter: raw::SiblingIter<'d>,
 }
 
-impl<'d> Iterator<ChildOfElement<'d>> for Siblings<'d> {
+impl<'d> Iterator for Siblings<'d> {
+    type Item = ChildOfElement<'d>;
+
     fn next(&mut self) -> Option<ChildOfElement<'d>> {
         self.iter.next().map(|n| ChildOfElement::wrap(n))
     }

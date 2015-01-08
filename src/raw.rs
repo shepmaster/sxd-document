@@ -652,7 +652,9 @@ impl<'a> SiblingIter<'a> {
     }
 }
 
-impl<'d> Iterator<ChildOfElement> for SiblingIter<'d> {
+impl<'d> Iterator for SiblingIter<'d> {
+    type Item = ChildOfElement;
+
     fn next(&mut self) -> Option<ChildOfElement> {
         match self.data {
             SiblingData::FromRoot(children) => {
