@@ -20,7 +20,6 @@
 
 #![crate_name = "document"]
 #![experimental]
-#![feature(slicing_syntax)]
 
 extern crate arena;
 extern crate test;

@@ -614,12 +614,12 @@ pub struct SiblingIter<'a> {
 impl<'a> SiblingIter<'a> {
     unsafe fn of_root(direction: SiblingDirection, root_parent: *mut Root, child: ChildOfRoot) -> SiblingIter<'a> {
         let root_parent_r = &*root_parent;
-        let data = root_parent_r.children[];
+        let data = root_parent_r.children.as_slice();
         let pos = data.iter().position(|c| *c == child).unwrap();
 
         let data = match direction {
-            SiblingDirection::Preceding => data[..pos],
-            SiblingDirection::Following => data[pos+1..],
+            SiblingDirection::Preceding => data.slice_to(pos),
+            SiblingDirection::Following => data.slice_from(pos+1),
         };
 
         SiblingIter {
@@ -630,12 +630,12 @@ impl<'a> SiblingIter<'a> {
 
     unsafe fn of_element(direction: SiblingDirection, element_parent: *mut Element, child: ChildOfElement) -> SiblingIter<'a> {
         let element_parent_r = &*element_parent;
-        let data = element_parent_r.children[];
+        let data = element_parent_r.children.as_slice();
         let pos = data.iter().position(|c| *c == child).unwrap();
 
         let data = match direction {
-            SiblingDirection::Preceding => data[..pos],
-            SiblingDirection::Following => data[pos+1..],
+            SiblingDirection::Preceding => data.slice_to(pos),
+            SiblingDirection::Following => data.slice_from(pos+1),
         };
 
         SiblingIter {
