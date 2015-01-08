@@ -20,6 +20,7 @@
 
 #![crate_name = "document"]
 #![experimental]
+#![allow(unstable)]
 
 extern crate arena;
 extern crate test;

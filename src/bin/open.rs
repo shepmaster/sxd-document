@@ -1,3 +1,5 @@
+#![allow(unstable)]
+
 extern crate document;
 
 use std::cmp::min;
