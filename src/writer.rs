@@ -88,7 +88,7 @@ impl<'d> PrefixScope<'d> {
 
 struct PrefixMapping<'d> {
     scopes: Vec<PrefixScope<'d>>,
-    generated_prefix_count: uint,
+    generated_prefix_count: usize,
 }
 
 impl<'d> PrefixMapping<'d> {

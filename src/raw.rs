@@ -607,7 +607,7 @@ enum SiblingData<'a> {
 }
 
 pub struct SiblingIter<'a> {
-    idx: uint,
+    idx: usize,
     data: SiblingData<'a>
 }
 

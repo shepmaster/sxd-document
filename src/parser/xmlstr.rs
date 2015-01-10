@@ -1,21 +1,21 @@
 use super::super::peresil::StrParseExt;
 
 pub trait XmlStr {
-    fn end_of_attribute(&self, quote: &str) -> Option<uint>;
-    fn end_of_char_data(&self) -> Option<uint>;
-    fn end_of_cdata(&self) -> Option<uint>;
-    fn end_of_decimal_chars(&self) -> Option<uint>;
-    fn end_of_hex_chars(&self) -> Option<uint>;
-    fn end_of_comment(&self) -> Option<uint>;
-    fn end_of_pi_value(&self) -> Option<uint>;
-    fn end_of_name(&self) -> Option<uint>;
-    fn end_of_ncname(&self) -> Option<uint>;
-    fn end_of_space(&self) -> Option<uint>;
-    fn end_of_start_tag(&self) -> Option<uint>;
+    fn end_of_attribute(&self, quote: &str) -> Option<usize>;
+    fn end_of_char_data(&self) -> Option<usize>;
+    fn end_of_cdata(&self) -> Option<usize>;
+    fn end_of_decimal_chars(&self) -> Option<usize>;
+    fn end_of_hex_chars(&self) -> Option<usize>;
+    fn end_of_comment(&self) -> Option<usize>;
+    fn end_of_pi_value(&self) -> Option<usize>;
+    fn end_of_name(&self) -> Option<usize>;
+    fn end_of_ncname(&self) -> Option<usize>;
+    fn end_of_space(&self) -> Option<usize>;
+    fn end_of_start_tag(&self) -> Option<usize>;
 }
 
 impl<'a> XmlStr for &'a str {
-    fn end_of_attribute(&self, quote: &str) -> Option<uint> {
+    fn end_of_attribute(&self, quote: &str) -> Option<usize> {
         if self.len() == 0 ||
            self.starts_with("&") ||
            self.starts_with("<") ||
@@ -34,7 +34,7 @@ impl<'a> XmlStr for &'a str {
         }
     }
 
-    fn end_of_char_data(&self) -> Option<uint> {
+    fn end_of_char_data(&self) -> Option<usize> {
         if self.starts_with("<") ||
            self.starts_with("&") ||
            self.starts_with("]]>")
@@ -63,24 +63,24 @@ impl<'a> XmlStr for &'a str {
         }
     }
 
-    fn end_of_cdata(&self) -> Option<uint> {
+    fn end_of_cdata(&self) -> Option<usize> {
         match self.find_str("]]>") {
             None => None,
             Some(offset) => Some(offset),
         }
     }
 
-    fn end_of_decimal_chars(&self) -> Option<uint> {
+    fn end_of_decimal_chars(&self) -> Option<usize> {
         self.end_of_start_rest(|c| c.is_decimal_char(),
                                |c| c.is_decimal_char())
     }
 
-    fn end_of_hex_chars(&self) -> Option<uint> {
+    fn end_of_hex_chars(&self) -> Option<usize> {
         self.end_of_start_rest(|c| c.is_hex_char(),
                                |c| c.is_hex_char())
     }
 
-    fn end_of_comment(&self) -> Option<uint> {
+    fn end_of_comment(&self) -> Option<usize> {
         // This deliberately does not include the >. -- is not allowed
         // in a comment, so we can just test the end if it matches the
         // complete close delimiter.
@@ -90,26 +90,26 @@ impl<'a> XmlStr for &'a str {
         }
     }
 
-    fn end_of_pi_value(&self) -> Option<uint> {
+    fn end_of_pi_value(&self) -> Option<usize> {
         match self.find_str("?>") {
             None => None,
             Some(offset) => Some(offset),
         }
     }
 
-    fn end_of_name(&self) -> Option<uint> {
+    fn end_of_name(&self) -> Option<usize> {
         self.end_of_start_rest(|c| c.is_name_start_char(), |c| c.is_name_char())
     }
 
-    fn end_of_ncname(&self) -> Option<uint> {
+    fn end_of_ncname(&self) -> Option<usize> {
         self.end_of_start_rest(|c| c.is_ncname_start_char(), |c| c.is_ncname_char())
     }
 
-    fn end_of_space(&self) -> Option<uint> {
+    fn end_of_space(&self) -> Option<usize> {
         self.end_of_start_rest(|c| c.is_space_char(), |c| c.is_space_char())
     }
 
-    fn end_of_start_tag(&self) -> Option<uint> {
+    fn end_of_start_tag(&self) -> Option<usize> {
         let mut positions = self.char_indices();
 
         match positions.next() {

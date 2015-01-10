@@ -1,12 +1,12 @@
 pub trait StrParseExt {
-    fn end_of_start_rest<F1, F2>(&self, is_first: F1, is_rest: F2) -> Option<uint>
+    fn end_of_start_rest<F1, F2>(&self, is_first: F1, is_rest: F2) -> Option<usize>
         where F1: Fn(char) -> bool,
               F2: Fn(char) -> bool;
-    fn end_of_literal(&self, expected: &str) -> Option<uint>;
+    fn end_of_literal(&self, expected: &str) -> Option<usize>;
 }
 
 impl<'a> StrParseExt for &'a str {
-    fn end_of_start_rest<F1, F2>(&self, is_first: F1, is_rest: F2) -> Option<uint>
+    fn end_of_start_rest<F1, F2>(&self, is_first: F1, is_rest: F2) -> Option<usize>
         where F1: Fn(char) -> bool,
               F2: Fn(char) -> bool
     {
@@ -25,7 +25,7 @@ impl<'a> StrParseExt for &'a str {
         }
     }
 
-    fn end_of_literal(&self, expected: &str) -> Option<uint> {
+    fn end_of_literal(&self, expected: &str) -> Option<usize> {
         if self.starts_with(expected) {
             Some(expected.len())
         } else {
@@ -68,7 +68,7 @@ impl<'a, E> BestFailure<'a, E> {
 
 #[derive(Show,Clone,PartialEq,Copy)]
 pub struct Point<'a> {
-    pub offset: uint,
+    pub offset: usize,
     pub s: &'a str,
 }
 
@@ -78,7 +78,7 @@ impl<'a> Point<'a> {
         self.s.slice_to(len)
     }
 
-    pub fn slice_at(&self, position: uint) -> Progress<'a, &'a str> {
+    pub fn slice_at(&self, position: usize) -> Progress<'a, &'a str> {
         Progress {
             data: self.s.slice_to(position),
             point: Point { offset: self.offset + position,
@@ -86,7 +86,7 @@ impl<'a> Point<'a> {
         }
     }
 
-    pub fn consume_to<E>(&self, l: Option<uint>) -> Result<'a, &'a str, E> {
+    pub fn consume_to<E>(&self, l: Option<usize>) -> Result<'a, &'a str, E> {
         match l {
             None => Result::Failure(Progress{point: self.clone(), data: None}),
             Some(position) => Result::Success(self.slice_at(position)),

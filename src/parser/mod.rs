@@ -508,7 +508,7 @@ impl Parser {
         success((), xml)
     }
 
-    pub fn parse<'a>(&self, xml: &'a str) -> Result<super::Package, uint> {
+    pub fn parse<'a>(&self, xml: &'a str) -> Result<super::Package, usize> {
         let xml = Point{offset: 0, s: xml};
         let package = super::Package::new();
 
@@ -776,7 +776,7 @@ mod test {
         ($l:expr, $r:expr) => (assert_eq!($l.as_slice(), $r.as_slice()));
     );
 
-    fn full_parse(xml: &str) -> Result<Package, uint> {
+    fn full_parse(xml: &str) -> Result<Package, usize> {
         Parser::new()
             .parse(xml)
     }

@@ -19,11 +19,11 @@ use xxhash::{XXHasher};
 
 struct Chunk {
     start: *mut u8,
-    capacity: uint,
+    capacity: usize,
 }
 
 impl Chunk {
-    fn new(capacity: uint) -> Chunk {
+    fn new(capacity: usize) -> Chunk {
         Chunk {
             start: unsafe { allocate(capacity, mem::min_align_of::<u8>()) },
             capacity: capacity,
@@ -39,7 +39,7 @@ impl Chunk {
     // Returns a pointer to the end of the allocated space.
     #[inline]
     fn end(&self) -> *const u8 {
-        unsafe { self.start().offset(self.capacity as int) }
+        unsafe { self.start().offset(self.capacity as isize) }
     }
 }
 
@@ -57,7 +57,7 @@ pub struct InternedString {
 }
 
 impl InternedString {
-    fn from_parts(data: *const u8, len: uint) -> InternedString {
+    fn from_parts(data: *const u8, len: usize) -> InternedString {
         InternedString {
             slice: Slice {
                 data: data,
@@ -117,7 +117,7 @@ pub struct StringPool {
     index: RefCell<HashMap<InternedString, InternedString, XXHasher>>,
 }
 
-static CAPACITY: uint = 10240;
+static CAPACITY: usize = 10240;
 
 impl StringPool {
     pub fn new() -> StringPool {
@@ -148,14 +148,14 @@ impl StringPool {
         self.store(s)
     }
 
-    fn ensure_capacity(&self, str_len: uint) {
-        let remaining = self.end.get() as uint - self.start.get() as uint;
+    fn ensure_capacity(&self, str_len: usize) {
+        let remaining = self.end.get() as usize - self.start.get() as usize;
         if remaining < str_len {
             self.allocate_another(max(CAPACITY, str_len))
         }
     }
 
-    fn allocate_another(&self, capacity: uint) {
+    fn allocate_another(&self, capacity: usize) {
         let chunk = Chunk::new(capacity);
         self.start.set(chunk.start() as *mut u8);
         self.end.set(chunk.end());
@@ -173,7 +173,7 @@ impl StringPool {
             let interned_str = InternedString::from_parts(self.start.get() as *const u8, str_len);
 
             // Increase current pointer
-            self.start.set(self.start.get().offset(str_len as int));
+            self.start.set(self.start.get().offset(str_len as isize));
 
             interned_str
         }
@@ -283,7 +283,7 @@ mod bench {
         let s = StringPool::new();
 
         let strings: Vec<String> =
-            range(0u, 1000)
+            range(0, 1000)
             .map(|i| format!("str{}str", i))
             .collect();
         b.iter(|| {
@@ -299,7 +299,7 @@ mod bench {
         let s = StringPool::new();
 
         let strings: Vec<String> =
-            range(0u, 1000)
+            range(0, 1000)
             .map(|i| format!("str{}str", i % 100))
             .collect();
         b.iter(|| {

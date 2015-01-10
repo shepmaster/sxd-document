@@ -189,7 +189,7 @@ impl<'d> Connections<'d> {
 
 pub struct RootChildren<'d> {
     x: &'d [raw::ChildOfRoot],
-    idx: uint,
+    idx: usize,
 }
 
 impl<'d> Iterator for RootChildren<'d> {
@@ -208,7 +208,7 @@ impl<'d> Iterator for RootChildren<'d> {
 
 pub struct ElementChildren<'d> {
     x: &'d [raw::ChildOfElement],
-    idx: uint,
+    idx: usize,
 }
 
 impl<'d> Iterator for ElementChildren<'d> {
@@ -227,7 +227,7 @@ impl<'d> Iterator for ElementChildren<'d> {
 
 pub struct Attributes<'d> {
     x: &'d [*mut raw::Attribute],
-    idx: uint,
+    idx: usize,
 }
 
 impl<'d> Iterator for Attributes<'d> {
