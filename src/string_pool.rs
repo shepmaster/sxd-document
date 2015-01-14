@@ -15,7 +15,8 @@ use std::ptr;
 use std::raw::Slice;
 use std::rt::heap::{allocate, deallocate};
 use std::str;
-use xxhash::{XXHasher};
+use xxhash::XXHasher;
+use std::collections::hash_state::DefaultState;
 
 struct Chunk {
     start: *mut u8,
@@ -114,7 +115,7 @@ pub struct StringPool {
     start: Cell<*mut u8>,
     end: Cell<*const u8>,
     chunks: RefCell<DList<Chunk>>,
-    index: RefCell<HashMap<InternedString, InternedString, XXHasher>>,
+    index: RefCell<HashMap<InternedString, InternedString, DefaultState<XXHasher>>>,
 }
 
 static CAPACITY: usize = 10240;
@@ -125,7 +126,7 @@ impl StringPool {
             start: Cell::new(ptr::null_mut()),
             end: Cell::new(ptr::null()),
             chunks: RefCell::new(DList::new()),
-            index: RefCell::new(HashMap::with_hasher(XXHasher::new())),
+            index: RefCell::new(HashMap::with_hash_state(DefaultState)),
         }
     }
 
