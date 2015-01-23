@@ -83,7 +83,7 @@ impl InternedString {
     }
 }
 
-impl fmt::Show for InternedString {
+impl fmt::Debug for InternedString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.as_slice().fmt(f)
     }

@@ -38,7 +38,7 @@ pub mod dom4;
 pub mod parser;
 pub mod writer;
 
-#[derive(Show,PartialEq,Eq,PartialOrd)]
+#[derive(Debug,PartialEq,Eq,PartialOrd)]
 pub struct QName<'s> {
     namespace_uri: Option<&'s str>,
     local_part: &'s str,
@@ -110,7 +110,7 @@ impl PartialEq for Package {
     }
 }
 
-impl fmt::Show for Package {
+impl fmt::Debug for Package {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Package")
     }

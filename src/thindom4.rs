@@ -287,7 +287,7 @@ macro_rules! node(
 
 node!(Root, raw::Root);
 
-impl<'d> fmt::Show for Root<'d> {
+impl<'d> fmt::Debug for Root<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Root")
     }
@@ -299,7 +299,7 @@ impl<'d> Element<'d> {
     pub fn name(&self) -> QName<'d> { self.node().name() }
 }
 
-impl<'d> fmt::Show for Element<'d> {
+impl<'d> fmt::Debug for Element<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Element {{ name: {:?} }}", self.name())
     }
@@ -312,7 +312,7 @@ impl<'d> Attribute<'d> {
     pub fn value(&self) -> &str { self.node().value() }
 }
 
-impl<'d> fmt::Show for Attribute<'d> {
+impl<'d> fmt::Debug for Attribute<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Attribute {{ name: {:?}, value: {:?} }}", self.name(), self.value())
     }
@@ -324,7 +324,7 @@ impl<'d> Text<'d> {
     pub fn text(&self) -> &str { self.node().text() }
 }
 
-impl<'d> fmt::Show for Text<'d> {
+impl<'d> fmt::Debug for Text<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Text {{ text: {:?} }}", self.text())
     }
@@ -336,7 +336,7 @@ impl<'d> Comment<'d> {
     pub fn text(&self) -> &str { self.node().text() }
 }
 
-impl<'d> fmt::Show for Comment<'d> {
+impl<'d> fmt::Debug for Comment<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Comment {{ text: {:?} }}", self.text())
     }
@@ -349,7 +349,7 @@ impl<'d> ProcessingInstruction<'d> {
     pub fn value(&self) -> Option<&str> { self.node().value() }
 }
 
-impl<'d> fmt::Show for ProcessingInstruction<'d> {
+impl<'d> fmt::Debug for ProcessingInstruction<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "ProcessingInstruction {{ target: {:?}, value: {:?} }}", self.target(), self.value())
     }
@@ -368,7 +368,7 @@ macro_rules! unpack(
     )
 );
 
-#[derive(PartialEq,Show,Copy)]
+#[derive(PartialEq,Debug,Copy)]
 pub enum ChildOfRoot<'d> {
     Element(Element<'d>),
     Comment(Comment<'d>),
@@ -397,7 +397,7 @@ impl<'d> ChildOfRoot<'d> {
     }
 }
 
-#[derive(PartialEq,Show,Copy)]
+#[derive(PartialEq,Debug,Copy)]
 pub enum ChildOfElement<'d> {
     Element(Element<'d>),
     Text(Text<'d>),
@@ -430,7 +430,7 @@ impl<'d> ChildOfElement<'d> {
     }
 }
 
-#[derive(PartialEq,Show,Copy)]
+#[derive(PartialEq,Debug,Copy)]
 pub enum ParentOfChild<'d> {
     Root(Root<'d>),
     Element(Element<'d>),
