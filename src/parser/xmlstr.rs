@@ -51,7 +51,7 @@ impl<'a> XmlStr for &'a str {
                 None => return Some(self.len()),
                 Some((offset, c)) if c == '<' || c == '&' => return Some(offset),
                 Some((offset, _)) => {
-                    let tail = self.slice_from(offset);
+                    let tail = &self[offset..];
                     if tail.starts_with("]]>") {
                         return Some(offset)
                     } else {

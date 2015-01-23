@@ -75,14 +75,14 @@ pub struct Point<'a> {
 impl<'a> Point<'a> {
     pub fn to(&self, other: Point<'a>) -> &'a str {
         let len = other.offset - self.offset;
-        self.s.slice_to(len)
+        &self.s[..len]
     }
 
     pub fn slice_at(&self, position: usize) -> Progress<'a, &'a str> {
         Progress {
-            data: self.s.slice_to(position),
+            data: &self.s[..position],
             point: Point { offset: self.offset + position,
-                           s: self.s.slice_from(position) }
+                           s: &self.s[position..] }
         }
     }
 

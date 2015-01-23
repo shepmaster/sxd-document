@@ -10,7 +10,7 @@ use std::io::stdio;
 use document::parser::Parser;
 
 fn pretty_error(xml: &str, position: usize) -> &str {
-    let s = xml.slice_from(position);
+    let s = &xml[position..];
     let l = s.chars().count();
     s.slice_chars(0, min(l, 15))
 }
