@@ -783,10 +783,6 @@ mod test {
         ($l:expr, $r:expr) => (assert_eq!($l.to_qname(), $r.to_qname()));
     );
 
-    macro_rules! assert_str_eq(
-        ($l:expr, $r:expr) => (assert_eq!($l.as_slice(), $r.as_slice()));
-    );
-
     fn full_parse(xml: &str) -> Result<Package, usize> {
         Parser::new()
             .parse(xml)
@@ -845,7 +841,7 @@ mod test {
         let doc = package.as_document();
         let top = top(&doc);
 
-        assert_str_eq!(top.attribute_value("scope").unwrap(), "world");
+        assert_eq!(top.attribute_value("scope").unwrap(), "world");
     }
 
     #[test]
@@ -854,7 +850,7 @@ mod test {
         let doc = package.as_document();
         let top = top(&doc);
 
-        assert_str_eq!(top.attribute_value("scope").unwrap(), "world");
+        assert_eq!(top.attribute_value("scope").unwrap(), "world");
     }
 
     #[test]
@@ -863,8 +859,8 @@ mod test {
         let doc = package.as_document();
         let top = top(&doc);
 
-        assert_str_eq!(top.attribute_value("scope").unwrap(), "world");
-        assert_str_eq!(top.attribute_value("happy").unwrap(), "true");
+        assert_eq!(top.attribute_value("scope").unwrap(), "world");
+        assert_eq!(top.attribute_value("happy").unwrap(), "true");
     }
 
     #[test]
@@ -885,7 +881,7 @@ mod test {
         let doc = package.as_document();
         let top = top(&doc);
 
-        assert_str_eq!(top.attribute_value("msg").unwrap(), "I <3 math");
+        assert_eq!(top.attribute_value("msg").unwrap(), "I <3 math");
     }
 
     #[test]
@@ -946,7 +942,7 @@ mod test {
         let hello = top(&doc);
         let world = hello.children()[0].element().unwrap();
 
-        assert_str_eq!(world.attribute_value("name").unwrap(), "Earth");
+        assert_eq!(world.attribute_value("name").unwrap(), "Earth");
     }
 
     #[test]
@@ -969,7 +965,7 @@ mod test {
         let hello = top(&doc);
         let text = hello.children()[0].text().unwrap();
 
-        assert_str_eq!(text.text(), "world");
+        assert_eq!(text.text(), "world");
     }
 
     #[test]
@@ -979,7 +975,7 @@ mod test {
         let words = top(&doc);
         let text = words.children()[0].text().unwrap();
 
-        assert_str_eq!(text.text(), "I have & and < !");
+        assert_eq!(text.text(), "I have & and < !");
     }
 
     #[test]
@@ -989,7 +985,7 @@ mod test {
         let words = top(&doc);
         let comment = words.children()[0].comment().unwrap();
 
-        assert_str_eq!(comment.text(), " A comment ");
+        assert_eq!(comment.text(), " A comment ");
     }
 
     #[test]
@@ -998,7 +994,7 @@ mod test {
         let doc = package.as_document();
         let comment = doc.root().children()[0].comment().unwrap();
 
-        assert_str_eq!(comment.text(), " A comment ");
+        assert_eq!(comment.text(), " A comment ");
     }
 
     #[test]
@@ -1012,8 +1008,8 @@ mod test {
         let comment1 = doc.root().children()[0].comment().unwrap();
         let comment2 = doc.root().children()[1].comment().unwrap();
 
-        assert_str_eq!(comment1.text(), "Comment 1");
-        assert_str_eq!(comment2.text(), "Comment 2");
+        assert_eq!(comment1.text(), "Comment 1");
+        assert_eq!(comment2.text(), "Comment 2");
     }
 
     #[test]
@@ -1027,8 +1023,8 @@ mod test {
         let comment1 = doc.root().children()[1].comment().unwrap();
         let comment2 = doc.root().children()[2].comment().unwrap();
 
-        assert_str_eq!(comment1.text(), "Comment 1");
-        assert_str_eq!(comment2.text(), "Comment 2");
+        assert_eq!(comment1.text(), "Comment 1");
+        assert_eq!(comment2.text(), "Comment 2");
     }
 
     #[test]
@@ -1038,7 +1034,7 @@ mod test {
         let hello = top(&doc);
         let pi = hello.children()[0].processing_instruction().unwrap();
 
-        assert_str_eq!(pi.target(), "device");
+        assert_eq!(pi.target(), "device");
         assert_eq!(pi.value(), None);
     }
 
@@ -1054,10 +1050,10 @@ mod test {
         let pi1 = doc.root().children()[0].processing_instruction().unwrap();
         let pi2 = doc.root().children()[2].processing_instruction().unwrap();
 
-        assert_str_eq!(pi1.target(), "output");
-        assert_str_eq!(pi1.value().unwrap(), "printer");
+        assert_eq!(pi1.target(), "output");
+        assert_eq!(pi1.value().unwrap(), "printer");
 
-        assert_str_eq!(pi2.target(), "validated");
+        assert_eq!(pi2.target(), "validated");
         assert_eq!(pi2.value(), None);
     }
 
@@ -1070,9 +1066,9 @@ mod test {
         let text2 = math.children()[1].text().unwrap();
         let text3 = math.children()[2].text().unwrap();
 
-        assert_str_eq!(text1.text(), "2 ");
-        assert_str_eq!(text2.text(), ">");
-        assert_str_eq!(text3.text(), " 1");
+        assert_eq!(text1.text(), "2 ");
+        assert_eq!(text2.text(), ">");
+        assert_eq!(text3.text(), " 1");
     }
 
     #[test]
@@ -1084,9 +1080,9 @@ mod test {
         let text2 = math.children()[1].text().unwrap();
         let text3 = math.children()[2].text().unwrap();
 
-        assert_str_eq!(text1.text(), "1 ");
-        assert_str_eq!(text2.text(), "<");
-        assert_str_eq!(text3.text(), " 2");
+        assert_eq!(text1.text(), "1 ");
+        assert_eq!(text2.text(), "<");
+        assert_eq!(text3.text(), " 2");
     }
 
     #[test]
@@ -1098,9 +1094,9 @@ mod test {
         let text2 = math.children()[1].text().unwrap();
         let text3 = math.children()[2].text().unwrap();
 
-        assert_str_eq!(text1.text(), "I ");
-        assert_str_eq!(text2.text(), "<");
-        assert_str_eq!(text3.text(), "3 math");
+        assert_eq!(text1.text(), "I ");
+        assert_eq!(text2.text(), "<");
+        assert_eq!(text3.text(), "3 math");
     }
 
     #[test]
@@ -1114,10 +1110,10 @@ mod test {
         let element = hello.children()[2].element().unwrap();
         let pi      = hello.children()[3].processing_instruction().unwrap();
 
-        assert_str_eq!(text.text(),    "to ");
-        assert_str_eq!(comment.text(), "fixme");
+        assert_eq!(text.text(),    "to ");
+        assert_eq!(comment.text(), "fixme");
         assert_qname_eq!(element.name(), "a");
-        assert_str_eq!(pi.target(),    "world");
+        assert_eq!(pi.target(),    "world");
     }
 
     #[test]

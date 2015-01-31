@@ -372,10 +372,6 @@ mod test {
     use super::super::dom4;
     use super::format_document;
 
-    macro_rules! assert_str_eq(
-        ($l:expr, $r:expr) => (assert_eq!($l.as_slice(), $r.as_slice()));
-    );
-
     fn format_xml<'d>(doc: &'d dom4::Document<'d>) -> String {
         let mut w = MemWriter::new();
         format_document(doc, &mut w).ok().expect("Not formatted");
@@ -390,7 +386,7 @@ mod test {
         d.root().append_child(e);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><hello/>");
+        assert_eq!(xml, "<?xml version='1.0'?><hello/>");
     }
 
     #[test]
@@ -402,7 +398,7 @@ mod test {
         d.root().append_child(e);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><autons0:local-part xmlns:autons0='namespace'/>");
+        assert_eq!(xml, "<?xml version='1.0'?><autons0:local-part xmlns:autons0='namespace'/>");
     }
 
     #[test]
@@ -415,7 +411,7 @@ mod test {
         d.root().append_child(e);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><prefix:local-part xmlns:prefix='namespace'/>");
+        assert_eq!(xml, "<?xml version='1.0'?><prefix:local-part xmlns:prefix='namespace'/>");
     }
 
     #[test]
@@ -427,7 +423,7 @@ mod test {
         d.root().append_child(e);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><hello a='b'/>");
+        assert_eq!(xml, "<?xml version='1.0'?><hello a='b'/>");
     }
 
     #[test]
@@ -440,7 +436,7 @@ mod test {
         d.root().append_child(e);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><hello autons0:a='b' xmlns:autons0='namespace'/>");
+        assert_eq!(xml, "<?xml version='1.0'?><hello autons0:a='b' xmlns:autons0='namespace'/>");
     }
 
     #[test]
@@ -454,7 +450,7 @@ mod test {
         d.root().append_child(e);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><hello p:a='b' xmlns:p='namespace'/>");
+        assert_eq!(xml, "<?xml version='1.0'?><hello p:a='b' xmlns:p='namespace'/>");
     }
 
     #[test]
@@ -474,7 +470,7 @@ mod test {
         d.root().append_child(e);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><hello p:a1='b1' autons0:a2='b2' xmlns:p='namespace1' xmlns:autons0='namespace2'/>");
+        assert_eq!(xml, "<?xml version='1.0'?><hello p:a1='b1' autons0:a2='b2' xmlns:p='namespace1' xmlns:autons0='namespace2'/>");
     }
 
     #[test]
@@ -494,7 +490,7 @@ mod test {
         d.root().append_child(e);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><hello p1:a1='b1' p2:a2='b2' xmlns:p1='namespace' xmlns:p2='namespace'/>");
+        assert_eq!(xml, "<?xml version='1.0'?><hello p1:a1='b1' p2:a2='b2' xmlns:p1='namespace' xmlns:p2='namespace'/>");
     }
 
     #[test]
@@ -507,7 +503,7 @@ mod test {
         d.root().append_child(hello);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><hello><world/></hello>");
+        assert_eq!(xml, "<?xml version='1.0'?><hello><world/></hello>");
     }
 
     #[test]
@@ -522,7 +518,7 @@ mod test {
         d.root().append_child(hello);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><autons0:hello xmlns:autons0='outer'><autons1:world xmlns:autons1='inner'/></autons0:hello>");
+        assert_eq!(xml, "<?xml version='1.0'?><autons0:hello xmlns:autons0='outer'><autons1:world xmlns:autons1='inner'/></autons0:hello>");
     }
 
     #[test]
@@ -537,7 +533,7 @@ mod test {
         d.root().append_child(hello);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><autons0:hello xmlns:autons0='ns'><autons0:world/></autons0:hello>");
+        assert_eq!(xml, "<?xml version='1.0'?><autons0:hello xmlns:autons0='ns'><autons0:world/></autons0:hello>");
     }
 
     #[test]
@@ -554,7 +550,7 @@ mod test {
         d.root().append_child(hello);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><p:hello xmlns:p='outer'><p:world xmlns:p='inner'/></p:hello>");
+        assert_eq!(xml, "<?xml version='1.0'?><p:hello xmlns:p='outer'><p:world xmlns:p='inner'/></p:hello>");
     }
 
     #[test]
@@ -567,7 +563,7 @@ mod test {
         d.root().append_child(hello);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><hello>A fine day to you!</hello>");
+        assert_eq!(xml, "<?xml version='1.0'?><hello>A fine day to you!</hello>");
     }
 
     #[test]
@@ -580,7 +576,7 @@ mod test {
         d.root().append_child(hello);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><hello><!-- Fill this in --></hello>");
+        assert_eq!(xml, "<?xml version='1.0'?><hello><!-- Fill this in --></hello>");
     }
 
     #[test]
@@ -593,7 +589,7 @@ mod test {
         d.root().append_child(hello);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><hello><?display?></hello>");
+        assert_eq!(xml, "<?xml version='1.0'?><hello><?display?></hello>");
     }
 
     #[test]
@@ -606,7 +602,7 @@ mod test {
         d.root().append_child(hello);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><hello><?display screen?></hello>");
+        assert_eq!(xml, "<?xml version='1.0'?><hello><?display screen?></hello>");
     }
 
     #[test]
@@ -617,7 +613,7 @@ mod test {
         d.root().append_child(comment);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><!-- Fill this in -->");
+        assert_eq!(xml, "<?xml version='1.0'?><!-- Fill this in -->");
     }
 
     #[test]
@@ -628,6 +624,6 @@ mod test {
         d.root().append_child(pi);
 
         let xml = format_xml(&d);
-        assert_str_eq!(xml, "<?xml version='1.0'?><?display?>");
+        assert_eq!(xml, "<?xml version='1.0'?><?display?>");
     }
 }
