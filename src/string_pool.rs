@@ -8,6 +8,7 @@ use std::cmp::max;
 use std::collections::DList;
 use std::collections::hash_map::HashMap;
 use std::collections::hash_map::Entry::{Occupied,Vacant};
+use std::default::Default;
 use std::fmt;
 use std::hash;
 use std::mem;
@@ -126,7 +127,7 @@ impl StringPool {
             start: Cell::new(ptr::null_mut()),
             end: Cell::new(ptr::null()),
             chunks: RefCell::new(DList::new()),
-            index: RefCell::new(HashMap::with_hash_state(DefaultState)),
+            index: RefCell::new(Default::default()),
         }
     }
 
