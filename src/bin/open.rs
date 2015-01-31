@@ -1,4 +1,8 @@
-#![allow(unstable)]
+#![feature(collections)]
+#![feature(core)]
+#![feature(io)]
+#![feature(os)]
+#![feature(path)]
 
 extern crate document;
 

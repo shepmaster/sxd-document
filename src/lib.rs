@@ -19,8 +19,15 @@
 //! Try to leverage the type system as much as possible.
 
 #![crate_name = "document"]
-#![experimental]
-#![allow(unstable)]
+
+#![feature(alloc)]
+#![feature(collections)]
+#![feature(core)]
+#![feature(hash)]
+#![feature(io)]
+#![feature(rustc_private)]
+#![feature(std_misc)]
+#![feature(test)]
 
 extern crate arena;
 extern crate test;
