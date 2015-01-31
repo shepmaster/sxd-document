@@ -3,9 +3,7 @@
 extern crate document;
 
 use std::cmp::min;
-use std::io::File;
-use std::io::BufferedWriter;
-use std::io::stdio;
+use std::old_io::{File,BufferedWriter,stdio};
 
 use document::parser::Parser;
 

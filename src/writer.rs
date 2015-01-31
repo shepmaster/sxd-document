@@ -12,7 +12,7 @@
 //! hello.set_attribute_value("planet", "Earth");
 //! doc.root().append_child(hello);
 //!
-//! let mut output = std::io::stdio::stdout();
+//! let mut output = std::old_io::stdio::stdout();
 //! format_document(&doc, &mut output).ok().expect("unable to output XML");
 //! ```
 //!
@@ -30,7 +30,7 @@
 use std::num::Int;
 use std::collections::HashMap;
 use std::slice;
-use std::io::IoResult;
+use std::old_io::IoResult;
 
 use self::Content::*;
 
@@ -366,7 +366,7 @@ pub fn format_document<'d, W>(doc: &'d dom4::Document<'d>, writer: &mut W) -> Io
 
 #[cfg(test)]
 mod test {
-    use std::io::MemWriter;
+    use std::old_io::MemWriter;
 
     use super::super::{Package,QName};
     use super::super::dom4;
