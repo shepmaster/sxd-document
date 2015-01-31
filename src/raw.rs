@@ -13,7 +13,7 @@ impl InternedQName {
     fn as_qname(&self) -> QName {
         QName {
             namespace_uri: self.namespace_uri.map(|n| n.as_slice()),
-            local_part: self.local_part.as_slice(),
+            local_part: &self.local_part,
         }
     }
 }
@@ -45,7 +45,7 @@ pub struct Attribute {
 
 impl Attribute {
     pub fn name(&self)  -> QName { self.name.as_qname() }
-    pub fn value(&self) -> &str { self.value.as_slice() }
+    pub fn value(&self) -> &str { &self.value }
     pub fn preferred_prefix(&self) -> Option<&str> { self.preferred_prefix.map(|p| p.as_slice()) }
 }
 
@@ -55,7 +55,7 @@ pub struct Text {
 }
 
 impl Text {
-    pub fn text(&self) -> &str { self.text.as_slice() }
+    pub fn text(&self) -> &str { &self.text }
 }
 
 pub struct Comment {
@@ -64,7 +64,7 @@ pub struct Comment {
 }
 
 impl Comment {
-    pub fn text(&self) -> &str { self.text.as_slice() }
+    pub fn text(&self) -> &str { &self.text }
 }
 
 pub struct ProcessingInstruction {
@@ -74,8 +74,8 @@ pub struct ProcessingInstruction {
 }
 
 impl ProcessingInstruction {
-    pub fn target(&self) -> &str { self.target.as_slice() }
-    pub fn value(&self) -> Option<&str> { self.value.as_ref().map(|v| v.as_slice()) }
+    pub fn target(&self) -> &str { &self.target }
+    pub fn value(&self) -> Option<&str> { self.value.map(|v| v.as_slice()) }
 }
 
 #[allow(raw_pointer_derive)]
@@ -429,12 +429,12 @@ impl Connections {
 
     pub unsafe fn root_children(&self) -> &[ChildOfRoot] {
         let parent_r = &*self.root;
-        parent_r.children.as_slice()
+        &parent_r.children
     }
 
     pub unsafe fn element_children(&self, parent: *mut Element) -> &[ChildOfElement] {
         let parent_r = &*parent;
-        parent_r.children.as_slice()
+        &parent_r.children
     }
 
     /// Returns the sibling nodes that come before this node. The
@@ -552,7 +552,7 @@ impl Connections {
 
     pub unsafe fn attributes(&self, parent: *mut Element) -> &[*mut Attribute] {
         let parent_r = &*parent;
-        parent_r.attributes.as_slice()
+        &parent_r.attributes
     }
 
     pub fn attribute<'n, N>(&self, element: *mut Element, name: N) -> Option<*mut Attribute>
@@ -584,7 +584,7 @@ impl Connections {
             let element_r = unsafe { &*element };
 
             if let Some(ns_uri) = element_r.prefix_to_namespace.get(prefix) {
-                return Some(ns_uri.as_slice());
+                return Some(ns_uri);
             }
 
             match element_r.parent {
@@ -614,7 +614,7 @@ pub struct SiblingIter<'a> {
 impl<'a> SiblingIter<'a> {
     unsafe fn of_root(direction: SiblingDirection, root_parent: *mut Root, child: ChildOfRoot) -> SiblingIter<'a> {
         let root_parent_r = &*root_parent;
-        let data = root_parent_r.children.as_slice();
+        let data = &root_parent_r.children;
         let pos = data.iter().position(|c| *c == child).unwrap();
 
         let data = match direction {
@@ -630,7 +630,7 @@ impl<'a> SiblingIter<'a> {
 
     unsafe fn of_element(direction: SiblingDirection, element_parent: *mut Element, child: ChildOfElement) -> SiblingIter<'a> {
         let element_parent_r = &*element_parent;
-        let data = element_parent_r.children.as_slice();
+        let data = &element_parent_r.children;
         let pos = data.iter().position(|c| *c == child).unwrap();
 
         let data = match direction {

@@ -45,10 +45,11 @@
 
 use std::ascii::AsciiExt;
 use std::char::from_u32;
-use std::num::from_str_radix;
-use std::mem::replace;
 use std::collections::HashMap;
-use std::iter;
+use std::mem::replace;
+use std::num::from_str_radix;
+use std::ops::Deref;
+use std::{iter};
 
 use self::AttributeValue::*;
 use self::Reference::*;
@@ -553,13 +554,13 @@ fn decode_reference<T, F>(ref_data: Reference, cb: F) -> T
             let code: u32 = from_str_radix(d, 10).unwrap();
             let c: char = from_u32(code).expect("Not a valid codepoint");
             let s: String = iter::repeat(c).take(1).collect();
-            cb(s.as_slice())
+            cb(&s)
         },
         HexCharReference(h) => {
             let code: u32 = from_str_radix(h, 16).unwrap();
             let c: char = from_u32(code).expect("Not a valid codepoint");
             let s: String = iter::repeat(c).take(1).collect();
-            cb(s.as_slice())
+            cb(&s)
         },
         EntityReference(e) => {
             let s = match e {
@@ -605,12 +606,16 @@ impl AttributeValueBuilder {
         self.value.clear();
     }
 
-    fn as_slice(&self) -> &str {
-        self.value.as_slice()
-    }
-
     fn implode(self) -> String {
         self.value
+    }
+}
+
+impl Deref for AttributeValueBuilder {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        &self.value
     }
 }
 
@@ -707,7 +712,10 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         let new_prefix_mappings = new_prefix_mappings;
 
         let element = if let Some(prefix) = deferred_element.prefix {
-            if let Some(ns_uri) = new_prefix_mappings.get(prefix).map(|p| p.as_slice()).or_else(|| self.namespace_uri_for_prefix(prefix)) {
+            let ns_uri = new_prefix_mappings.get(prefix).map(|p| p.as_slice());
+            let ns_uri = ns_uri.or_else(|| self.namespace_uri_for_prefix(prefix));
+
+            if let Some(ns_uri) = ns_uri {
                 let name = QName::with_namespace_uri(Some(ns_uri),
                                                      deferred_element.local_part);
                 let element = self.doc.create_element(name);
@@ -721,7 +729,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         };
 
         for (prefix, ns_uri) in new_prefix_mappings.iter() {
-            element.register_prefix(*prefix, ns_uri.as_slice());
+            element.register_prefix(*prefix, ns_uri);
         }
 
         self.append_to_either(element);
@@ -732,19 +740,22 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         for attribute in attributes.iter() {
             builder.clear();
             builder.ingest(&attribute.values);
-            let value = builder.as_slice();
+            let value = &builder;
 
             if let Some(prefix) = attribute.name.prefix {
-                if let Some(ns_uri) = new_prefix_mappings.get(prefix).map(|p| p.as_slice()).or_else(|| self.namespace_uri_for_prefix(prefix)) {
-                    let name = QName::with_namespace_uri(Some(ns_uri.as_slice()),
+                let ns_uri = new_prefix_mappings.get(prefix).map(|p| p.as_slice());
+                let ns_uri = ns_uri.or_else(|| self.namespace_uri_for_prefix(prefix));
+
+                if let Some(ns_uri) = ns_uri {
+                    let name = QName::with_namespace_uri(Some(ns_uri),
                                                          attribute.name.local_part);
-                    let attr = element.set_attribute_value(name, value);
+                    let attr = element.set_attribute_value(name, &value);
                     attr.set_preferred_prefix(Some(prefix));
                 } else {
                     panic!("Unknown namespace prefix '{}'", prefix);
                 }
             } else {
-                element.set_attribute_value(attribute.name.local_part, value);
+                element.set_attribute_value(attribute.name.local_part, &value);
             }
         }
     }

@@ -1,5 +1,4 @@
 #![feature(collections)]
-#![feature(core)]
 #![feature(io)]
 #![feature(os)]
 #![feature(path)]
@@ -28,9 +27,9 @@ fn process_input<R>(input: R)
 
     let p = Parser::new();
 
-    let package = match p.parse(data.as_slice()) {
+    let package = match p.parse(&data) {
         Ok(d) => d,
-        Err(point) => panic!("Unable to parse: {}", pretty_error(data.as_slice(), point)),
+        Err(point) => panic!("Unable to parse: {}", pretty_error(&data, point)),
     };
 
     let mut out = BufferedWriter::new(stdio::stdout_raw());

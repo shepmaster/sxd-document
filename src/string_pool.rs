@@ -6,18 +6,15 @@ use std::borrow::BorrowFrom;
 use std::cell::{Cell,RefCell};
 use std::cmp::max;
 use std::collections::DList;
-use std::collections::hash_map::HashMap;
 use std::collections::hash_map::Entry::{Occupied,Vacant};
+use std::collections::hash_map::HashMap;
+use std::collections::hash_state::DefaultState;
 use std::default::Default;
-use std::fmt;
-use std::hash;
-use std::mem;
-use std::ptr;
+use std::ops::Deref;
 use std::raw::Slice;
 use std::rt::heap::{allocate, deallocate};
-use std::str;
+use std::{fmt,hash,mem,ptr,str};
 use xxhash::XXHasher;
-use std::collections::hash_state::DefaultState;
 
 struct Chunk {
     start: *mut u8,
@@ -112,6 +109,14 @@ impl BorrowFrom<InternedString> for str {
     }
 }
 
+impl Deref for InternedString {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        self.as_slice()
+    }
+}
+
 pub struct StringPool {
     start: Cell<*mut u8>,
     end: Cell<*const u8>,
@@ -142,7 +147,7 @@ impl StringPool {
         };
 
         // The lifetime is really matched to us
-        unsafe { mem::transmute(interned_str.as_slice()) }
+        unsafe { mem::transmute(interned_str) }
     }
 
     fn do_intern(&self, s: &str) -> InternedString {
@@ -236,7 +241,7 @@ mod test {
 
         let interned = {
             let allocated_string = String::from_str("green");
-            s.intern(allocated_string.as_slice())
+            s.intern(&allocated_string)
         };
 
         // allocated_string is gone now, but we should be able to
@@ -290,7 +295,7 @@ mod bench {
             .collect();
         b.iter(|| {
             for ss in strings.iter() {
-                s.intern(ss.as_slice());
+                s.intern(ss);
             }
         });
         b.bytes = strings.iter().fold(0, |a, s| a + s.len()) as u64;
@@ -306,7 +311,7 @@ mod bench {
             .collect();
         b.iter(|| {
             for ss in strings.iter() {
-                s.intern(ss.as_slice());
+                s.intern(ss);
             }
         });
         b.bytes = strings.iter().fold(0, |a, s| a + s.len()) as u64;

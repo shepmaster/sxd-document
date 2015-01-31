@@ -181,7 +181,7 @@ impl<'d> PrefixMapping<'d> {
             if let Some(prefix) = parent_scope.prefix_for(namespace_uri) {
                 // A parent happens to have a prefix for this URI.
                 // Prevent redefining it
-                current_scope.add_mapping(prefix.as_slice(), namespace_uri);
+                current_scope.add_mapping(prefix, namespace_uri);
                 return;
             }
         }
@@ -190,8 +190,8 @@ impl<'d> PrefixMapping<'d> {
             let prefix = format!("autons{}", self.generated_prefix_count);
             self.generated_prefix_count += 1;
 
-            if ! current_scope.has_prefix(prefix.as_slice()) {
-                current_scope.add_mapping(prefix.as_slice(), namespace_uri);
+            if ! current_scope.has_prefix(&prefix) {
+                current_scope.add_mapping(&prefix, namespace_uri);
                 current_scope.define_prefix(prefix, namespace_uri);
                 break;
             }
@@ -248,7 +248,7 @@ fn format_element<'d, W>(element: dom4::Element<'d>,
 {
     let attrs = element.attributes();
 
-    mapping.populate_scope(&element, attrs.as_slice());
+    mapping.populate_scope(&element, &attrs);
 
     try!(writer.write_str("<"));
     try!(format_qname(element.name(), mapping, element.preferred_prefix(), writer));
@@ -261,7 +261,7 @@ fn format_element<'d, W>(element: dom4::Element<'d>,
 
     for &(ref prefix, ref ns_uri) in mapping.prefixes_in_current_scope() {
         try!(writer.write_str(" xmlns:"));
-        try!(writer.write_str(prefix.as_slice()));
+        try!(writer.write_str(prefix));
         try!(write!(writer, "='{}'", ns_uri));
     }
 
@@ -328,7 +328,7 @@ fn format_one<'d, W>(content: Content<'d>,
             mapping.pop_scope();
             r
         },
-        Text(t)                  => writer.write_str(t.text().as_slice()),
+        Text(t)                  => writer.write_str(t.text()),
         Comment(c)               => format_comment(c, writer),
         ProcessingInstruction(p) => format_processing_instruction(p, writer),
     }
