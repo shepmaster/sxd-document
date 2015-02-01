@@ -1,8 +1,8 @@
+use std::cell::RefCell;
+use std::{fmt,hash};
+
 use super::{QName,ToQName};
 use super::raw;
-
-use std::fmt;
-use std::cell::RefCell;
 
 type SiblingFn<T> = unsafe fn(&raw::Connections, T) -> raw::SiblingIter;
 
@@ -109,7 +109,7 @@ impl<'d> fmt::Debug for Document<'d> {
 macro_rules! node(
     ($name:ident, $raw:ty) => (
         #[allow(raw_pointer_derive)]
-        #[derive(Clone,Copy)]
+        #[derive(Copy,Clone)]
         pub struct $name<'d> {
             document: &'d Document<'d>,
             node: *mut $raw,
@@ -125,6 +125,16 @@ macro_rules! node(
         impl<'d> PartialEq for $name<'d> {
             fn eq(&self, other: &$name<'d>) -> bool {
                 self.node == other.node
+            }
+        }
+
+        impl<'d> Eq for $name<'d> {}
+
+        impl<'d, H> hash::Hash<H> for $name<'d>
+            where H: hash::Hasher + hash::Writer
+        {
+            fn hash(&self, state: &mut H) {
+                self.node.hash(state)
             }
         }
     )

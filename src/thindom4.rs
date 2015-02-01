@@ -1,8 +1,8 @@
+use std::marker::InvariantLifetime;
+use std::{fmt,hash};
+
 use super::{QName,ToQName};
 use super::raw;
-
-use std::fmt;
-use std::marker::InvariantLifetime;
 
 pub struct Storage<'d> {
     storage: &'d raw::Storage,
@@ -259,7 +259,7 @@ impl<'d> Iterator for Siblings<'d> {
 macro_rules! node(
     ($name:ident, $raw:ty) => (
         #[allow(raw_pointer_derive)]
-        #[derive(Copy)]
+        #[derive(Copy,Clone)]
         pub struct $name<'d> {
             lifetime: InvariantLifetime<'d>,
             node: *mut $raw,
@@ -280,6 +280,16 @@ macro_rules! node(
         impl<'d> PartialEq for $name<'d> {
             fn eq(&self, other: &$name<'d>) -> bool {
                 self.node == other.node
+            }
+        }
+
+        impl<'d> Eq for $name<'d> {}
+
+        impl<'d, H> hash::Hash<H> for $name<'d>
+            where H: hash::Hasher + hash::Writer
+        {
+            fn hash(&self, state: &mut H) {
+                self.node.hash(state)
             }
         }
     )
