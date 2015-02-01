@@ -60,7 +60,7 @@ use super::dom4;
 use super::peresil;
 use super::peresil::{Point};
 
-mod xmlstr;
+pub mod xmlstr;
 
 type ParseResult<'a, T> = peresil::Result<'a, T, ()>;
 

@@ -128,27 +128,27 @@ impl<'a> XmlStr for &'a str {
     }
 }
 
-trait XmlChar {
-    fn is_name_start_char(&self) -> bool;
-    fn is_name_char(&self) -> bool;
-    fn is_ncname_start_char(&self) -> bool;
-    fn is_ncname_char(&self) -> bool;
-    fn is_space_char(&self) -> bool;
-    fn is_decimal_char(&self) -> bool;
-    fn is_hex_char(&self) -> bool;
+pub trait XmlChar {
+    fn is_name_start_char(self) -> bool;
+    fn is_name_char(self) -> bool;
+    fn is_ncname_start_char(self) -> bool;
+    fn is_ncname_char(self) -> bool;
+    fn is_space_char(self) -> bool;
+    fn is_decimal_char(self) -> bool;
+    fn is_hex_char(self) -> bool;
 }
 
 impl XmlChar for char {
-    fn is_name_start_char(&self) -> bool {
-        *self == ':' || self.is_ncname_start_char()
+    fn is_name_start_char(self) -> bool {
+        self == ':' || self.is_ncname_start_char()
     }
 
-    fn is_name_char(&self) -> bool {
+    fn is_name_char(self) -> bool {
         self.is_name_start_char() || self.is_ncname_char()
     }
 
-    fn is_ncname_start_char(&self) -> bool {
-        match *self {
+    fn is_ncname_start_char(self) -> bool {
+        match self {
             'A'...'Z'                   |
             '_'                         |
             'a'...'z'                   |
@@ -168,9 +168,9 @@ impl XmlChar for char {
         }
     }
 
-    fn is_ncname_char(&self) -> bool {
+    fn is_ncname_char(self) -> bool {
         if self.is_ncname_start_char() { return true; }
-        match *self {
+        match self {
             '-'                     |
             '.'                     |
             '0'...'9'               |
@@ -181,8 +181,8 @@ impl XmlChar for char {
         }
     }
 
-    fn is_space_char(&self) -> bool {
-        match *self {
+    fn is_space_char(self) -> bool {
+        match self {
             '\x20' |
             '\x09' |
             '\x0D' |
@@ -191,15 +191,15 @@ impl XmlChar for char {
         }
     }
 
-    fn is_decimal_char(&self) -> bool {
-        match *self {
+    fn is_decimal_char(self) -> bool {
+        match self {
             '0'...'9' => true,
             _ => false,
         }
     }
 
-    fn is_hex_char(&self) -> bool {
-        match *self {
+    fn is_hex_char(self) -> bool {
+        match self {
             '0'...'9' |
             'a'...'f' |
             'A'...'F' => true,
