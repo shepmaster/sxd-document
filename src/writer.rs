@@ -368,7 +368,7 @@ pub fn format_document<'d, W>(doc: &'d dom4::Document<'d>, writer: &mut W) -> Io
 mod test {
     use std::old_io::MemWriter;
 
-    use super::super::{Package,QName};
+    use super::super::Package;
     use super::super::dom4;
     use super::format_document;
 
@@ -393,8 +393,7 @@ mod test {
     fn element_with_namespace() {
         let p = Package::new();
         let d = p.as_document();
-        let name = QName::with_namespace_uri(Some("namespace"), "local-part");
-        let e = d.create_element(name);
+        let e = d.create_element(("namespace", "local-part"));
         d.root().append_child(e);
 
         let xml = format_xml(&d);
@@ -405,8 +404,7 @@ mod test {
     fn element_with_preferred_namespace_prefix() {
         let p = Package::new();
         let d = p.as_document();
-        let name = QName::with_namespace_uri(Some("namespace"), "local-part");
-        let e = d.create_element(name);
+        let e = d.create_element(("namespace", "local-part"));
         e.set_preferred_prefix(Some("prefix"));
         d.root().append_child(e);
 
@@ -431,8 +429,7 @@ mod test {
         let p = Package::new();
         let d = p.as_document();
         let e = d.create_element("hello");
-        let name = QName::with_namespace_uri(Some("namespace"), "a");
-        e.set_attribute_value(name, "b");
+        e.set_attribute_value(("namespace", "a"), "b");
         d.root().append_child(e);
 
         let xml = format_xml(&d);
@@ -444,8 +441,7 @@ mod test {
         let p = Package::new();
         let d = p.as_document();
         let e = d.create_element("hello");
-        let name = QName::with_namespace_uri(Some("namespace"), "a");
-        let a = e.set_attribute_value(name, "b");
+        let a = e.set_attribute_value(("namespace", "a"), "b");
         a.set_preferred_prefix(Some("p"));
         d.root().append_child(e);
 
@@ -459,12 +455,10 @@ mod test {
         let d = p.as_document();
         let e = d.create_element("hello");
 
-        let name = QName::with_namespace_uri(Some("namespace1"), "a1");
-        let a = e.set_attribute_value(name, "b1");
+        let a = e.set_attribute_value(("namespace1", "a1"), "b1");
         a.set_preferred_prefix(Some("p"));
 
-        let name = QName::with_namespace_uri(Some("namespace2"), "a2");
-        let a = e.set_attribute_value(name, "b2");
+        let a = e.set_attribute_value(("namespace2", "a2"), "b2");
         a.set_preferred_prefix(Some("p"));
 
         d.root().append_child(e);
@@ -479,12 +473,10 @@ mod test {
         let d = p.as_document();
         let e = d.create_element("hello");
 
-        let name = QName::with_namespace_uri(Some("namespace"), "a1");
-        let a = e.set_attribute_value(name, "b1");
+        let a = e.set_attribute_value(("namespace", "a1"), "b1");
         a.set_preferred_prefix(Some("p1"));
 
-        let name = QName::with_namespace_uri(Some("namespace"), "a2");
-        let a = e.set_attribute_value(name, "b2");
+        let a = e.set_attribute_value(("namespace", "a2"), "b2");
         a.set_preferred_prefix(Some("p2"));
 
         d.root().append_child(e);
@@ -510,10 +502,8 @@ mod test {
     fn nested_element_with_namespaces() {
         let p = Package::new();
         let d = p.as_document();
-        let outer_name = QName::with_namespace_uri(Some("outer"), "hello");
-        let inner_name = QName::with_namespace_uri(Some("inner"), "world");
-        let hello = d.create_element(outer_name);
-        let world = d.create_element(inner_name);
+        let hello = d.create_element(("outer", "hello"));
+        let world = d.create_element(("inner", "world"));
         hello.append_child(world);
         d.root().append_child(hello);
 
@@ -525,10 +515,8 @@ mod test {
     fn nested_element_with_namespaces_with_reused_namespaces() {
         let p = Package::new();
         let d = p.as_document();
-        let outer_name = QName::with_namespace_uri(Some("ns"), "hello");
-        let inner_name = QName::with_namespace_uri(Some("ns"), "world");
-        let hello = d.create_element(outer_name);
-        let world = d.create_element(inner_name);
+        let hello = d.create_element(("ns", "hello"));
+        let world = d.create_element(("ns", "world"));
         hello.append_child(world);
         d.root().append_child(hello);
 
@@ -540,10 +528,8 @@ mod test {
     fn nested_element_with_with_conflicting_preferred_namespace_prefixes() {
         let p = Package::new();
         let d = p.as_document();
-        let outer_name = QName::with_namespace_uri(Some("outer"), "hello");
-        let inner_name = QName::with_namespace_uri(Some("inner"), "world");
-        let hello = d.create_element(outer_name);
-        let world = d.create_element(inner_name);
+        let hello = d.create_element(("outer", "hello"));
+        let world = d.create_element(("inner", "world"));
         hello.set_preferred_prefix(Some("p"));
         world.set_preferred_prefix(Some("p"));
         hello.append_child(world);

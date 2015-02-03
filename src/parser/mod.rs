@@ -55,7 +55,6 @@ use self::AttributeValue::*;
 use self::Reference::*;
 use self::xmlstr::XmlStr;
 
-use super::QName;
 use super::dom4;
 use super::peresil;
 use super::peresil::{Point};
@@ -716,9 +715,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
             let ns_uri = ns_uri.or_else(|| self.namespace_uri_for_prefix(prefix));
 
             if let Some(ns_uri) = ns_uri {
-                let name = QName::with_namespace_uri(Some(ns_uri),
-                                                     deferred_element.local_part);
-                let element = self.doc.create_element(name);
+                let element = self.doc.create_element((ns_uri, deferred_element.local_part));
                 element.set_preferred_prefix(Some(prefix));
                 element
             } else {
@@ -747,9 +744,8 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
                 let ns_uri = ns_uri.or_else(|| self.namespace_uri_for_prefix(prefix));
 
                 if let Some(ns_uri) = ns_uri {
-                    let name = QName::with_namespace_uri(Some(ns_uri),
-                                                         attribute.name.local_part);
-                    let attr = element.set_attribute_value(name, &value);
+                    let attr = element.set_attribute_value((ns_uri, attribute.name.local_part),
+                                                           &value);
                     attr.set_preferred_prefix(Some(prefix));
                 } else {
                     panic!("Unknown namespace prefix '{}'", prefix);
@@ -776,7 +772,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
 #[cfg(test)]
 mod test {
     use super::Parser;
-    use super::super::{Package,QName,ToQName};
+    use super::super::{Package,ToQName};
     use super::super::dom4;
 
     macro_rules! assert_qname_eq(
@@ -832,7 +828,7 @@ mod test {
         let top = top(&doc);
 
         assert_eq!(top.preferred_prefix(), Some("ns"));
-        assert_eq!(QName::with_namespace_uri(Some("namespace"), "hello"), top.name());
+        assert_qname_eq!(("namespace", "hello"), top.name());
     }
 
     #[test]
@@ -869,7 +865,7 @@ mod test {
         let doc = package.as_document();
         let top = top(&doc);
 
-        let attr = top.attribute(QName::with_namespace_uri(Some("namespace"), "a")).unwrap();
+        let attr = top.attribute(("namespace", "a")).unwrap();
 
         assert_eq!(attr.preferred_prefix(), Some("ns"));
         assert_eq!(attr.value(), "b");
@@ -921,7 +917,7 @@ mod test {
         let hello = top(&doc);
         let world = hello.children()[0].element().unwrap();
 
-        assert_qname_eq!(world.name(), QName::with_namespace_uri(Some("inner"), "world"));
+        assert_qname_eq!(world.name(), ("inner", "world"));
     }
 
     #[test]
@@ -932,7 +928,7 @@ mod test {
         let world = hello.children()[0].element().unwrap();
 
         assert_eq!(world.preferred_prefix(), Some("ns1"));
-        assert_eq!(world.name(), QName::with_namespace_uri(Some("outer"), "world"));
+        assert_qname_eq!(world.name(), ("outer", "world"));
     }
 
     #[test]
@@ -952,7 +948,7 @@ mod test {
         let hello = top(&doc);
         let world = hello.children()[0].element().unwrap();
 
-        let attr = world.attribute(QName::with_namespace_uri(Some("outer"), "name")).unwrap();
+        let attr = world.attribute(("outer", "name")).unwrap();
 
         assert_eq!(attr.preferred_prefix(), Some("ns1"));
         assert_eq!(attr.value(), "Earth");

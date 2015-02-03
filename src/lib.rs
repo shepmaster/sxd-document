@@ -81,6 +81,10 @@ impl<'s> ToQName<'s> for QName<'s> {
     fn to_qname(self) -> QName<'s> { self }
 }
 
+impl<'s> ToQName<'s> for (&'s str, &'s str) {
+    fn to_qname(self) -> QName<'s> { QName { namespace_uri: Some(self.0), local_part: self.1 } }
+}
+
 impl<'s> ToQName<'s> for &'s str {
     fn to_qname(self) -> QName<'s> { QName { namespace_uri: None, local_part: self } }
 }
