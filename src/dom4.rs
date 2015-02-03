@@ -373,8 +373,8 @@ impl<'d> fmt::Debug for Comment<'d> {
 node!(ProcessingInstruction, raw::ProcessingInstruction);
 
 impl<'d> ProcessingInstruction<'d> {
-    pub fn target(&self) -> &str { self.node().target() }
-    pub fn value(&self) -> Option<&str> { self.node().value() }
+    pub fn target(&self) -> &'d str { self.node().target() }
+    pub fn value(&self) -> Option<&'d str> { self.node().value() }
 
     pub fn set_target(&self, new_target: &str) {
         self.document.storage.processing_instruction_set_target(self.node, new_target);
