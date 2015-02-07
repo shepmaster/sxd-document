@@ -1,10 +1,12 @@
 #![feature(collections)]
 #![feature(io)]
 #![feature(os)]
+#![feature(env)]
 #![feature(path)]
 
 extern crate document;
 
+use std::env;
 use std::cmp::min;
 use std::old_io::{File,BufferedWriter,stdio};
 
@@ -42,7 +44,8 @@ fn process_input<R>(input: R)
 
 #[allow(dead_code)]
 fn main() {
-    let mut args = std::os::args();
+    let args: Result<Vec<_>, _> = env::args().map(|a| a.into_string()).collect();
+    let mut args = args.unwrap();
 
     let filename = args.remove(1);
 
