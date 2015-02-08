@@ -88,14 +88,12 @@ impl<'d> PrefixScope<'d> {
 
 struct PrefixMapping<'d> {
     scopes: Vec<PrefixScope<'d>>,
-    generated_prefix_count: usize,
 }
 
 impl<'d> PrefixMapping<'d> {
     fn new() -> PrefixMapping<'d> {
         PrefixMapping {
             scopes: vec![PrefixScope::new()],
-            generated_prefix_count: 0,
         }
     }
 
@@ -130,13 +128,13 @@ impl<'d> PrefixMapping<'d> {
 
         let name = element.name();
         if let Some(uri) = name.namespace_uri {
-            self.generate_prefix(uri);
+            self.generate_prefix(element, uri);
         }
 
         for attribute in attributes.iter() {
             let name = attribute.name();
             if let Some(uri) = name.namespace_uri {
-                self.generate_prefix(uri);
+                self.generate_prefix(element, uri);
             }
         }
     }
@@ -166,7 +164,7 @@ impl<'d> PrefixMapping<'d> {
         current_scope.define_prefix(String::from_str(prefix), namespace_uri);
     }
 
-    fn generate_prefix(&mut self, namespace_uri: &'d str) {
+    fn generate_prefix(&mut self, element: &dom4::Element<'d>, namespace_uri: &'d str) {
         let idx_of_last = self.scopes.len().saturating_sub(1);
         let (parents, current_scope) = self.scopes.split_at_mut(idx_of_last);
         let current_scope = &mut current_scope[0];
@@ -186,16 +184,9 @@ impl<'d> PrefixMapping<'d> {
             }
         }
 
-        loop {
-            let prefix = format!("autons{}", self.generated_prefix_count);
-            self.generated_prefix_count += 1;
-
-            if ! current_scope.has_prefix(&prefix) {
-                current_scope.add_mapping(&prefix, namespace_uri);
-                current_scope.define_prefix(prefix, namespace_uri);
-                break;
-            }
-        }
+        let prefix = element.generate_prefix(namespace_uri, None);
+        current_scope.add_mapping(&prefix, namespace_uri);
+        current_scope.define_prefix(prefix.to_string(), namespace_uri);
     }
 
     fn prefix<'a : 'c, 'b : 'c, 'c>(&'a self, preferred_prefix: Option<&'b str>, namespace_uri: &str) -> &'c str {

@@ -3,6 +3,7 @@ use super::{QName,ToQName};
 use arena::TypedArena;
 use string_pool::{StringPool,InternedString};
 use std::collections::HashMap;
+use std::cell::Cell;
 
 struct InternedQName {
     namespace_uri: Option<InternedString>,
@@ -225,6 +226,7 @@ pub struct Storage {
     texts: TypedArena<Text>,
     comments: TypedArena<Comment>,
     processing_instructions: TypedArena<ProcessingInstruction>,
+    auto_ns_count: Cell<u32>,
 }
 
 impl Storage {
@@ -237,6 +239,7 @@ impl Storage {
             texts: TypedArena::new(),
             comments: TypedArena::new(),
             processing_instructions: TypedArena::new(),
+            auto_ns_count: Cell::new(0),
         }
     }
 
@@ -333,6 +336,32 @@ impl Storage {
         let namespace_uri = self.intern(namespace_uri);
         let element_r = unsafe { &mut * element };
         element_r.prefix_to_namespace.insert(prefix, namespace_uri);
+    }
+
+    pub fn element_generate_prefix(&self, element: *mut Element, namespace_uri: &str, preferred_prefix: Option<&str>) -> &str {
+        let namespace_uri = self.intern(namespace_uri);
+        let element_r = unsafe { &mut * element };
+
+        if let Some(preferred_prefix) = preferred_prefix {
+            if ! element_r.prefix_to_namespace.contains_key(preferred_prefix) {
+                let preferred_prefix = self.intern(preferred_prefix);
+                element_r.prefix_to_namespace.insert(preferred_prefix, namespace_uri);
+                return preferred_prefix.as_slice();
+            }
+        }
+
+        for ns_count in self.auto_ns_count.get().. {
+            let prefix = format!("autons{}", ns_count);
+
+            if ! element_r.prefix_to_namespace.contains_key(prefix.as_slice()) {
+                self.auto_ns_count.set(ns_count + 1);
+                let prefix = self.intern(&prefix);
+                element_r.prefix_to_namespace.insert(prefix, namespace_uri);
+                return prefix.as_slice();
+            }
+        }
+
+        unreachable!();
     }
 
     pub fn element_set_preferred_prefix(&self, element: *mut Element, prefix: Option<&str>) {
@@ -585,6 +614,41 @@ impl Connections {
 
             if let Some(ns_uri) = element_r.prefix_to_namespace.get(prefix) {
                 return Some(ns_uri);
+            }
+
+            match element_r.parent {
+                Some(ParentOfChild::Element(parent)) => element = parent,
+                _ => return None,
+            }
+        }
+    }
+
+    pub fn element_prefix_for_namespace_uri(&self,
+                                            element: *mut Element,
+                                            namespace_uri: &str,
+                                            preferred_prefix: Option<&str>)
+                                            -> Option<&str>
+    {
+        let mut element = element;
+        loop {
+            let element_r = unsafe { &*element };
+
+            let prefixes: Vec<_> = element_r.prefix_to_namespace.iter()
+                .filter_map(|(&prefix, ns_uri)| {
+                    if ns_uri == namespace_uri { Some(prefix) } else { None }
+                })
+                .collect();
+
+            if let Some(preferred_prefix) = preferred_prefix {
+                match prefixes.iter().find(|&prefix| prefix == preferred_prefix) {
+                    Some(prefix) => return Some(prefix.as_slice()),
+                    _ => {}
+                }
+            }
+
+            match prefixes.first() {
+                Some(prefix) => return Some(prefix.as_slice()),
+                _ => {}
             }
 
             match element_r.parent {

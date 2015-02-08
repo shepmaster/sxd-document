@@ -93,6 +93,12 @@ impl PartialEq for InternedString {
     }
 }
 
+impl PartialEq<str> for InternedString {
+    fn eq(&self, other: &str) -> bool {
+        self.as_slice().eq(other)
+    }
+}
+
 impl Eq for InternedString {}
 
 impl<S> hash::Hash<S> for InternedString
