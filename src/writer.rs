@@ -357,16 +357,14 @@ pub fn format_document<'d, W>(doc: &'d dom4::Document<'d>, writer: &mut W) -> Io
 
 #[cfg(test)]
 mod test {
-    use std::old_io::MemWriter;
-
     use super::super::Package;
     use super::super::dom4;
     use super::format_document;
 
     fn format_xml<'d>(doc: &'d dom4::Document<'d>) -> String {
-        let mut w = MemWriter::new();
+        let mut w = Vec::new();
         format_document(doc, &mut w).ok().expect("Not formatted");
-        String::from_utf8(w.into_inner()).ok().expect("Not a string")
+        String::from_utf8(w).ok().expect("Not a string")
     }
 
     #[test]
