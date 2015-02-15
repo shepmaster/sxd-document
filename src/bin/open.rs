@@ -1,6 +1,5 @@
 #![feature(collections)]
 #![feature(io)]
-#![feature(os)]
 #![feature(env)]
 #![feature(path)]
 
@@ -44,8 +43,7 @@ fn process_input<R>(input: R)
 
 #[allow(dead_code)]
 fn main() {
-    let args: Result<Vec<_>, _> = env::args().map(|a| a.into_string()).collect();
-    let mut args = args.unwrap();
+    let mut args: Vec<_> = env::args().collect();
 
     let filename = args.remove(1);
 
