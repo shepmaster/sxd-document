@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(dead_code))]
+
 #![feature(collections)]
 #![feature(io)]
 #![feature(env)]
@@ -41,7 +43,6 @@ fn process_input<R>(input: R)
     }
 }
 
-#[allow(dead_code)]
 fn main() {
     let mut args: Vec<_> = env::args().collect();
 
