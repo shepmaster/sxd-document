@@ -5,6 +5,9 @@ use string_pool::{StringPool,InternedString};
 use std::collections::HashMap;
 use std::cell::Cell;
 
+static XML_NS_PREFIX: &'static str = "xml";
+static XML_NS_URI:    &'static str = "http://www.w3.org/XML/1998/namespace";
+
 struct InternedQName {
     namespace_uri: Option<InternedString>,
     local_part: InternedString,
@@ -656,6 +659,47 @@ impl Connections {
                 _ => return None,
             }
         }
+    }
+
+    pub fn element_namespaces_in_scope(&self, element: *mut Element)
+                                       -> NamespacesInScope
+    {
+        let mut namespaces = Vec::new();
+
+        namespaces.push((XML_NS_PREFIX, XML_NS_URI));
+
+        let mut element = element;
+        loop {
+            let element_r = unsafe { &*element };
+
+            for (&prefix, &uri) in element_r.prefix_to_namespace.iter() {
+                let namespace = (prefix.as_slice(), uri.as_slice());
+                if !namespaces.iter().any(|ns| ns.0 == namespace.0) {
+                    namespaces.push(namespace)
+                }
+            }
+
+            match element_r.parent {
+                Some(ParentOfChild::Element(parent)) => element = parent,
+                _ => break,
+            }
+        }
+
+        NamespacesInScope { iter: namespaces.into_iter() }
+    }
+}
+
+struct NamespacesInScope<'a> {
+    // There's probably a more efficient way instead of building up
+    // the entire vector, but this has the right API for now.
+    iter: ::std::vec::IntoIter<(&'a str, &'a str)>,
+}
+
+impl<'a> Iterator for NamespacesInScope<'a> {
+    type Item = (&'a str, &'a str);
+
+    fn next(&mut self) -> Option<(&'a str, &'a str)> {
+        self.iter.next()
     }
 }
 

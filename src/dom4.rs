@@ -170,6 +170,16 @@ impl<'d> fmt::Debug for Root<'d> {
     }
 }
 
+pub struct Namespace<'d> {
+    prefix: &'d str,
+    uri: &'d str,
+}
+
+impl<'d> Namespace<'d> {
+    pub fn prefix(&self) -> &'d str { self.prefix }
+    pub fn uri(&self) -> &'d str { self.uri }
+}
+
 node!(Element, raw::Element);
 
 impl<'d> Element<'d> {
@@ -199,6 +209,13 @@ impl<'d> Element<'d> {
     {
         let connections = self.document.connections.borrow();
         connections.element_prefix_for_namespace_uri(self.node, namespace_uri, preferred)
+    }
+
+    pub fn namespaces_in_scope(&self) -> Vec<Namespace<'d>> {
+        let connections = self.document.connections.borrow();
+        connections.element_namespaces_in_scope(self.node).map(|(prefix, uri)|{
+            Namespace { prefix: prefix, uri: uri }
+        }).collect()
     }
 
     pub fn preferred_prefix(&self) -> Option<&str> {
@@ -738,6 +755,44 @@ mod test {
         let alpha = doc.create_element("alpha");
         alpha.set_name("beta");
         assert_qname_eq!(alpha.name(), "beta");
+    }
+
+    #[test]
+    fn elements_know_in_scope_namespaces() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let element = doc.create_element("alpha");
+        element.register_prefix("a", "uri");
+
+        let nses = element.namespaces_in_scope();
+        assert_eq!(2, nses.len());
+
+        let xml_ns = nses.iter().find(|ns| ns.prefix() == "xml").unwrap();
+        assert_eq!("http://www.w3.org/XML/1998/namespace", xml_ns.uri());
+
+        let a_ns = nses.iter().find(|ns| ns.prefix() == "a").unwrap();
+        assert_eq!("uri", a_ns.uri());
+    }
+
+    #[test]
+    fn elements_in_scope_namespaces_override_parents_with_the_same_prefix() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let parent = doc.create_element("parent");
+        parent.register_prefix("prefix", "uri1");
+
+        let child = doc.create_element("child");
+        child.register_prefix("prefix", "uri2");
+
+        parent.append_child(child);
+
+        let nses = child.namespaces_in_scope();
+        assert_eq!(2, nses.len());
+
+        let ns = nses.iter().find(|ns| ns.prefix() == "prefix").unwrap();
+        assert_eq!("uri2", ns.uri());
     }
 
     #[test]
