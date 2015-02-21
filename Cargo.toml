@@ -10,4 +10,5 @@ compile_failure = []
 
 [dependencies.xxhash]
 
-git = "https://github.com/jurily/rust-xxhash"
+git = "https://github.com/shepmaster/rust-xxhash"
+branch = "update-fallout-3"
