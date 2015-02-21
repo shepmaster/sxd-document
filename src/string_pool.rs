@@ -5,7 +5,7 @@
 use std::borrow::Borrow;
 use std::cell::{Cell,RefCell};
 use std::cmp::max;
-use std::collections::DList;
+use std::collections::LinkedList;
 use std::collections::hash_map::Entry::{Occupied,Vacant};
 use std::collections::hash_map::HashMap;
 use std::collections::hash_state::DefaultState;
@@ -126,7 +126,7 @@ impl Deref for InternedString {
 pub struct StringPool {
     start: Cell<*mut u8>,
     end: Cell<*const u8>,
-    chunks: RefCell<DList<Chunk>>,
+    chunks: RefCell<LinkedList<Chunk>>,
     index: RefCell<HashMap<InternedString, InternedString, DefaultState<XXHasher>>>,
 }
 
@@ -137,7 +137,7 @@ impl StringPool {
         StringPool{
             start: Cell::new(ptr::null_mut()),
             end: Cell::new(ptr::null()),
-            chunks: RefCell::new(DList::new()),
+            chunks: RefCell::new(LinkedList::new()),
             index: RefCell::new(Default::default()),
         }
     }
