@@ -1,15 +1,18 @@
 #![cfg_attr(test, allow(dead_code))]
 
 #![feature(collections)]
-#![feature(io)]
 #![feature(env)]
-#![feature(path)]
+#![feature(fs)]
+#![feature(io)]
+#![feature(old_io)]
 
 extern crate document;
 
 use std::env;
 use std::cmp::min;
-use std::old_io::{File,BufferedWriter,stdio};
+use std::fs::File;
+use std::io::{Read,Cursor};
+use std::old_io::stdio;
 
 use document::parser::Parser;
 
@@ -20,10 +23,11 @@ fn pretty_error(xml: &str, position: usize) -> &str {
 }
 
 fn process_input<R>(input: R)
-    where R: Reader
+    where R: Read
 {
     let mut input = input;
-    let data = match input.read_to_string() {
+    let mut data = String::new();
+    match input.read_to_string(&mut data) {
         Ok(x) => x,
         Err(x) => panic!("Can't read: {}", x),
     };
@@ -35,12 +39,12 @@ fn process_input<R>(input: R)
         Err(point) => panic!("Unable to parse: {}", pretty_error(&data, point)),
     };
 
-    let mut out = BufferedWriter::new(stdio::stdout_raw());
+    // TODO: Remove buffering when std::io gets stdout
+    let mut out = Vec::new();
+    let d = package.as_document();
+    document::writer::format_document(&d, &mut out).ok().expect("I can't output");
 
-    {
-        let d = package.as_document();
-        document::writer::format_document(&d, &mut out).ok().expect("I can't output");
-    }
+    stdio::stdout_raw().write_all(&out).unwrap();
 }
 
 fn main() {
@@ -49,8 +53,10 @@ fn main() {
     let filename = args.remove(1);
 
     if filename == "-" {
-        process_input(stdio::stdin_raw());
+        let data = stdio::stdin_raw().read_to_end().unwrap();
+        process_input(Cursor::new(data));
     } else {
-        process_input(File::open(&Path::new(filename)))
+        let file = File::open(&filename).unwrap();
+        process_input(file);
     }
 }

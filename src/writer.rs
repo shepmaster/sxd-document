@@ -1,4 +1,4 @@
-//! Formats a DOM structure to a Writer
+//! Formats a DOM structure to a Write
 //!
 //! ### Example
 //! ```
@@ -12,7 +12,7 @@
 //! hello.set_attribute_value("planet", "Earth");
 //! doc.root().append_child(hello);
 //!
-//! let mut output = std::old_io::stdio::stdout();
+//! let mut output = Vec::new();
 //! format_document(&doc, &mut output).ok().expect("unable to output XML");
 //! ```
 //!
@@ -29,8 +29,8 @@
 
 use std::num::Int;
 use std::collections::HashMap;
+use std::io::{self,Write};
 use std::slice;
-use std::old_io::IoResult;
 
 use self::Content::*;
 
@@ -38,6 +38,14 @@ use super::QName;
 
 use super::dom4;
 use super::dom4::{ChildOfElement,ChildOfRoot};
+
+trait WriteStr: Write {
+    fn write_str(&mut self, s: &str) -> io::Result<()> {
+        self.write_all(s.as_bytes())
+    }
+}
+
+impl<W> WriteStr for W where W: Write {}
 
 // TODO: Duplicating the String seems inefficient...
 struct PrefixScope<'d> {
@@ -219,8 +227,8 @@ fn format_qname<'d, W>(q: QName<'d>,
                        mapping: &mut PrefixMapping<'d>,
                        preferred_prefix: Option<&str>,
                        writer: &mut W)
-                       -> IoResult<()>
-    where W: Writer
+                       -> io::Result<()>
+    where W: Write
 {
     if let Some(namespace_uri) = q.namespace_uri {
         let prefix = mapping.prefix(preferred_prefix, namespace_uri);
@@ -234,8 +242,8 @@ fn format_element<'d, W>(element: dom4::Element<'d>,
                          todo: &mut Vec<Content<'d>>,
                          mapping: &mut PrefixMapping<'d>,
                          writer: &mut W)
-                         -> IoResult<()>
-    where W: Writer
+                         -> io::Result<()>
+    where W: Write
 {
     let attrs = element.attributes();
 
@@ -279,22 +287,22 @@ fn format_element<'d, W>(element: dom4::Element<'d>,
 fn format_element_end<'d, W>(element: dom4::Element<'d>,
                              mapping: &mut PrefixMapping<'d>,
                              writer: &mut W)
-                             -> IoResult<()>
-    where W: Writer
+                             -> io::Result<()>
+    where W: Write
 {
     try!(writer.write_str("</"));
     try!(format_qname(element.name(), mapping, element.preferred_prefix(), writer));
     writer.write_str(">")
 }
 
-fn format_comment<W>(comment: dom4::Comment, writer: &mut W) -> IoResult<()>
-    where W: Writer
+fn format_comment<W>(comment: dom4::Comment, writer: &mut W) -> io::Result<()>
+    where W: Write
 {
     write!(writer, "<!--{}-->", comment.text())
 }
 
-fn format_processing_instruction<W>(pi: dom4::ProcessingInstruction, writer: &mut W) -> IoResult<()>
-    where W: Writer
+fn format_processing_instruction<W>(pi: dom4::ProcessingInstruction, writer: &mut W) -> io::Result<()>
+    where W: Write
 {
     match pi.value() {
         None    => write!(writer, "<?{}?>", pi.target()),
@@ -306,8 +314,8 @@ fn format_one<'d, W>(content: Content<'d>,
                      todo: &mut Vec<Content<'d>>,
                      mapping: &mut PrefixMapping<'d>,
                      writer: &mut W)
-                     -> IoResult<()>
-    where W: Writer
+                     -> io::Result<()>
+    where W: Write
 {
     match content {
         Element(e)               => {
@@ -325,8 +333,8 @@ fn format_one<'d, W>(content: Content<'d>,
     }
 }
 
-fn format_body<W>(element: dom4::Element, writer: &mut W) -> IoResult<()>
-    where W: Writer
+fn format_body<W>(element: dom4::Element, writer: &mut W) -> io::Result<()>
+    where W: Write
 {
     let mut todo = vec![Element(element)];
     let mut mapping = PrefixMapping::new();
@@ -338,9 +346,9 @@ fn format_body<W>(element: dom4::Element, writer: &mut W) -> IoResult<()>
     Ok(())
 }
 
-/// Formats a document into a Writer
-pub fn format_document<'d, W>(doc: &'d dom4::Document<'d>, writer: &mut W) -> IoResult<()>
-    where W: Writer
+/// Formats a document into a Write
+pub fn format_document<'d, W>(doc: &'d dom4::Document<'d>, writer: &mut W) -> io::Result<()>
+    where W: Write
 {
     try!(writer.write_str("<?xml version='1.0'?>"));
 
