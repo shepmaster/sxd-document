@@ -1,4 +1,4 @@
-use std::marker::InvariantLifetime;
+use std::marker::PhantomData;
 use std::{fmt,hash};
 
 use super::{QName,ToQName};
@@ -261,15 +261,15 @@ macro_rules! node(
         #[allow(raw_pointer_derive)]
         #[derive(Copy,Clone)]
         pub struct $name<'d> {
-            lifetime: InvariantLifetime<'d>,
             node: *mut $raw,
+            lifetime: PhantomData<Storage<'d>>,
         }
 
         impl<'d> $name<'d> {
             fn wrap(node: *mut $raw) -> $name<'d> {
                 $name {
-                    lifetime: InvariantLifetime,
                     node: node,
+                    lifetime: PhantomData,
                 }
             }
 
