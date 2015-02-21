@@ -285,10 +285,10 @@ macro_rules! node(
 
         impl<'d> Eq for $name<'d> {}
 
-        impl<'d, H> hash::Hash<H> for $name<'d>
-            where H: hash::Hasher + hash::Writer
-        {
-            fn hash(&self, state: &mut H) {
+        impl<'d> hash::Hash for $name<'d> {
+            fn hash<H>(&self, state: &mut H)
+                where H: hash::Hasher
+            {
                 self.node.hash(state)
             }
         }

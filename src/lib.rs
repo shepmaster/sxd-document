@@ -23,7 +23,6 @@
 #![feature(alloc)]
 #![feature(collections)]
 #![feature(core)]
-#![feature(hash)]
 #![feature(io)]
 #![feature(rustc_private)]
 #![feature(std_misc)]
