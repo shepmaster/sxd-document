@@ -32,13 +32,14 @@ extern crate arena;
 extern crate test;
 extern crate xxhash;
 
+#[macro_use]
+extern crate peresil;
+
 use std::fmt;
 
 mod string_pool;
 mod raw;
 
-#[macro_use]
-pub mod peresil;
 pub mod str;
 pub mod thindom4;
 pub mod dom4;
@@ -125,9 +126,4 @@ impl fmt::Debug for Package {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Package")
     }
-}
-
-#[doc(hidden)]
-mod document {
-    pub use peresil;
 }

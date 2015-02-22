@@ -8,6 +8,10 @@ authors = ["Jake Goulding <jake.goulding@gmail.com>"]
 
 compile_failure = []
 
+[dependencies]
+
+peresil = "0.1.0"
+
 [dependencies.xxhash]
 
 git = "https://github.com/shepmaster/rust-xxhash"

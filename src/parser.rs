@@ -51,12 +51,12 @@ use std::num::from_str_radix;
 use std::ops::Deref;
 use std::{iter};
 
+use peresil::{self, Point};
+
 use self::AttributeValue::*;
 use self::Reference::*;
 
 use super::dom4;
-use super::peresil;
-use super::peresil::{Point};
 use super::str::XmlStr;
 
 type ParseResult<'a, T> = peresil::Result<'a, T, ()>;
