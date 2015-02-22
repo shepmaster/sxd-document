@@ -195,10 +195,6 @@ impl<'d> Element<'d> {
         self.document.storage.element_register_prefix(self.node, prefix, namespace_uri);
     }
 
-    pub fn generate_prefix(&self, namespace_uri: &str, preferred_prefix: Option<&str>) -> &'d str {
-        self.document.storage.element_generate_prefix(self.node, namespace_uri, preferred_prefix)
-    }
-
     pub fn namespace_uri_for_prefix(&self, prefix: &str) -> Option<&str> {
         let connections = self.document.connections.borrow();
         connections.element_namespace_uri_for_prefix(self.node, prefix)
