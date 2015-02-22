@@ -53,13 +53,11 @@ use std::{iter};
 
 use self::AttributeValue::*;
 use self::Reference::*;
-use self::xmlstr::XmlStr;
 
 use super::dom4;
 use super::peresil;
 use super::peresil::{Point};
-
-pub mod xmlstr;
+use super::str::XmlStr;
 
 type ParseResult<'a, T> = peresil::Result<'a, T, ()>;
 

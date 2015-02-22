@@ -39,6 +39,7 @@ mod raw;
 
 #[macro_use]
 pub mod peresil;
+pub mod str;
 pub mod thindom4;
 pub mod dom4;
 pub mod parser;

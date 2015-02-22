@@ -1,4 +1,4 @@
-use super::super::peresil::StrParseExt;
+use super::peresil::StrParseExt;
 
 pub trait XmlStr {
     fn end_of_attribute(&self, quote: &str) -> Option<usize>;
