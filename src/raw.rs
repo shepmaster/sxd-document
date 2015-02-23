@@ -193,7 +193,7 @@ macro_rules! conversion_trait(
     ($tr_name:ident, $method:ident, $res_type:ident,
         { $($leaf_type:ident => $variant:expr),* }
     ) => (
-        pub trait $tr_name {
+        trait $tr_name {
             fn $method(self) -> $res_type;
         }
 

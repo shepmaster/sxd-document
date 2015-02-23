@@ -455,7 +455,7 @@ unpack!(ChildOfRoot, comment, Comment, Comment);
 unpack!(ChildOfRoot, processing_instruction, ProcessingInstruction, ProcessingInstruction);
 
 impl<'d> ChildOfRoot<'d> {
-    pub fn as_raw(&self) -> raw::ChildOfRoot {
+    fn as_raw(&self) -> raw::ChildOfRoot {
         match self {
             &ChildOfRoot::Element(n) => raw::ChildOfRoot::Element(n.node),
             &ChildOfRoot::Comment(n) => raw::ChildOfRoot::Comment(n.node),
@@ -478,7 +478,7 @@ unpack!(ChildOfElement, comment, Comment, Comment);
 unpack!(ChildOfElement, processing_instruction, ProcessingInstruction, ProcessingInstruction);
 
 impl<'d> ChildOfElement<'d> {
-    pub fn as_raw(&self) -> raw::ChildOfElement {
+    fn as_raw(&self) -> raw::ChildOfElement {
         match self {
             &ChildOfElement::Element(n) => raw::ChildOfElement::Element(n.node),
             &ChildOfElement::Text(n) => raw::ChildOfElement::Text(n.node),
