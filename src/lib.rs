@@ -40,11 +40,13 @@ mod string_pool;
 mod raw;
 
 pub mod str;
+#[doc(hidden)]
 pub mod thindom4;
 pub mod dom4;
 pub mod parser;
 pub mod writer;
 
+/// A namespace-qualified name
 #[derive(Debug,PartialEq,Eq,PartialOrd)]
 pub struct QName<'s> {
     namespace_uri: Option<&'s str>,
@@ -52,10 +54,12 @@ pub struct QName<'s> {
 }
 
 impl<'s> QName<'s> {
+    /// Create a `QName` without a namespace
     pub fn new(local_part: &'s str) -> QName<'s> {
         QName::with_namespace_uri(None, local_part)
     }
 
+    /// Create a `QName` with an optional namespace
     pub fn with_namespace_uri(namespace_uri: Option<&'s str>, local_part: &'s str) -> QName<'s> {
         QName {
             namespace_uri: namespace_uri,
@@ -73,6 +77,7 @@ impl<'s> Ord for QName<'s> {
     }
 }
 
+/// Convert item into a `QName`
 pub trait ToQName<'s> {
     fn to_qname(self) -> QName<'s>;
 }
@@ -89,6 +94,10 @@ impl<'s> ToQName<'s> for &'s str {
     fn to_qname(self) -> QName<'s> { QName { namespace_uri: None, local_part: self } }
 }
 
+/// The main entrypoint to an XML document
+///
+/// This is an opaque structure that stores the internal details of
+/// the XML document. Modify the document via `as_document`.
 pub struct Package {
     storage: raw::Storage,
     connections: raw::Connections,
@@ -108,6 +117,7 @@ impl Package {
         dom4::Document::new(&self.storage, &self.connections)
     }
 
+    #[doc(hidden)]
     pub fn as_thin_document(&self) -> (thindom4::Storage, thindom4::Connections) {
         let s = thindom4::Storage::new(&self.storage);
         let c = thindom4::Connections::new(&self.connections);
