@@ -1,3 +1,6 @@
+//! A traditional DOM tree interface for navigating and manipulating
+//! XML documents.
+
 use std::cell::RefCell;
 use std::{fmt,hash};
 
@@ -6,6 +9,7 @@ use super::raw;
 
 type SiblingFn<T> = unsafe fn(&raw::Connections, T) -> raw::SiblingIter;
 
+/// An XML document
 pub struct Document<'d> {
     storage: &'d raw::Storage,
     connections: RefCell<&'d raw::Connections>,
@@ -30,6 +34,7 @@ impl<'d> Document<'d> {
     wrapper!(wrap_comment, Comment, raw::Comment);
     wrapper!(wrap_pi, ProcessingInstruction, raw::ProcessingInstruction);
 
+    #[doc(hidden)]
     pub fn new(storage: &'d raw::Storage, connections: &'d raw::Connections) -> Document<'d> {
         Document {
             storage: storage,
@@ -107,7 +112,8 @@ impl<'d> fmt::Debug for Document<'d> {
 }
 
 macro_rules! node(
-    ($name:ident, $raw:ty) => (
+    ($name:ident, $raw:ty, $doc:expr) => (
+        #[doc = $doc]
         #[allow(raw_pointer_derive)]
         #[derive(Copy,Clone)]
         pub struct $name<'d> {
@@ -140,7 +146,10 @@ macro_rules! node(
     )
 );
 
-node!(Root, raw::Root);
+node!(
+    Root, raw::Root,
+    "The logical ancestor of every other node type"
+);
 
 impl<'d> Root<'d> {
     pub fn append_child<C>(&self, child: C)
@@ -170,6 +179,7 @@ impl<'d> fmt::Debug for Root<'d> {
     }
 }
 
+/// A mapping from a prefix to a URI
 pub struct Namespace<'d> {
     prefix: &'d str,
     uri: &'d str,
@@ -180,7 +190,11 @@ impl<'d> Namespace<'d> {
     pub fn uri(&self) -> &'d str { self.uri }
 }
 
-node!(Element, raw::Element);
+node!(
+    Element, raw::Element,
+    "Elements are the workhorse of a document and may contain any type of
+    node, except for the Root node"
+);
 
 impl<'d> Element<'d> {
     pub fn name(&self) -> QName<'d> { self.node().name() }
@@ -191,15 +205,21 @@ impl<'d> Element<'d> {
         self.document.storage.element_set_name(self.node, name)
     }
 
+    /// Map a prefix to a namespace URI. Any existing prefix on this
+    /// element will be replaced.
     pub fn register_prefix(&self, prefix: &str, namespace_uri: &str) {
         self.document.storage.element_register_prefix(self.node, prefix, namespace_uri);
     }
 
+    /// Recursively resolve the prefix to a namespace URI.
     pub fn namespace_uri_for_prefix(&self, prefix: &str) -> Option<&str> {
         let connections = self.document.connections.borrow();
         connections.element_namespace_uri_for_prefix(self.node, prefix)
     }
 
+    /// Recursively find a prefix for the namespace URI. Since
+    /// multiple prefixes may map to the same URI, `preferred` can be
+    /// provided to select a specific prefix, if it is valid.
     pub fn prefix_for_namespace_uri(&self, namespace_uri: &str, preferred: Option<&str>)
                                     -> Option<&'d str>
     {
@@ -207,6 +227,8 @@ impl<'d> Element<'d> {
         connections.element_prefix_for_namespace_uri(self.node, namespace_uri, preferred)
     }
 
+    /// Retrieve all namespaces that are in scope, recursively walking
+    /// up the document tree.
     pub fn namespaces_in_scope(&self) -> Vec<Namespace<'d>> {
         let connections = self.document.connections.borrow();
         connections.element_namespaces_in_scope(self.node).map(|(prefix, uri)|{
@@ -240,8 +262,8 @@ impl<'d> Element<'d> {
 
     pub fn children(&self) -> Vec<ChildOfElement<'d>> {
         let connections = self.document.connections.borrow();
-        // This is safe because we copy of the children, and the
-        // children are never deallocated.
+        // This is safe because we make a copy of the children, and
+        // the children are never deallocated.
         unsafe {
             let raw_children = connections.element_children(self.node);
             raw_children.iter().map(|n| {
@@ -269,8 +291,8 @@ impl<'d> Element<'d> {
 
     pub fn attributes(&self) -> Vec<Attribute<'d>> {
         let connections = self.document.connections.borrow();
-        // This is safe because we copy of the children, and the
-        // children are never deallocated.
+        // This is safe because we make a copy of the children, and
+        // the children are never deallocated.
         unsafe {
             connections.attributes(self.node).iter().map(|n| {
                 self.document.wrap_attribute(*n)
@@ -304,7 +326,10 @@ impl<'d> fmt::Debug for Element<'d> {
     }
 }
 
-node!(Attribute, raw::Attribute);
+node!(
+    Attribute, raw::Attribute,
+    "Metadata about the current element"
+);
 
 impl<'d> Attribute<'d> {
     pub fn name(&self)  -> QName<'d> { self.node().name() }
@@ -332,7 +357,10 @@ impl<'d> fmt::Debug for Attribute<'d> {
     }
 }
 
-node!(Text, raw::Text);
+node!(
+    Text, raw::Text,
+    "Textual data"
+);
 
 impl<'d> Text<'d> {
     pub fn text(&self) -> &str { self.node().text() }
@@ -363,7 +391,10 @@ impl<'d> fmt::Debug for Text<'d> {
     }
 }
 
-node!(Comment, raw::Comment);
+node!(
+    Comment, raw::Comment,
+    "Information only relevant to humans"
+);
 
 impl<'d> Comment<'d> {
     pub fn text(&self) -> &str { self.node().text() }
@@ -394,7 +425,10 @@ impl<'d> fmt::Debug for Comment<'d> {
     }
 }
 
-node!(ProcessingInstruction, raw::ProcessingInstruction);
+node!(
+    ProcessingInstruction, raw::ProcessingInstruction,
+    "Metadata relevant to the application, but not the XML processor or humans"
+);
 
 impl<'d> ProcessingInstruction<'d> {
     pub fn target(&self) -> &'d str { self.node().target() }
@@ -443,6 +477,7 @@ macro_rules! unpack(
     )
 );
 
+/// Nodes that may occur as a child of the root node
 #[derive(PartialEq,Debug,Copy)]
 pub enum ChildOfRoot<'d> {
     Element(Element<'d>),
@@ -464,6 +499,7 @@ impl<'d> ChildOfRoot<'d> {
     }
 }
 
+/// Nodes that may occur as a child of an element node
 #[derive(PartialEq,Debug,Copy)]
 pub enum ChildOfElement<'d> {
     Element(Element<'d>),
@@ -488,16 +524,21 @@ impl<'d> ChildOfElement<'d> {
     }
 }
 
+/// Nodes that may occur as the parent of a child node
 #[derive(PartialEq,Debug,Copy)]
 pub enum ParentOfChild<'d> {
     Root(Root<'d>),
     Element(Element<'d>),
 }
 
+unpack!(ParentOfChild, root, Root, Root);
+unpack!(ParentOfChild, element, Element, Element);
+
 macro_rules! conversion_trait(
-    ($tr_name:ident, $method:ident, $res_type:ident,
+    ($tr_name:ident, $method:ident, $res_type:ident, $doc:expr,
         { $($leaf_type:ident => $variant:expr),* }
     ) => (
+        #[doc = $doc]
         pub trait $tr_name<'d> {
             fn $method(self) -> $res_type<'d>;
         }
@@ -516,18 +557,26 @@ macro_rules! conversion_trait(
     )
 );
 
-conversion_trait!(ToChildOfRoot, to_child_of_root, ChildOfRoot, {
-    Element => ChildOfRoot::Element,
-    Comment => ChildOfRoot::Comment,
-    ProcessingInstruction => ChildOfRoot::ProcessingInstruction
-});
+conversion_trait!(
+    ToChildOfRoot, to_child_of_root, ChildOfRoot,
+    "Convert item into a `ChildOfRoot`",
+    {
+        Element               => ChildOfRoot::Element,
+        Comment               => ChildOfRoot::Comment,
+        ProcessingInstruction => ChildOfRoot::ProcessingInstruction
+    }
+);
 
-conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
-    Element => ChildOfElement::Element,
-    Text => ChildOfElement::Text,
-    Comment => ChildOfElement::Comment,
-    ProcessingInstruction => ChildOfElement::ProcessingInstruction
-});
+conversion_trait!(
+    ToChildOfElement, to_child_of_element, ChildOfElement,
+    "Convert item into a `ChildOfElement`",
+    {
+        Element               => ChildOfElement::Element,
+        Text                  => ChildOfElement::Text,
+        Comment               => ChildOfElement::Comment,
+        ProcessingInstruction => ChildOfElement::ProcessingInstruction
+    }
+);
 
 impl<'d> ToChildOfElement<'d> for ChildOfRoot<'d> {
     fn to_child_of_element(self) -> ChildOfElement<'d> {
