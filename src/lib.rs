@@ -55,13 +55,15 @@ use std::fmt;
 
 mod string_pool;
 mod raw;
+mod str;
 
-pub mod str;
 #[doc(hidden)]
 pub mod thindom4;
 pub mod dom4;
 pub mod parser;
 pub mod writer;
+
+pub use str::XmlChar;
 
 /// A namespace-qualified name
 #[derive(Debug,PartialEq,Eq,PartialOrd)]

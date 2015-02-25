@@ -1,16 +1,27 @@
 use super::peresil::StrParseExt;
 
 pub trait XmlStr {
+    /// Find the end of the quoted attribute value, not including the quote
     fn end_of_attribute(&self, quote: &str) -> Option<usize>;
+    /// Find the end of the direct character data
     fn end_of_char_data(&self) -> Option<usize>;
+    /// Find the end of the CData section, not including the ]]>
     fn end_of_cdata(&self) -> Option<usize>;
+    /// Find the end of a run of decimal characters
     fn end_of_decimal_chars(&self) -> Option<usize>;
+    /// Find the end of a run of hexidecimal characters
     fn end_of_hex_chars(&self) -> Option<usize>;
+    /// Find the end of the comment, not including the -->
     fn end_of_comment(&self) -> Option<usize>;
+    /// Find the end of the processing instruction, not including the ?>
     fn end_of_pi_value(&self) -> Option<usize>;
+    /// Find the end of the [Name](http://www.w3.org/TR/xml/#NT-Name)
     fn end_of_name(&self) -> Option<usize>;
+    /// Find the end of the [NCName](http://www.w3.org/TR/REC-xml-names/#NT-NCName)
     fn end_of_ncname(&self) -> Option<usize>;
+    /// Find the end of a run of space characters
     fn end_of_space(&self) -> Option<usize>;
+    /// Find the end of the starting tag
     fn end_of_start_tag(&self) -> Option<usize>;
 }
 
@@ -128,11 +139,17 @@ impl<'a> XmlStr for &'a str {
     }
 }
 
+/// Predicates used when parsing an characters in an XML document.
 pub trait XmlChar {
+    /// Is this a [NameStartChar](http://www.w3.org/TR/xml/#NT-NameStartChar)?
     fn is_name_start_char(self) -> bool;
+    /// Is this a [NameChar](http://www.w3.org/TR/xml/#NT-NameChar)?
     fn is_name_char(self) -> bool;
+    /// Does this start a [NCName](http://www.w3.org/TR/REC-xml-names/#NT-NCName)?
     fn is_ncname_start_char(self) -> bool;
+    /// Is this a component of a [NCName](http://www.w3.org/TR/REC-xml-names/#NT-NCName)?
     fn is_ncname_char(self) -> bool;
+    /// Is this an [XML space](http://www.w3.org/TR/xml/#NT-S)?
     fn is_space_char(self) -> bool;
     fn is_decimal_char(self) -> bool;
     fn is_hex_char(self) -> bool;
