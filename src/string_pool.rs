@@ -180,7 +180,7 @@ impl StringPool {
         let str_len = s.len();
 
         unsafe {
-            ptr::copy_nonoverlapping_memory(self.start.get(), str_start, str_len);
+            ptr::copy_nonoverlapping(self.start.get(), str_start, str_len);
 
             // Rebuild the string from our buffer
             let interned_str = InternedString::from_parts(self.start.get() as *const u8, str_len);
