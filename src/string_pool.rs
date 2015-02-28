@@ -11,9 +11,10 @@ use std::collections::hash_map::HashMap;
 use std::collections::hash_state::DefaultState;
 use std::default::Default;
 use std::ops::Deref;
-use std::raw::Slice;
 use std::rt::heap::{allocate, deallocate};
+use std::slice;
 use std::{fmt,hash,mem,ptr,str};
+
 use xxhash::XXHasher;
 
 struct Chunk {
@@ -52,30 +53,29 @@ impl Drop for Chunk {
 
 #[derive(Copy)]
 pub struct InternedString {
-    slice: Slice<u8>,
+    data: *const u8,
+    len: usize,
 }
 
 impl InternedString {
     fn from_parts(data: *const u8, len: usize) -> InternedString {
         InternedString {
-            slice: Slice {
-                data: data,
-                len: len,
-            },
+            data: data,
+            len: len,
         }
     }
 
     pub fn from_str(s: &str) -> InternedString {
         let bytes: &[u8] = s.as_bytes();
-        let slice: Slice<u8> = unsafe { mem::transmute(bytes) };
         InternedString {
-            slice: slice,
+            data: bytes.as_ptr(),
+            len: bytes.len(),
         }
     }
 
     pub fn as_slice<'s>(&self) -> &'s str {
         unsafe {
-            let bytes: &[u8] = mem::transmute(self.slice);
+            let bytes = slice::from_raw_parts(self.data, self.len);
             str::from_utf8_unchecked(bytes)
         }
     }
