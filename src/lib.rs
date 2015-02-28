@@ -94,7 +94,7 @@ impl<'a> PrefixedName<'a> {
 /// A namespace-qualified name. This represents the name of an element
 /// or attribute *after* the prefix has been mapped to a specific
 /// namespace.
-#[derive(Debug,PartialEq,Eq,PartialOrd)]
+#[derive(Debug,Copy,Clone,PartialEq)]
 pub struct QName<'s> {
     namespace_uri: Option<&'s str>,
     local_part: &'s str,
@@ -116,12 +116,6 @@ impl<'s> QName<'s> {
 
     pub fn namespace_uri(&self) -> Option<&'s str> { self.namespace_uri }
     pub fn local_part(&self) -> &'s str { self.local_part }
-}
-
-impl<'s> Ord for QName<'s> {
-    fn cmp(&self, other: &QName<'s>) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
-    }
 }
 
 /// Convert item into a `QName`

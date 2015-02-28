@@ -726,7 +726,7 @@ mod test {
         c.set_attribute(element, attr2);
 
         let mut attrs: Vec<Attribute> = c.attributes(element).collect();
-        attrs.sort_by(|a, b| a.name().cmp(&b.name()));
+        attrs.sort_by(|a, b| a.name().namespace_uri().cmp(&b.name().namespace_uri()));
 
         assert_eq!(2, attrs.len());
         assert_qname_eq!("name1",  attrs[0].name());

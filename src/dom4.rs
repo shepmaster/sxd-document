@@ -898,7 +898,7 @@ mod test {
         element.set_attribute_value("name2", "value2");
 
         let mut attrs = element.attributes();
-        attrs.sort_by(|a, b| a.name().cmp(&b.name()));
+        attrs.sort_by(|a, b| a.name().namespace_uri().cmp(&b.name().namespace_uri()));
 
         assert_eq!(2, attrs.len());
         assert_qname_eq!("name1",  attrs[0].name());
