@@ -11,7 +11,6 @@ use std::collections::hash_map::HashMap;
 use std::collections::hash_state::DefaultState;
 use std::default::Default;
 use std::ops::Deref;
-use std::rt::heap::{allocate, deallocate};
 use std::slice;
 use std::{fmt,hash,mem,ptr,str};
 
@@ -24,8 +23,16 @@ struct Chunk {
 
 impl Chunk {
     fn new(capacity: usize) -> Chunk {
+        let mut slab: Vec<u8> = Vec::with_capacity(capacity);
+        let start = slab.as_mut_ptr();
+
+        // We will manually track the buffer and then drop it ourselves
+        unsafe {
+            mem::forget(slab);
+        }
+
         Chunk {
-            start: unsafe { allocate(capacity, mem::min_align_of::<u8>()) },
+            start: start,
             capacity: capacity,
         }
     }
@@ -45,8 +52,11 @@ impl Chunk {
 
 impl Drop for Chunk {
     fn drop(&mut self) {
+        // This is safe because we only ever store u8, which doesn't
+        // have a destructor. This means the len doesn't matter, only
+        // the capacity.
         unsafe {
-            deallocate(self.start, self.capacity, mem::min_align_of::<u8>());
+            Vec::from_raw_parts(self.start, self.capacity, self.capacity);
         }
     }
 }

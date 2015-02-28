@@ -20,7 +20,6 @@
 
 #![crate_name = "document"]
 
-#![feature(alloc)]
 #![feature(collections)]
 #![feature(core)]
 #![feature(io)]
