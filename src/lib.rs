@@ -14,6 +14,19 @@
 //! doc.root().append_child(hello);
 //! ```
 //!
+//! ### Memory and ownership
+//!
+//! The `Package` struct is responsible for owning every node in the
+//! document. Strings are interned, allowing repeated text to consume
+//! less memory. This is very useful for documents containing lots of
+//! the same attributes and tag names.
+//!
+//! The flip side of this decision is that allocated nodes and strings
+//! are not deallocated until the entire `Package` is dropped. This is
+//! a reasonable decision for two common cases: building up an XML
+//! document and reading an XML document. You may wish to perform
+//! large modifications to your data *before* creating a document.
+//!
 //! ### Namespaces, QNames, and Prefixes
 //!
 //! The names of elements and attributes may use namespaces. XML
