@@ -83,10 +83,15 @@ enum Reference<'a> {
     HexCharReference(&'a str),
 }
 
+/// Common reusable XML parsing methods
 pub trait XmlParseExt<'a> {
+    /// Parse XML whitespace
     fn consume_space(&self) -> peresil::Result<'a, &'a str, ()>;
+    /// Parse XML decimal characters
     fn consume_decimal_chars<E>(&self) -> peresil::Result<'a, &'a str, E>;
+    /// Parse an XML [NCName](http://www.w3.org/TR/REC-xml-names/#NT-NCName)
     fn consume_ncname<E>(&self) -> peresil::Result<'a, &'a str, E>;
+    /// Parse an XML [prefixed name](http://www.w3.org/TR/REC-xml-names/#NT-QName)
     fn consume_prefixed_name<E>(&self) -> peresil::Result<'a, PrefixedName<'a>, E>;
 }
 
@@ -498,7 +503,11 @@ impl Parser {
         success((), xml)
     }
 
-    pub fn parse<'a>(&self, xml: &'a str) -> Result<super::Package, usize> {
+    /// Parses a string into a DOM. On failure, the location of the
+    /// parsing failure will be returned.
+    pub fn parse(&self, xml: &str) -> Result<super::Package, usize> {
+        // TODO: Evaluate how useful the error result is.
+
         let xml = Point{offset: 0, s: xml};
         let package = super::Package::new();
 
