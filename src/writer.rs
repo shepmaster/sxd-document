@@ -80,7 +80,7 @@ impl<'d> PrefixScope<'d> {
     }
 
     fn prefix_for(&self, namespace_uri: &str) -> Option<&str> {
-        self.ns_to_prefix.get(namespace_uri).map(|p| p.as_slice())
+        self.ns_to_prefix.get(namespace_uri).map(|p| &p[..])
     }
 
     fn add_mapping(&mut self, prefix: &str, namespace_uri: &'d str) {

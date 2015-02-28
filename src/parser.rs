@@ -709,7 +709,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         let new_prefix_mappings = new_prefix_mappings;
 
         let element = if let Some(prefix) = deferred_element.prefix {
-            let ns_uri = new_prefix_mappings.get(prefix).map(|p| p.as_slice());
+            let ns_uri = new_prefix_mappings.get(prefix).map(|p| &p[..]);
             let ns_uri = ns_uri.or_else(|| self.namespace_uri_for_prefix(prefix));
 
             if let Some(ns_uri) = ns_uri {
@@ -738,7 +738,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
             let value = &builder;
 
             if let Some(prefix) = attribute.name.prefix {
-                let ns_uri = new_prefix_mappings.get(prefix).map(|p| p.as_slice());
+                let ns_uri = new_prefix_mappings.get(prefix).map(|p| &p[..]);
                 let ns_uri = ns_uri.or_else(|| self.namespace_uri_for_prefix(prefix));
 
                 if let Some(ns_uri) = ns_uri {
