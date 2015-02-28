@@ -65,7 +65,35 @@ pub mod writer;
 
 pub use str::XmlChar;
 
-/// A namespace-qualified name
+/// A prefixed name. This represents what is found in the string form
+/// of an XML document, and does not apply any namespace mapping.
+#[derive(Debug,Copy,Clone,PartialEq)]
+pub struct PrefixedName<'a> {
+    prefix: Option<&'a str>,
+    local_part: &'a str,
+}
+
+impl<'a> PrefixedName<'a> {
+    /// Create a `PrefixedName` without a prefix
+    pub fn new(local_part: &str) -> PrefixedName {
+        PrefixedName::with_prefix(None, local_part)
+    }
+
+    /// Create a `PrefixedName` without an optional prefix
+    pub fn with_prefix(prefix: Option<&'a str>, local_part: &'a str) -> PrefixedName<'a> {
+        PrefixedName {
+            prefix: prefix,
+            local_part: local_part,
+        }
+    }
+
+    pub fn prefix(&self) -> Option<&str> { self.prefix }
+    pub fn local_part(&self) -> &str { self.local_part }
+}
+
+/// A namespace-qualified name. This represents the name of an element
+/// or attribute *after* the prefix has been mapped to a specific
+/// namespace.
 #[derive(Debug,PartialEq,Eq,PartialOrd)]
 pub struct QName<'s> {
     namespace_uri: Option<&'s str>,

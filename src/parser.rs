@@ -56,6 +56,7 @@ use peresil::{self, Point};
 use self::AttributeValue::*;
 use self::Reference::*;
 
+use super::PrefixedName;
 use super::dom4;
 use super::str::XmlStr;
 
@@ -65,18 +66,9 @@ fn success<'a, T>(data: T, point: Point<'a>) -> ParseResult<'a, T> {
     peresil::Result::success(data, point)
 }
 
+/// Parses XML strings
 #[allow(missing_copy_implementations)]
 pub struct Parser;
-
-// TODO: It is proper to compare simply on the prefix?
-// Should this work:
-// <a xmlns:x1="x" xmlns:x2="x"> <x1:b></x2:b> </a>
-// xmllint reports it as an error...
-#[derive(PartialEq,Copy,Debug)]
-pub struct PrefixedName<'a> {
-    pub prefix: Option<&'a str>,
-    pub local_part: &'a str,
-}
 
 #[derive(Debug,Copy)]
 enum AttributeValue<'a> {
@@ -121,8 +113,8 @@ impl<'a> XmlParseExt<'a> for Point<'a> {
         let (local, xml)  = parse_local::<E>(xml).optional(xml);
 
         let name = match local {
-            Some(local) => PrefixedName { prefix: Some(prefix), local_part: local },
-            None        => PrefixedName { prefix: None, local_part: prefix },
+            Some(local) => PrefixedName::with_prefix(Some(prefix),local),
+            None        => PrefixedName::new(prefix),
         };
 
         peresil::Result::success(name, xml)
