@@ -1120,15 +1120,15 @@ mod test {
         assert_qname_eq!(element.name(), "hello");
     }
 
-    // #[test]
-    // #[compile_failure]
-    // fn nodes_cannot_live_outside_of_the_document() {
-    //     let package = Package::new();
+    #[test]
+    #[cfg(feature = "compile_failure")]
+    fn nodes_cannot_live_outside_of_the_document() {
+        let package = Package::new();
 
-    //     let _ = {
-    //         let doc = package.as_document();
+        let _ = {
+            let doc = package.as_document();
 
-    //         doc.create_element("hello")
-    //     };
-    // }
+            doc.create_element("hello")
+        };
+    }
 }
