@@ -298,7 +298,7 @@ mod bench {
         let s = StringPool::new();
 
         let strings: Vec<String> =
-            range(0, 1000)
+            (0..1000)
             .map(|i| format!("str{}str", i))
             .collect();
         b.iter(|| {
@@ -314,7 +314,7 @@ mod bench {
         let s = StringPool::new();
 
         let strings: Vec<String> =
-            range(0, 1000)
+            (0..1000)
             .map(|i| format!("str{}str", i % 100))
             .collect();
         b.iter(|| {
