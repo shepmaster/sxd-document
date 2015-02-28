@@ -27,9 +27,10 @@
 //! - Single vs double quotes
 //! - Fixed ordering of attributes
 
-use std::num::Int;
+use std::borrow::ToOwned;
 use std::collections::HashMap;
 use std::io::{self,Write};
+use std::num::Int;
 use std::slice;
 
 use self::Content::*;
@@ -83,7 +84,7 @@ impl<'d> PrefixScope<'d> {
     }
 
     fn add_mapping(&mut self, prefix: &str, namespace_uri: &'d str) {
-        let prefix = String::from_str(prefix);
+        let prefix = prefix.to_owned();
 
         self.prefix_to_ns.insert(prefix.clone(), namespace_uri);
         self.ns_to_prefix.insert(namespace_uri, prefix);
@@ -171,7 +172,7 @@ impl<'d> PrefixMapping<'d> {
         }
 
         // Defined by us, must be added to the element
-        current_scope.define_prefix(String::from_str(prefix), namespace_uri);
+        current_scope.define_prefix(prefix.to_owned(), namespace_uri);
     }
 
     fn generate_prefix(&mut self, namespace_uri: &'d str) {

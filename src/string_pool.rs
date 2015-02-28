@@ -195,6 +195,8 @@ impl StringPool {
 
 #[cfg(test)]
 mod test {
+    use std::borrow::ToOwned;
+
     use super::StringPool;
 
     #[test]
@@ -246,7 +248,7 @@ mod test {
         let s = StringPool::new();
 
         let interned = {
-            let allocated_string = String::from_str("green");
+            let allocated_string = "green".to_owned();
             s.intern(&allocated_string)
         };
 
