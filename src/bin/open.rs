@@ -1,7 +1,6 @@
 #![cfg_attr(test, allow(dead_code))]
 
 #![feature(collections)]
-#![feature(env)]
 #![feature(fs)]
 #![feature(io)]
 #![feature(old_io)]
