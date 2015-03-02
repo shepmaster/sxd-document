@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-use std::{fmt,hash};
+use std::{fmt,hash,slice};
 
 use super::{QName,ToQName};
 use super::raw;
@@ -117,12 +117,12 @@ impl<'d> Connections<'d> {
 
     pub fn root_children(&self) -> RootChildren {
         // This is safe because we disallow mutation while this borrow is active.
-        unsafe { RootChildren { x: self.connections.root_children(), idx: 0 } }
+        unsafe { RootChildren { iter: self.connections.root_children().iter() } }
     }
 
     pub fn element_children(&self, parent: Element) -> ElementChildren {
         // This is safe because we disallow mutation while this borrow is active.
-        unsafe { ElementChildren { x: self.connections.element_children(parent.node), idx: 0 } }
+        unsafe { ElementChildren { iter: self.connections.element_children(parent.node).iter() } }
     }
 
     pub fn element_preceding_siblings(&self, element: Element) -> Siblings {
@@ -172,7 +172,7 @@ impl<'d> Connections<'d> {
     pub fn attributes(&self, parent: Element<'d>) -> Attributes<'d> {
         // This is safe because we disallow mutation while this borrow is active
         // TODO: Test that
-        unsafe { Attributes { x: self.connections.attributes(parent.node), idx: 0 } }
+        unsafe { Attributes { iter: self.connections.attributes(parent.node).iter() } }
     }
 
     pub fn set_attribute(&mut self, parent: Element<'d>, attribute: Attribute<'d>) {
@@ -188,59 +188,38 @@ impl<'d> Connections<'d> {
 }
 
 pub struct RootChildren<'d> {
-    x: &'d [raw::ChildOfRoot],
-    idx: usize,
+    iter: slice::Iter<'d, raw::ChildOfRoot>,
 }
 
 impl<'d> Iterator for RootChildren<'d> {
     type Item = ChildOfRoot<'d>;
 
     fn next(&mut self) -> Option<ChildOfRoot<'d>> {
-        if self.idx >= self.x.len() {
-            None
-        } else {
-            let c = ChildOfRoot::wrap(self.x[self.idx]);
-            self.idx += 1;
-            Some(c)
-        }
+        self.iter.next().map(|&c| ChildOfRoot::wrap(c))
     }
 }
 
 pub struct ElementChildren<'d> {
-    x: &'d [raw::ChildOfElement],
-    idx: usize,
+    iter: slice::Iter<'d, raw::ChildOfElement>,
 }
 
 impl<'d> Iterator for ElementChildren<'d> {
     type Item = ChildOfElement<'d>;
 
     fn next(&mut self) -> Option<ChildOfElement<'d>> {
-        if self.idx >= self.x.len() {
-            None
-        } else {
-            let c = ChildOfElement::wrap(self.x[self.idx]);
-            self.idx += 1;
-            Some(c)
-        }
+        self.iter.next().map(|&c| ChildOfElement::wrap(c))
     }
 }
 
 pub struct Attributes<'d> {
-    x: &'d [*mut raw::Attribute],
-    idx: usize,
+    iter: slice::Iter<'d, *mut raw::Attribute>,
 }
 
 impl<'d> Iterator for Attributes<'d> {
     type Item = Attribute<'d>;
 
     fn next(&mut self) -> Option<Attribute<'d>> {
-        if self.idx >= self.x.len() {
-            None
-        } else {
-            let a = Attribute::wrap(self.x[self.idx]);
-            self.idx += 1;
-            Some(a)
-        }
+        self.iter.next().map(|&a| Attribute::wrap(a))
     }
 }
 

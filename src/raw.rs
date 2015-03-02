@@ -3,6 +3,7 @@ use super::{QName,ToQName};
 use arena::TypedArena;
 use string_pool::{StringPool,InternedString};
 use std::collections::HashMap;
+use std::slice;
 
 static XML_NS_PREFIX: &'static str = "xml";
 static XML_NS_URI:    &'static str = "http://www.w3.org/XML/1998/namespace";
@@ -685,13 +686,12 @@ enum SiblingDirection {
 }
 
 enum SiblingData<'a> {
-    FromRoot(&'a [ChildOfRoot]),
-    FromElement(&'a [ChildOfElement]),
+    FromRoot(slice::Iter<'a, ChildOfRoot>),
+    FromElement(slice::Iter<'a, ChildOfElement>),
     Dead,
 }
 
 pub struct SiblingIter<'a> {
-    idx: usize,
     data: SiblingData<'a>
 }
 
@@ -707,8 +707,7 @@ impl<'a> SiblingIter<'a> {
         };
 
         SiblingIter {
-            idx: 0,
-            data: SiblingData::FromRoot(data),
+            data: SiblingData::FromRoot(data.iter()),
         }
     }
 
@@ -723,14 +722,12 @@ impl<'a> SiblingIter<'a> {
         };
 
         SiblingIter {
-            idx: 0,
-            data: SiblingData::FromElement(data),
+            data: SiblingData::FromElement(data.iter()),
         }
     }
 
     fn dead() -> SiblingIter<'a> {
         SiblingIter {
-            idx: 0,
             data: SiblingData::Dead
         }
     }
@@ -741,23 +738,11 @@ impl<'d> Iterator for SiblingIter<'d> {
 
     fn next(&mut self) -> Option<ChildOfElement> {
         match self.data {
-            SiblingData::FromRoot(children) => {
-                if self.idx >= children.len() {
-                    None
-                } else {
-                    let sib = children[self.idx];
-                    self.idx += 1;
-                    Some(sib.to_child_of_element())
-                }
+            SiblingData::FromRoot(ref mut children) => {
+                children.next().map(|sib| sib.to_child_of_element())
             },
-            SiblingData::FromElement(children) => {
-                if self.idx >= children.len() {
-                    None
-                } else {
-                    let sib = children[self.idx];
-                    self.idx += 1;
-                    Some(sib)
-                }
+            SiblingData::FromElement(ref mut children) => {
+                children.next().map(|&sib| sib)
             },
             SiblingData::Dead => None
         }
