@@ -573,6 +573,11 @@ impl Connections {
         let parent_r = unsafe { &mut *parent };
         let attr_r = unsafe { &mut *attribute };
 
+        if let Some(prev_parent) = attr_r.parent {
+            let prev_parent_r = unsafe { &mut *prev_parent };
+            prev_parent_r.attributes.retain(|&a| a != attribute);
+        }
+
         parent_r.attributes.retain(|a| {
             let a_r: &Attribute = unsafe { &**a };
             a_r.name.as_qname() != attr_r.name.as_qname()

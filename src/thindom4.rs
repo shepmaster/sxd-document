@@ -697,6 +697,22 @@ mod test {
     }
 
     #[test]
+    fn attributes_belong_to_one_element() {
+        let package = Package::new();
+        let (s, mut c) = package.as_thin_document();
+
+        let element1 = s.create_element("element1");
+        let element2 = s.create_element("element2");
+        let attr = s.create_attribute("hello", "world");
+
+        c.set_attribute(element1, attr);
+        c.set_attribute(element2, attr);
+
+        assert_eq!(0, c.attributes(element1).count());
+        assert_eq!(1, c.attributes(element2).count());
+    }
+
+    #[test]
     fn attributes_can_be_reset() {
         let package = Package::new();
         let (s, mut c) = package.as_thin_document();
