@@ -59,7 +59,6 @@
 
 extern crate arena;
 extern crate test;
-extern crate xxhash;
 
 #[macro_use]
 extern crate peresil;
