@@ -65,6 +65,7 @@ extern crate peresil;
 
 use std::fmt;
 
+mod str_ext;
 mod string_pool;
 mod raw;
 mod str;
