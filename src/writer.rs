@@ -248,6 +248,23 @@ fn format_qname<'d, W>(q: QName<'d>,
     writer.write_str(q.local_part)
 }
 
+fn format_attribute_value<W>(value: &str, writer: &mut W) -> io::Result<()>
+    where W: Write
+{
+    for item in value.split_keeping_delimiter(&['<', '>', '&', '\'', '"'][..]) {
+        match item {
+            SplitType::Match(t)        => try!(writer.write_str(t)),
+            SplitType::Delimiter("<")  => try!(writer.write_str("&lt;")),
+            SplitType::Delimiter(">")  => try!(writer.write_str("&gt;")),
+            SplitType::Delimiter("&")  => try!(writer.write_str("&amp;")),
+            SplitType::Delimiter("'")  => try!(writer.write_str("&apos;")),
+            SplitType::Delimiter("\"") => try!(writer.write_str("&quot;")),
+            SplitType::Delimiter(..)   => unreachable!(),
+        }
+    }
+    Ok(())
+}
+
 fn format_element<'d, W>(element: dom4::Element<'d>,
                          todo: &mut Vec<Content<'d>>,
                          mapping: &mut PrefixMapping<'d>,
@@ -265,7 +282,9 @@ fn format_element<'d, W>(element: dom4::Element<'d>,
     for attr in attrs.iter() {
         try!(writer.write_str(" "));
         try!(format_qname(attr.name(), mapping, attr.preferred_prefix(), writer));
-        try!(write!(writer, "='{}'", attr.value()));
+        try!(write!(writer, "='"));
+        try!(format_attribute_value(attr.value(), writer));
+        try!(write!(writer, "'"));
     }
 
     for &(ref prefix, ref ns_uri) in mapping.prefixes_in_current_scope() {
@@ -507,6 +526,18 @@ mod test {
 
         let xml = format_xml(&d);
         assert_eq!(xml, "<?xml version='1.0'?><hello p1:a1='b1' p2:a2='b2' xmlns:p1='namespace' xmlns:p2='namespace'/>");
+    }
+
+    #[test]
+    fn attribute_values_with_less_than_greater_than_ampersand_apostrophe_or_quote_are_escaped() {
+        let p = Package::new();
+        let d = p.as_document();
+        let e = d.create_element("hello");
+        e.set_attribute_value("name", r#"'1 < 2' & "4 > 3""#);
+        d.root().append_child(e);
+
+        let xml = format_xml(&d);
+        assert_eq!(xml, "<?xml version='1.0'?><hello name='&apos;1 &lt; 2&apos; &amp; &quot;4 &gt; 3&quot;'/>");
     }
 
     #[test]
