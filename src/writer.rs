@@ -305,6 +305,23 @@ fn format_element_end<'d, W>(element: dom4::Element<'d>,
     writer.write_str(">")
 }
 
+use super::str_ext::{SplitKeepingDelimiterExt,SplitType};
+
+fn format_text<W>(text: dom4::Text, writer: &mut W) -> io::Result<()>
+    where W: Write
+{
+    for item in text.text().split_keeping_delimiter(&['<', '>', '&'][..]) {
+        match item {
+            SplitType::Match(t)       => try!(writer.write_str(t)),
+            SplitType::Delimiter("<") => try!(writer.write_str("&lt;")),
+            SplitType::Delimiter(">") => try!(writer.write_str("&gt;")),
+            SplitType::Delimiter("&") => try!(writer.write_str("&amp;")),
+            SplitType::Delimiter(..)  => unreachable!(),
+        }
+    }
+    Ok(())
+}
+
 fn format_comment<W>(comment: dom4::Comment, writer: &mut W) -> io::Result<()>
     where W: Write
 {
@@ -337,7 +354,7 @@ fn format_one<'d, W>(content: Content<'d>,
             mapping.pop_scope();
             r
         },
-        Text(t)                  => writer.write_str(t.text()),
+        Text(t)                  => format_text(t, writer),
         Comment(c)               => format_comment(c, writer),
         ProcessingInstruction(p) => format_processing_instruction(p, writer),
     }
@@ -557,6 +574,19 @@ mod test {
 
         let xml = format_xml(&d);
         assert_eq!(xml, "<?xml version='1.0'?><hello>A fine day to you!</hello>");
+    }
+
+    #[test]
+    fn text_escapes_less_than_greater_than_and_ampersand() {
+        let p = Package::new();
+        let d = p.as_document();
+        let hello = d.create_element("escaped");
+        let text = d.create_text("1 < 3 & 4 > 2");
+        hello.append_child(text);
+        d.root().append_child(hello);
+
+        let xml = format_xml(&d);
+        assert_eq!(xml, "<?xml version='1.0'?><escaped>1 &lt; 3 &amp; 4 &gt; 2</escaped>");
     }
 
     #[test]
