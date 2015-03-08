@@ -28,6 +28,7 @@ pub struct Root {
 
 pub struct Element {
     name: InternedQName,
+    default_namespace_uri: Option<InternedString>,
     preferred_prefix: Option<InternedString>,
     children: Vec<ChildOfElement>,
     parent: Option<ParentOfChild>,
@@ -36,8 +37,15 @@ pub struct Element {
 }
 
 impl Element {
-    pub fn name(&self) -> QName { self.name.as_qname() }
-    pub fn preferred_prefix(&self) -> Option<&str> { self.preferred_prefix.map(|p| p.as_slice()) }
+    pub fn name(&self) -> QName {
+        self.name.as_qname()
+    }
+    pub fn default_namespace_uri(&self) -> Option<&str> {
+        self.default_namespace_uri.map(|p| p.as_slice())
+    }
+    pub fn preferred_prefix(&self) -> Option<&str> {
+        self.preferred_prefix.map(|p| p.as_slice())
+    }
 }
 
 pub struct Attribute {
@@ -270,6 +278,7 @@ impl Storage {
 
         self.elements.alloc(Element {
             name: name,
+            default_namespace_uri: None,
             preferred_prefix: None,
             children: Vec::new(),
             parent: None,
@@ -337,6 +346,12 @@ impl Storage {
         let namespace_uri = self.intern(namespace_uri);
         let element_r = unsafe { &mut * element };
         element_r.prefix_to_namespace.insert(prefix, namespace_uri);
+    }
+
+    pub fn element_set_default_namespace_uri(&self, element: *mut Element, namespace_uri: Option<&str>) {
+        let namespace_uri = namespace_uri.map(|p| self.intern(p));
+        let element_r = unsafe { &mut * element };
+        element_r.default_namespace_uri = namespace_uri;
     }
 
     pub fn element_set_preferred_prefix(&self, element: *mut Element, prefix: Option<&str>) {

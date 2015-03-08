@@ -205,6 +205,14 @@ impl<'d> Element<'d> {
         self.document.storage.element_set_name(self.node, name)
     }
 
+    pub fn set_default_namespace_uri(&self, namespace_uri: Option<&str>) {
+        self.document.storage.element_set_default_namespace_uri(self.node, namespace_uri);
+    }
+
+    pub fn default_namespace_uri(&self) -> Option<&'d str> {
+        self.node().default_namespace_uri()
+    }
+
     /// Map a prefix to a namespace URI. Any existing prefix on this
     /// element will be replaced.
     pub fn register_prefix(&self, prefix: &str, namespace_uri: &str) {
