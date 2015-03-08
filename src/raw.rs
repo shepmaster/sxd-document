@@ -106,7 +106,7 @@ impl ChildOfRoot {
         }
     }
 
-    fn to_child_of_element(self) -> ChildOfElement {
+    fn into_child_of_element(self) -> ChildOfElement {
         match self {
             ChildOfRoot::Element(n) => ChildOfElement::Element(n),
             ChildOfRoot::Comment(n) => ChildOfElement::Comment(n),
@@ -152,7 +152,7 @@ fn replace_parent(child: ChildOfRoot, parent: ParentOfChild, parent_field: &mut 
             },
             ParentOfChild::Element(e) => {
                 let e_r = unsafe { &mut *e };
-                let as_element_child = child.to_child_of_element();
+                let as_element_child = child.into_child_of_element();
                 e_r.children.retain(|n| *n != as_element_child);
             },
         }
@@ -220,12 +220,12 @@ macro_rules! conversion_trait(
     )
 );
 
-conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
+conversion_trait!(IntoChildOfElement, into_child_of_element, ChildOfElement, {
     Element => ChildOfElement::Element,
     Text => ChildOfElement::Text
 });
 
-conversion_trait!(ToChildOfRoot, to_child_of_root, ChildOfRoot, {
+conversion_trait!(IntoChildOfRoot, into_child_of_root, ChildOfRoot, {
     Element => ChildOfRoot::Element
 });
 
@@ -427,9 +427,9 @@ impl Connections {
     }
 
     pub fn append_root_child<C>(&self, child: C) where
-        C: ToChildOfRoot
+        C: IntoChildOfRoot
     {
-        let child = child.to_child_of_root();
+        let child = child.into_child_of_root();
         let parent_r = unsafe { &mut *self.root };
 
         child.replace_parent(self.root);
@@ -437,9 +437,9 @@ impl Connections {
     }
 
     pub fn append_element_child<C>(&self, parent: *mut Element, child: C)
-        where C: ToChildOfElement
+        where C: IntoChildOfElement
     {
-        let child = child.to_child_of_element();
+        let child = child.into_child_of_element();
         let parent_r = unsafe { &mut *parent };
 
         child.replace_parent(parent);
@@ -754,7 +754,7 @@ impl<'d> Iterator for SiblingIter<'d> {
     fn next(&mut self) -> Option<ChildOfElement> {
         match self.data {
             SiblingData::FromRoot(ref mut children) => {
-                children.next().map(|sib| sib.to_child_of_element())
+                children.next().map(|sib| sib.into_child_of_element())
             },
             SiblingData::FromElement(ref mut children) => {
                 children.next().map(|&sib| sib)

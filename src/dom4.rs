@@ -153,9 +153,9 @@ node!(
 
 impl<'d> Root<'d> {
     pub fn append_child<C>(&self, child: C)
-        where C: ToChildOfRoot<'d>
+        where C: IntoChildOfRoot<'d>
     {
-        let child = child.to_child_of_root();
+        let child = child.into_child_of_root();
         let connections = self.document.connections.borrow_mut();
         connections.append_root_child(child.as_raw())
     }
@@ -261,9 +261,9 @@ impl<'d> Element<'d> {
     }
 
     pub fn append_child<C>(&self, child: C)
-        where C: ToChildOfElement<'d>
+        where C: IntoChildOfElement<'d>
     {
-        let child = child.to_child_of_element();
+        let child = child.into_child_of_element();
         let connections = self.document.connections.borrow_mut();
         connections.append_element_child(self.node, child.as_raw())
     }
@@ -566,7 +566,7 @@ macro_rules! conversion_trait(
 );
 
 conversion_trait!(
-    ToChildOfRoot, to_child_of_root, ChildOfRoot,
+    IntoChildOfRoot, into_child_of_root, ChildOfRoot,
     "Convert item into a `ChildOfRoot`",
     {
         Element               => ChildOfRoot::Element,
@@ -576,7 +576,7 @@ conversion_trait!(
 );
 
 conversion_trait!(
-    ToChildOfElement, to_child_of_element, ChildOfElement,
+    IntoChildOfElement, into_child_of_element, ChildOfElement,
     "Convert item into a `ChildOfElement`",
     {
         Element               => ChildOfElement::Element,
@@ -586,8 +586,8 @@ conversion_trait!(
     }
 );
 
-impl<'d> ToChildOfElement<'d> for ChildOfRoot<'d> {
-    fn to_child_of_element(self) -> ChildOfElement<'d> {
+impl<'d> IntoChildOfElement<'d> for ChildOfRoot<'d> {
+    fn into_child_of_element(self) -> ChildOfElement<'d> {
         match self {
             ChildOfRoot::Element(n) => ChildOfElement::Element(n),
             ChildOfRoot::Comment(n) => ChildOfElement::Comment(n),
