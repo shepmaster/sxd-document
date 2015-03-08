@@ -695,12 +695,22 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
 
     fn attributes_end(&mut self) {
         let deferred_element = self.element.take().unwrap();
+        let attributes = replace(&mut self.attributes, Vec::new());
 
-        let deferred_attributes = replace(&mut self.attributes, Vec::new());
-        let (namespaces, attributes): (Vec<_>, Vec<_>) = deferred_attributes.into_iter().partition(|attr| {
-            // TODO: Default namespace
-            attr.name.prefix == Some("xmlns")
-        });
+        let (namespaces, attributes): (Vec<_>, Vec<_>) =
+            attributes.into_iter().partition(|attr| attr.name.prefix == Some("xmlns"));
+
+        let (default_namespaces, attributes): (Vec<_>, Vec<_>) =
+            attributes.into_iter().partition(|attr| attr.name.local_part == "xmlns");
+
+        let default_namespace = match &default_namespaces[..] {
+            [] => None,
+            [ref ns] => {
+                let value = AttributeValueBuilder::convert(&ns.values);
+                Some(value)
+            },
+            _ => panic!("Cannot declare multiple default namespaces"),
+        };
 
         let mut new_prefix_mappings = HashMap::new();
         for ns in namespaces.iter() {
@@ -720,6 +730,11 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
             } else {
                 panic!("Unknown namespace prefix '{}'", prefix);
             }
+        } else if let Some(ns_uri) = default_namespace {
+            let ns_uri = &ns_uri[..];
+            let element = self.doc.create_element((ns_uri, deferred_element.local_part));
+            element.set_default_namespace_uri(Some(ns_uri));
+            element
         } else {
             self.doc.create_element(deferred_element.local_part)
         };
@@ -827,6 +842,16 @@ mod test {
         let top = top(&doc);
 
         assert_eq!(top.preferred_prefix(), Some("ns"));
+        assert_qname_eq!(("namespace", "hello"), top.name());
+    }
+
+    #[test]
+    fn an_element_with_a_default_namespace() {
+        let package = quick_parse("<hello xmlns='namespace'/>");
+        let doc = package.as_document();
+        let top = top(&doc);
+
+        assert_eq!(top.default_namespace_uri(), Some("namespace"));
         assert_qname_eq!(("namespace", "hello"), top.name());
     }
 
