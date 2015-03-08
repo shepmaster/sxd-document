@@ -786,11 +786,11 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
 #[cfg(test)]
 mod test {
     use super::Parser;
-    use super::super::{Package,ToQName};
+    use super::super::{Package,IntoQName};
     use super::super::dom4;
 
     macro_rules! assert_qname_eq(
-        ($l:expr, $r:expr) => (assert_eq!($l.to_qname(), $r.to_qname()));
+        ($l:expr, $r:expr) => (assert_eq!($l.into_qname(), $r.into_qname()));
     );
 
     fn full_parse(xml: &str) -> Result<Package, usize> {

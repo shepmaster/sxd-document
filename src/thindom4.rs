@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 use std::{fmt,hash,slice};
 
-use super::{QName,ToQName};
+use super::{QName,IntoQName};
 use super::raw;
 
 pub struct Storage<'d> {
@@ -16,13 +16,13 @@ impl<'d> Storage<'d> {
     }
 
     pub fn create_element<'n, N>(&'d self, name: N) -> Element<'d>
-        where N: ToQName<'n>
+        where N: IntoQName<'n>
     {
         Element::wrap(self.storage.create_element(name))
     }
 
     pub fn create_attribute<'n, N>(&'d self, name: N, value: &str) -> Attribute<'d>
-        where N: ToQName<'n>
+        where N: IntoQName<'n>
     {
         Attribute::wrap(self.storage.create_attribute(name, value))
     }
@@ -40,7 +40,7 @@ impl<'d> Storage<'d> {
     }
 
     pub fn element_set_name<'n, N>(&self, element: &Element, name: N)
-        where N: ToQName<'n>
+        where N: IntoQName<'n>
     {
         self.storage.element_set_name(element.node, name)
     }
@@ -484,12 +484,12 @@ impl<'d> ToChildOfElement<'d> for ChildOfRoot<'d> {
 
 #[cfg(test)]
 mod test {
-    use super::super::{Package,ToQName};
+    use super::super::{Package,IntoQName};
     use super::{ChildOfRoot,ChildOfElement,ParentOfChild};
     use super::Attribute;
 
     macro_rules! assert_qname_eq(
-        ($l:expr, $r:expr) => (assert_eq!($l.to_qname(), $r.to_qname()));
+        ($l:expr, $r:expr) => (assert_eq!($l.into_qname(), $r.into_qname()));
     );
 
     #[test]
