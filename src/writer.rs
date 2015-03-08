@@ -53,6 +53,7 @@ struct PrefixScope<'d> {
     ns_to_prefix: HashMap<&'d str, String>,
     prefix_to_ns: HashMap<String, &'d str>,
     defined_prefixes: Vec<(String, &'d str)>,
+    default_namespace_uri: Option<&'d str>,
 }
 
 impl<'d> PrefixScope<'d> {
@@ -61,6 +62,7 @@ impl<'d> PrefixScope<'d> {
             ns_to_prefix: HashMap::new(),
             prefix_to_ns: HashMap::new(),
             defined_prefixes: Vec::new(),
+            default_namespace_uri: None,
         }
     }
 
@@ -95,6 +97,12 @@ impl<'d> PrefixScope<'d> {
     }
 }
 
+enum NamespaceType<'a> {
+    Default,
+    Prefix(&'a str),
+    Unknown,
+}
+
 struct PrefixMapping<'d> {
     scopes: Vec<PrefixScope<'d>>,
     generated_prefix_count: usize,
@@ -116,11 +124,26 @@ impl<'d> PrefixMapping<'d> {
         self.scopes.pop();
     }
 
+    fn active_default_namespace_uri(&self) -> Option<&'d str> {
+        for scope in self.scopes.iter().rev() {
+            if scope.default_namespace_uri.is_some() {
+                return scope.default_namespace_uri;
+            }
+        }
+        None
+    }
+
+    fn default_namespace_uri_in_current_scope(&self) -> Option<&'d str> {
+        self.scopes.last().unwrap().default_namespace_uri
+    }
+
     fn prefixes_in_current_scope(&self) -> slice::Iter<(String, &'d str)> {
         self.scopes.last().unwrap().defined_prefixes.iter()
     }
 
     fn populate_scope(&mut self, element: &dom4::Element<'d>, attributes: &[dom4::Attribute<'d>]) {
+        self.scopes.last_mut().unwrap().default_namespace_uri = element.default_namespace_uri();
+
         if let Some(prefix) = element.preferred_prefix() {
             let name = element.name();
             if let Some(uri) = name.namespace_uri {
@@ -176,6 +199,11 @@ impl<'d> PrefixMapping<'d> {
     }
 
     fn generate_prefix(&mut self, namespace_uri: &'d str) {
+        if Some(namespace_uri) == self.active_default_namespace_uri() {
+            // We already map this namespace to the default
+            return;
+        }
+
         let idx_of_last = self.scopes.len().saturating_sub(1);
         let (parents, current_scope) = self.scopes.split_at_mut(idx_of_last);
         let current_scope = &mut current_scope[0];
@@ -207,21 +235,25 @@ impl<'d> PrefixMapping<'d> {
         }
     }
 
-    fn prefix<'a : 'c, 'b : 'c, 'c>(&'a self, preferred_prefix: Option<&'b str>, namespace_uri: &str) -> &'c str {
+    fn namespace_type<'a : 'c, 'b : 'c, 'c>(&'a self, preferred_prefix: Option<&'b str>, namespace_uri: &str) -> NamespaceType<'c> {
+        if Some(namespace_uri) == self.active_default_namespace_uri() {
+            return NamespaceType::Default;
+        }
+
         if let Some(prefix) = preferred_prefix {
             let scope = self.scopes.last().unwrap();
             if scope.prefix_is(prefix, namespace_uri) {
-                return prefix;
+                return NamespaceType::Prefix(prefix);
             }
         }
 
         for scope in self.scopes.iter().rev() {
             if let Some(prefix) = scope.prefix_for(namespace_uri) {
-                return prefix;
+                return NamespaceType::Prefix(prefix);
             }
         }
 
-        panic!("No namespace prefix available for {}", namespace_uri);
+        NamespaceType::Unknown
     }
 }
 
@@ -240,10 +272,21 @@ fn format_qname<'d, W>(q: QName<'d>,
                        -> io::Result<()>
     where W: Write
 {
+    // Can something without a namespace be prefixed? No, because
+    // defining a prefix requires a non-empty URI
     if let Some(namespace_uri) = q.namespace_uri {
-        let prefix = mapping.prefix(preferred_prefix, namespace_uri);
-        try!(writer.write_str(prefix));
-        try!(writer.write_str(":"));
+        match mapping.namespace_type(preferred_prefix, namespace_uri) {
+            NamespaceType::Default => {
+                // No need to do anything
+            },
+            NamespaceType::Prefix(prefix) => {
+                try!(writer.write_str(prefix));
+                try!(writer.write_str(":"));
+            },
+            NamespaceType::Unknown => {
+                panic!("No namespace prefix available for {}", namespace_uri);
+            },
+        }
     }
     writer.write_str(q.local_part)
 }
@@ -285,6 +328,12 @@ fn format_element<'d, W>(element: dom4::Element<'d>,
         try!(write!(writer, "='"));
         try!(format_attribute_value(attr.value(), writer));
         try!(write!(writer, "'"));
+    }
+
+    if let Some(ns_uri) = mapping.default_namespace_uri_in_current_scope() {
+        try!(writer.write_str(" xmlns='"));
+        try!(writer.write_str(ns_uri));
+        try!(writer.write_str("'"));
     }
 
     for &(ref prefix, ref ns_uri) in mapping.prefixes_in_current_scope() {
@@ -441,6 +490,18 @@ mod test {
 
         let xml = format_xml(&d);
         assert_eq!(xml, "<?xml version='1.0'?><autons0:local-part xmlns:autons0='namespace'/>");
+    }
+
+    #[test]
+    fn element_with_default_namespace() {
+        let p = Package::new();
+        let d = p.as_document();
+        let e = d.create_element(("namespace", "local-part"));
+        e.set_default_namespace_uri(Some("namespace"));
+        d.root().append_child(e);
+
+        let xml = format_xml(&d);
+        assert_eq!(xml, "<?xml version='1.0'?><local-part xmlns='namespace'/>");
     }
 
     #[test]
