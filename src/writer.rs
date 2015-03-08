@@ -81,6 +81,10 @@ impl<'d> PrefixScope<'d> {
         }
     }
 
+    fn namespace_uri_for(&self, prefix: &str) -> Option<&'d str> {
+        self.prefix_to_ns.get(prefix).map(|&ns| ns)
+    }
+
     fn prefix_for(&self, namespace_uri: &str) -> Option<&str> {
         self.ns_to_prefix.get(namespace_uri).map(|p| &p[..])
     }
@@ -125,12 +129,11 @@ impl<'d> PrefixMapping<'d> {
     }
 
     fn active_default_namespace_uri(&self) -> Option<&'d str> {
-        for scope in self.scopes.iter().rev() {
-            if scope.default_namespace_uri.is_some() {
-                return scope.default_namespace_uri;
-            }
-        }
-        None
+        self.scopes.iter().rev().filter_map(|s| s.default_namespace_uri).next()
+    }
+
+    fn active_namespace_uri_for_prefix(&self, prefix: &str) -> Option<&'d str> {
+        self.scopes.iter().rev().filter_map(|s| s.namespace_uri_for(prefix)).next()
     }
 
     fn default_namespace_uri_in_current_scope(&self) -> Option<&'d str> {
@@ -241,8 +244,7 @@ impl<'d> PrefixMapping<'d> {
         }
 
         if let Some(prefix) = preferred_prefix {
-            let scope = self.scopes.last().unwrap();
-            if scope.prefix_is(prefix, namespace_uri) {
+            if Some(namespace_uri) == self.active_namespace_uri_for_prefix(prefix) {
                 return NamespaceType::Prefix(prefix);
             }
         }
