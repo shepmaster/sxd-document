@@ -4,7 +4,7 @@
 use std::cell::RefCell;
 use std::{fmt,hash};
 
-use super::{QName,ToQName};
+use super::{QName,IntoQName};
 use super::raw;
 
 type SiblingFn<T> = unsafe fn(&raw::Connections, T) -> raw::SiblingIter;
@@ -71,7 +71,7 @@ impl<'d> Document<'d> {
     }
 
     pub fn create_element<'n, N>(&'d self, name: N) -> Element<'d>
-        where N: ToQName<'n>
+        where N: IntoQName<'n>
     {
         self.wrap_element(self.storage.create_element(name))
     }
@@ -153,9 +153,9 @@ node!(
 
 impl<'d> Root<'d> {
     pub fn append_child<C>(&self, child: C)
-        where C: ToChildOfRoot<'d>
+        where C: IntoChildOfRoot<'d>
     {
-        let child = child.to_child_of_root();
+        let child = child.into_child_of_root();
         let connections = self.document.connections.borrow_mut();
         connections.append_root_child(child.as_raw())
     }
@@ -200,7 +200,7 @@ impl<'d> Element<'d> {
     pub fn name(&self) -> QName<'d> { self.node().name() }
 
     pub fn set_name<'n, N>(&self, name: N)
-        where N: ToQName<'n>
+        where N: IntoQName<'n>
     {
         self.document.storage.element_set_name(self.node, name)
     }
@@ -261,9 +261,9 @@ impl<'d> Element<'d> {
     }
 
     pub fn append_child<C>(&self, child: C)
-        where C: ToChildOfElement<'d>
+        where C: IntoChildOfElement<'d>
     {
-        let child = child.to_child_of_element();
+        let child = child.into_child_of_element();
         let connections = self.document.connections.borrow_mut();
         connections.append_element_child(self.node, child.as_raw())
     }
@@ -289,7 +289,7 @@ impl<'d> Element<'d> {
     }
 
     pub fn attribute<'n, N>(&self, name: N) -> Option<Attribute<'d>>
-        where N: ToQName<'n>
+        where N: IntoQName<'n>
     {
         let connections = self.document.connections.borrow();
         connections.attribute(self.node, name).map(|n| {
@@ -309,7 +309,7 @@ impl<'d> Element<'d> {
     }
 
     pub fn set_attribute_value<'n, N>(&self, name: N, value: &str) -> Attribute<'d>
-        where N: ToQName<'n>
+        where N: IntoQName<'n>
     {
         let attr = self.document.storage.create_attribute(name, value);
         let connections = self.document.connections.borrow_mut();
@@ -318,7 +318,7 @@ impl<'d> Element<'d> {
     }
 
     pub fn attribute_value<'n, N>(&self, name: N) -> Option<&'d str>
-        where N: ToQName<'n>
+        where N: IntoQName<'n>
     {
         let connections = self.document.connections.borrow();
         connections.attribute(self.node, name).map(|a| {
@@ -566,7 +566,7 @@ macro_rules! conversion_trait(
 );
 
 conversion_trait!(
-    ToChildOfRoot, to_child_of_root, ChildOfRoot,
+    IntoChildOfRoot, into_child_of_root, ChildOfRoot,
     "Convert item into a `ChildOfRoot`",
     {
         Element               => ChildOfRoot::Element,
@@ -576,7 +576,7 @@ conversion_trait!(
 );
 
 conversion_trait!(
-    ToChildOfElement, to_child_of_element, ChildOfElement,
+    IntoChildOfElement, into_child_of_element, ChildOfElement,
     "Convert item into a `ChildOfElement`",
     {
         Element               => ChildOfElement::Element,
@@ -586,8 +586,8 @@ conversion_trait!(
     }
 );
 
-impl<'d> ToChildOfElement<'d> for ChildOfRoot<'d> {
-    fn to_child_of_element(self) -> ChildOfElement<'d> {
+impl<'d> IntoChildOfElement<'d> for ChildOfRoot<'d> {
+    fn into_child_of_element(self) -> ChildOfElement<'d> {
         match self {
             ChildOfRoot::Element(n) => ChildOfElement::Element(n),
             ChildOfRoot::Comment(n) => ChildOfElement::Comment(n),
@@ -598,11 +598,11 @@ impl<'d> ToChildOfElement<'d> for ChildOfRoot<'d> {
 
 #[cfg(test)]
 mod test {
-    use super::super::{Package,ToQName};
+    use super::super::{Package,IntoQName};
     use super::{ChildOfRoot,ChildOfElement,ParentOfChild};
 
     macro_rules! assert_qname_eq(
-        ($l:expr, $r:expr) => (assert_eq!($l.to_qname(), $r.to_qname()));
+        ($l:expr, $r:expr) => (assert_eq!($l.into_qname(), $r.into_qname()));
     );
 
     #[test]

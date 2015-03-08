@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 use std::{fmt,hash,slice};
 
-use super::{QName,ToQName};
+use super::{QName,IntoQName};
 use super::raw;
 
 pub struct Storage<'d> {
@@ -16,13 +16,13 @@ impl<'d> Storage<'d> {
     }
 
     pub fn create_element<'n, N>(&'d self, name: N) -> Element<'d>
-        where N: ToQName<'n>
+        where N: IntoQName<'n>
     {
         Element::wrap(self.storage.create_element(name))
     }
 
     pub fn create_attribute<'n, N>(&'d self, name: N, value: &str) -> Attribute<'d>
-        where N: ToQName<'n>
+        where N: IntoQName<'n>
     {
         Attribute::wrap(self.storage.create_attribute(name, value))
     }
@@ -40,7 +40,7 @@ impl<'d> Storage<'d> {
     }
 
     pub fn element_set_name<'n, N>(&self, element: &Element, name: N)
-        where N: ToQName<'n>
+        where N: IntoQName<'n>
     {
         self.storage.element_set_name(element.node, name)
     }
@@ -102,16 +102,16 @@ impl<'d> Connections<'d> {
     }
 
     pub fn append_root_child<C>(&mut self, child: C)
-        where C: ToChildOfRoot<'d>
+        where C: IntoChildOfRoot<'d>
     {
-        let child = child.to_child_of_root();
+        let child = child.into_child_of_root();
         self.connections.append_root_child(child.as_raw())
     }
 
     pub fn append_element_child<C>(&mut self, parent: Element<'d>, child: C)
-        where C: ToChildOfElement<'d>
+        where C: IntoChildOfElement<'d>
     {
-        let child = child.to_child_of_element();
+        let child = child.into_child_of_element();
         self.connections.append_element_child(parent.node, child.as_raw())
     }
 
@@ -459,21 +459,21 @@ macro_rules! conversion_trait(
     )
 );
 
-conversion_trait!(ToChildOfRoot, to_child_of_root, ChildOfRoot, {
+conversion_trait!(IntoChildOfRoot, into_child_of_root, ChildOfRoot, {
     Element => ChildOfRoot::Element,
     Comment => ChildOfRoot::Comment,
     ProcessingInstruction => ChildOfRoot::ProcessingInstruction
 });
 
-conversion_trait!(ToChildOfElement, to_child_of_element, ChildOfElement, {
+conversion_trait!(IntoChildOfElement, into_child_of_element, ChildOfElement, {
     Element => ChildOfElement::Element,
     Text => ChildOfElement::Text,
     Comment => ChildOfElement::Comment,
     ProcessingInstruction => ChildOfElement::ProcessingInstruction
 });
 
-impl<'d> ToChildOfElement<'d> for ChildOfRoot<'d> {
-    fn to_child_of_element(self) -> ChildOfElement<'d> {
+impl<'d> IntoChildOfElement<'d> for ChildOfRoot<'d> {
+    fn into_child_of_element(self) -> ChildOfElement<'d> {
         match self {
             ChildOfRoot::Element(n) => ChildOfElement::Element(n),
             ChildOfRoot::Comment(n) => ChildOfElement::Comment(n),
@@ -484,12 +484,12 @@ impl<'d> ToChildOfElement<'d> for ChildOfRoot<'d> {
 
 #[cfg(test)]
 mod test {
-    use super::super::{Package,ToQName};
+    use super::super::{Package,IntoQName};
     use super::{ChildOfRoot,ChildOfElement,ParentOfChild};
     use super::Attribute;
 
     macro_rules! assert_qname_eq(
-        ($l:expr, $r:expr) => (assert_eq!($l.to_qname(), $r.to_qname()));
+        ($l:expr, $r:expr) => (assert_eq!($l.into_qname(), $r.into_qname()));
     );
 
     #[test]

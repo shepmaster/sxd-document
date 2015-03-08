@@ -132,20 +132,20 @@ impl<'s> QName<'s> {
 }
 
 /// Convert item into a `QName`
-pub trait ToQName<'s> {
-    fn to_qname(self) -> QName<'s>;
+pub trait IntoQName<'s> {
+    fn into_qname(self) -> QName<'s>;
 }
 
-impl<'s> ToQName<'s> for QName<'s> {
-    fn to_qname(self) -> QName<'s> { self }
+impl<'s> IntoQName<'s> for QName<'s> {
+    fn into_qname(self) -> QName<'s> { self }
 }
 
-impl<'s> ToQName<'s> for (&'s str, &'s str) {
-    fn to_qname(self) -> QName<'s> { QName { namespace_uri: Some(self.0), local_part: self.1 } }
+impl<'s> IntoQName<'s> for (&'s str, &'s str) {
+    fn into_qname(self) -> QName<'s> { QName { namespace_uri: Some(self.0), local_part: self.1 } }
 }
 
-impl<'s> ToQName<'s> for &'s str {
-    fn to_qname(self) -> QName<'s> { QName { namespace_uri: None, local_part: self } }
+impl<'s> IntoQName<'s> for &'s str {
+    fn into_qname(self) -> QName<'s> { QName { namespace_uri: None, local_part: self } }
 }
 
 /// The main entrypoint to an XML document
