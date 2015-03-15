@@ -52,7 +52,6 @@
 
 #![feature(collections)]
 #![feature(core)]
-#![feature(io)]
 #![feature(rustc_private)]
 #![feature(std_misc)]
 #![feature(test)]
