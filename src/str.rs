@@ -1,4 +1,29 @@
-use super::peresil::StrParseExt;
+trait StrParseExt {
+    fn end_of_start_rest<F1, F2>(&self, is_first: F1, is_rest: F2) -> Option<usize>
+        where F1: Fn(char) -> bool,
+              F2: Fn(char) -> bool;
+}
+
+impl<'a> StrParseExt for &'a str {
+    fn end_of_start_rest<F1, F2>(&self, is_first: F1, is_rest: F2) -> Option<usize>
+        where F1: Fn(char) -> bool,
+              F2: Fn(char) -> bool,
+    {
+        let mut positions = self.char_indices();
+
+        match positions.next() {
+            Some((_, c)) if is_first(c) => (),
+            Some((_, _)) => return None,
+            None => return None,
+        };
+
+        let mut positions = positions.skip_while(|&(_, c)| is_rest(c));
+        match positions.next() {
+            Some((offset, _)) => Some(offset),
+            None => Some(self.len()),
+        }
+    }
+}
 
 pub trait XmlStr {
     /// Find the end of the quoted attribute value, not including the quote

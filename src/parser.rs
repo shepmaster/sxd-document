@@ -50,7 +50,7 @@ use std::mem::replace;
 use std::ops::Deref;
 use std::{iter};
 
-use peresil::{self, Point};
+use peresil::{self,StringPoint,ParseMaster,Recoverable};
 
 use self::AttributeValue::*;
 use self::Reference::*;
@@ -59,10 +59,52 @@ use super::PrefixedName;
 use super::dom4;
 use super::str::XmlStr;
 
-type ParseResult<'a, T> = peresil::Result<'a, T, ()>;
+enum Error {
+    Expected(&'static str),
 
-fn success<'a, T>(data: T, point: Point<'a>) -> ParseResult<'a, T> {
-    peresil::Result::success(data, point)
+    ExpectedAttribute,
+    ExpectedAttributeValue,
+
+    ExpectedCData,
+
+    ExpectedCharacterData,
+
+    ExpectedComment,
+    ExpectedCommentBody,
+
+    ExpectedElement,
+    ExpectedElementName,
+    ExpectedElementEnd,
+    ExpectedElementSelfClosed,
+
+    ExpectedProcessingInstruction,
+    ExpectedProcessingInstructionTarget,
+    ExpectedProcessingInstructionValue,
+
+    ExpectedVersionNumber,
+    ExpectedWhitespace,
+
+    ExpectedClosingQuote(&'static str),
+    ExpectedOpeningQuote(&'static str),
+
+    ExpectedDecimalReferenceValue,
+    ExpectedHexReferenceValue,
+    ExpectedNamedReferenceValue,
+
+    ExpectedDecimalReference,
+    ExpectedHexReference,
+    ExpectedNamedReference,
+}
+
+impl Recoverable for Error {
+    fn recoverable(&self) -> bool { true }
+}
+
+type XmlMaster<'a> = peresil::ParseMaster<StringPoint<'a>, Error>;
+type XmlProgress<'a, T> = peresil::Progress<StringPoint<'a>, T, Error>;
+
+fn success<'a, T>(data: T, point: StringPoint<'a>) -> XmlProgress<'a, T> {
+    peresil::Progress { point: point, status: peresil::Status::Success(data) }
 }
 
 /// Parses XML strings
@@ -85,88 +127,103 @@ enum Reference<'a> {
 /// Common reusable XML parsing methods
 pub trait XmlParseExt<'a> {
     /// Parse XML whitespace
-    fn consume_space(&self) -> peresil::Result<'a, &'a str, ()>;
+    fn consume_space(&self) -> peresil::Progress<StringPoint<'a>, &'a str, ()>;
     /// Parse XML decimal characters
-    fn consume_decimal_chars<E>(&self) -> peresil::Result<'a, &'a str, E>;
+    fn consume_decimal_chars(&self) -> peresil::Progress<StringPoint<'a>, &'a str, ()>;
     /// Parse an XML [NCName](http://www.w3.org/TR/REC-xml-names/#NT-NCName)
-    fn consume_ncname<E>(&self) -> peresil::Result<'a, &'a str, E>;
+    fn consume_ncname(&self) -> peresil::Progress<StringPoint<'a>, &'a str, ()>;
     /// Parse an XML [prefixed name](http://www.w3.org/TR/REC-xml-names/#NT-QName)
-    fn consume_prefixed_name<E>(&self) -> peresil::Result<'a, PrefixedName<'a>, E>;
+    fn consume_prefixed_name(&self) -> peresil::Progress<StringPoint<'a>, PrefixedName<'a>, ()>;
 }
 
-impl<'a> XmlParseExt<'a> for Point<'a> {
-    fn consume_space(&self) -> peresil::Result<'a, &'a str, ()> {
+impl<'a> XmlParseExt<'a> for StringPoint<'a> {
+    fn consume_space(&self) -> peresil::Progress<StringPoint<'a>, &'a str, ()> {
         self.consume_to(self.s.end_of_space())
     }
 
-    fn consume_decimal_chars<E>(&self) -> peresil::Result<'a, &'a str, E> {
+    fn consume_decimal_chars(&self) -> peresil::Progress<StringPoint<'a>, &'a str, ()> {
         self.consume_to(self.s.end_of_decimal_chars())
     }
 
-    fn consume_ncname<E>(&self) -> peresil::Result<'a, &'a str, E> {
+    fn consume_ncname(&self) -> peresil::Progress<StringPoint<'a>, &'a str, ()> {
         self.consume_to(self.s.end_of_ncname())
     }
 
-    fn consume_prefixed_name<E>(&self) -> peresil::Result<'a, PrefixedName<'a>, E> {
-        fn parse_local<'a, E>(xml: Point<'a>) -> peresil::Result<'a, &'a str, E> {
-            let (_, xml) = try_parse!(xml.consume_literal(":"));
+    fn consume_prefixed_name(&self) -> peresil::Progress<StringPoint<'a>, PrefixedName<'a>, ()> {
+        fn parse_local<'a>(xml: StringPoint<'a>) -> peresil::Progress<StringPoint<'a>, &'a str, ()> {
+            let (xml, _) = try_parse!(xml.consume_literal(":"));
             xml.consume_ncname()
         }
 
-        let (prefix, xml) = try_parse!(self.consume_ncname());
-        let (local, xml)  = parse_local::<E>(xml).optional(xml);
+        let (xml, prefix) = try_parse!(self.consume_ncname());
+        let (xml, local)  = parse_local(xml).optional(xml);
 
         let name = match local {
             Some(local) => PrefixedName::with_prefix(Some(prefix),local),
             None        => PrefixedName::new(prefix),
         };
 
-        peresil::Result::success(name, xml)
+        peresil::Progress { point: xml, status: peresil::Status::Success(name) }
     }
 }
 
 trait PrivateXmlParseExt<'a> {
-    fn consume_attribute_value(&self, quote: &str) -> ParseResult<'a, &'a str>;
-    fn consume_name(&self) -> ParseResult<'a, &'a str>;
-    fn consume_hex_chars(&self) -> ParseResult<'a, &'a str>;
-    fn consume_char_data(&self) -> ParseResult<'a, &'a str>;
-    fn consume_cdata(&self) -> ParseResult<'a, &'a str>;
-    fn consume_comment(&self) -> ParseResult<'a, &'a str>;
-    fn consume_pi_value(&self) -> ParseResult<'a, &'a str>;
-    fn consume_start_tag(&self) -> ParseResult<'a, &'a str>;
+    fn consume_attribute_value(&self, quote: &str) -> XmlProgress<'a, &'a str>;
+    fn consume_name(&self) -> peresil::Progress<StringPoint<'a>, &'a str, ()>;
+    fn consume_hex_chars(&self) -> XmlProgress<'a, &'a str>;
+    fn consume_char_data(&self) -> XmlProgress<'a, &'a str>;
+    fn consume_cdata(&self) -> XmlProgress<'a, &'a str>;
+    fn consume_comment(&self) -> XmlProgress<'a, &'a str>;
+    fn consume_pi_value(&self) -> XmlProgress<'a, &'a str>;
+    fn consume_start_tag(&self) -> XmlProgress<'a, &'a str>;
 }
 
-impl<'a> PrivateXmlParseExt<'a> for Point<'a> {
-    fn consume_attribute_value(&self, quote: &str) -> ParseResult<'a, &'a str> {
-        self.consume_to(self.s.end_of_attribute(quote))
+impl<'a> PrivateXmlParseExt<'a> for StringPoint<'a> {
+    fn consume_attribute_value(&self, quote: &str) -> XmlProgress<'a, &'a str> {
+        self.consume_to(self.s.end_of_attribute(quote)).map_err(|_| Error::ExpectedAttributeValue)
     }
 
-    fn consume_name(&self) -> ParseResult<'a, &'a str> {
+    fn consume_name(&self) -> peresil::Progress<StringPoint<'a>, &'a str, ()> {
         self.consume_to(self.s.end_of_name())
     }
 
-    fn consume_hex_chars(&self) -> ParseResult<'a, &'a str> {
-        self.consume_to(self.s.end_of_hex_chars())
+    fn consume_hex_chars(&self) -> XmlProgress<'a, &'a str> {
+        self.consume_to(self.s.end_of_hex_chars()).map_err(|_| Error::ExpectedHexReferenceValue)
     }
 
-    fn consume_char_data(&self) -> ParseResult<'a, &'a str> {
-        self.consume_to(self.s.end_of_char_data())
+    fn consume_char_data(&self) -> XmlProgress<'a, &'a str> {
+        self.consume_to(self.s.end_of_char_data()).map_err(|_| Error::ExpectedCharacterData)
     }
 
-    fn consume_cdata(&self) -> ParseResult<'a, &'a str> {
-        self.consume_to(self.s.end_of_cdata())
+    fn consume_cdata(&self) -> XmlProgress<'a, &'a str> {
+        self.consume_to(self.s.end_of_cdata()).map_err(|_| Error::ExpectedCData)
     }
 
-    fn consume_comment(&self) -> ParseResult<'a, &'a str> {
-        self.consume_to(self.s.end_of_comment())
+    fn consume_comment(&self) -> XmlProgress<'a, &'a str> {
+        self.consume_to(self.s.end_of_comment()).map_err(|_| Error::ExpectedCommentBody)
     }
 
-    fn consume_pi_value(&self) -> ParseResult<'a, &'a str> {
-        self.consume_to(self.s.end_of_pi_value())
+    fn consume_pi_value(&self) -> XmlProgress<'a, &'a str> {
+        self.consume_to(self.s.end_of_pi_value()).map_err(|_| Error::ExpectedProcessingInstructionValue)
     }
 
-    fn consume_start_tag(&self) -> ParseResult<'a, &'a str> {
-        self.consume_to(self.s.end_of_start_tag())
+    fn consume_start_tag(&self) -> XmlProgress<'a, &'a str> {
+        self.consume_to(self.s.end_of_start_tag()).map_err(|_| Error::ExpectedElement)
+    }
+}
+
+trait X<'a> {
+    fn expect_space(&self) -> XmlProgress<'a, &'a str>;
+    fn expect_literal(&self, s: &'static str) -> XmlProgress<'a, &'a str>;
+}
+
+impl<'a> X<'a> for StringPoint<'a> {
+    fn expect_space(&self) -> XmlProgress<'a, &'a str> {
+        self.consume_space().map_err(|_| Error::ExpectedWhitespace)
+    }
+
+    fn expect_literal(&self, s: &'static str) -> XmlProgress<'a, &'a str> {
+        self.consume_literal(s).map_err(|_| Error::Expected(s))
     }
 }
 
@@ -175,131 +232,137 @@ impl Parser {
         Parser
     }
 
-    fn parse_eq<'a>(&self, xml: Point<'a>) -> ParseResult<'a, ()> {
-        let (_, xml) = xml.consume_space().optional(xml);
-        let (_, xml) = try_parse!(xml.consume_literal("="));
-        let (_, xml) = xml.consume_space().optional(xml);
+    fn parse_eq<'a>(&self, xml: StringPoint<'a>) -> XmlProgress<'a, ()> {
+        let (xml, _) = xml.consume_space().optional(xml);
+        let (xml, _) = try_parse!(xml.expect_literal("="));
+        let (xml, _) = xml.consume_space().optional(xml);
 
         success((), xml)
     }
 
-    fn parse_version_info<'a>(&self, xml: Point<'a>) -> ParseResult<'a, &'a str> {
-        fn version_num<'a>(xml: Point<'a>) -> ParseResult<'a, &'a str> {
+    fn parse_version_info<'a>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> XmlProgress<'a, &'a str> {
+        fn version_num<'a>(xml: StringPoint<'a>) -> peresil::Progress<StringPoint<'a>, &'a str, ()> {
             let start_point = xml;
 
-            let (_, xml) = try_parse!(xml.consume_literal("1."));
-            let (_, xml) = try_parse!(xml.consume_decimal_chars());
+            let (xml, _) = try_parse!(xml.consume_literal("1."));
+            let (xml, _) = try_parse!(xml.consume_decimal_chars());
 
-            success(start_point.to(xml), xml)
+            peresil::Progress::success(xml, start_point.to(xml))
         }
 
-        let (_, xml) = try_parse!(xml.consume_space());
-        let (_, xml) = try_parse!(xml.consume_literal("version"));
-        let (_, xml) = try_parse!(self.parse_eq(xml));
-        let (version, xml) = try_parse!(
-            self.parse_quoted_value(xml, |xml, _| version_num(xml))
+        let (xml, _) = try_parse!(xml.expect_space().map_err(|_| Error::ExpectedWhitespace));
+        let (xml, _) = try_parse!(xml.expect_literal("version"));
+        let (xml, _) = try_parse!(self.parse_eq(xml));
+        let (xml, version) = try_parse!(
+            self.parse_quoted_value(pm, xml, |_, xml, _| version_num(xml).map_err(|_| Error::ExpectedVersionNumber))
         );
 
         success(version, xml)
     }
 
-    fn parse_xml_declaration<'a>(&self, xml: Point<'a>) -> ParseResult<'a, ()> {
-        let (_, xml) = try_parse!(xml.consume_literal("<?xml"));
-        let (_version, xml) = try_parse!(self.parse_version_info(xml));
-        // let (encoding, xml) = self.parse_encoding_declaration(xml).optional(xml));
-        // let (standalone, xml) = self.parse_standalone_declaration(xml).optional(xml);
-        let (_, xml) = xml.consume_space().optional(xml);
-        let (_, xml) = try_parse!(xml.consume_literal("?>"));
+    fn parse_xml_declaration<'a>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> XmlProgress<'a, ()> {
+        let (xml, _) = try_parse!(xml.expect_literal("<?xml"));
+        let (xml, _version) = try_parse!(self.parse_version_info(pm, xml));
+        // let (xml, encoding) = self.parse_encoding_declaration(xml).optional(xml));
+        // let (xml, standalone) = self.parse_standalone_declaration(xml).optional(xml);
+        let (xml, _) = xml.consume_space().optional(xml);
+        let (xml, _) = try_parse!(xml.expect_literal("?>"));
 
         success((), xml)
     }
 
-    fn parse_misc<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
+    fn parse_misc<'a, 's, S>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, sink: &'s mut S) -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        self.parse_comment(xml, sink)
-            .or_else(|| self.parse_pi(xml, sink))
-            .or_else(|| xml.consume_space().map(|_| ()))
+        pm.alternate()
+            .one(|_| self.parse_comment(xml, sink))
+            .one(|_| self.parse_pi(xml, sink))
+            .one(|_| xml.expect_space().map(|_| ()))
+            .finish()
     }
 
-    fn parse_miscs<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
+    fn parse_miscs<'a, 's, S>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, sink: &'s mut S) -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        peresil::zero_or_more(xml, |xml| self.parse_misc(xml, sink)).map(|_| ())
+        pm.zero_or_more(xml, |pm, xml| self.parse_misc(pm, xml, sink)).map(|_| ())
     }
 
-    fn parse_prolog<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
+    fn parse_prolog<'a, 's, S>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, sink: &'s mut S) -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        let (_, xml) = self.parse_xml_declaration(xml).optional(xml);
-        self.parse_miscs(xml, sink)
+        let (xml, _) = self.parse_xml_declaration(pm, xml).optional(xml);
+        self.parse_miscs(pm, xml, sink)
     }
 
-    fn parse_one_quoted_value<'a, T, F>(&self, xml: Point<'a>, quote: &str, f: F)
-                                        -> ParseResult<'a, T>
-        where F: FnMut(Point<'a>) -> ParseResult<'a, T>
+    fn parse_one_quoted_value<'a, T, F>(&self, xml: StringPoint<'a>, quote: &'static str, f: F)
+                                        -> XmlProgress<'a, T>
+        where F: FnMut(StringPoint<'a>) -> XmlProgress<'a, T>
     {
         let mut f = f;
-        let (_, xml) = try_parse!(xml.consume_literal(quote));
-        let (value, f, xml) = try_partial_parse!(f(xml));
-        let (_, xml) = try_resume_after_partial_failure!(f, xml.consume_literal(quote));
+        let (xml, _) = try_parse!(xml.consume_literal(quote).map_err(|_| Error::ExpectedOpeningQuote(quote)));
+        let (xml, value) = try_parse!(f(xml));
+        let (xml, _) = try_parse!(xml.consume_literal(quote).map_err(|_| Error::ExpectedClosingQuote(quote)));
 
         success(value, xml)
     }
 
-    fn parse_quoted_value<'a, T, F>(&self, xml: Point<'a>, f: F) -> ParseResult<'a, T>
-        where F: FnMut(Point<'a>, &str) -> ParseResult<'a, T>
+    fn parse_quoted_value<'a, T, F>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, f: F) -> XmlProgress<'a, T>
+        where F: FnMut(&mut XmlMaster<'a>, StringPoint<'a>, &str) -> XmlProgress<'a, T>
     {
         let mut f = f;
-        self.parse_one_quoted_value(xml, "'",  |xml| f(xml, "'"))
-            .or_else(|| self.parse_one_quoted_value(xml, "\"", |xml| f(xml, "\"")))
+        pm.alternate()
+            .one(|pm| self.parse_one_quoted_value(xml, "'",  |xml| f(pm, xml, "'")))
+            .one(|pm| self.parse_one_quoted_value(xml, "\"", |xml| f(pm, xml, "\"")))
+            .finish()
     }
 
-    fn parse_attribute_literal<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S, quote: &str)
-                                          -> ParseResult<'a, ()>
+    fn parse_attribute_literal<'a, 's, S>(&self, xml: StringPoint<'a>, sink: &'s mut S, quote: &str)
+                                          -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        let (val, xml) = try_parse!(xml.consume_attribute_value(quote));
+        let (xml, val) = try_parse!(xml.consume_attribute_value(quote));
         sink.attribute_value(LiteralAttributeValue(val));
 
         success((), xml)
     }
 
-    fn parse_attribute_reference<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S)
-                                          -> ParseResult<'a, ()>
+    fn parse_attribute_reference<'a, 's, S>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, sink: &'s mut S)
+                                          -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        let (val, xml) = try_parse!(self.parse_reference(xml));
+        let (xml, val) = try_parse!(self.parse_reference(pm, xml));
         sink.attribute_value(ReferenceAttributeValue(val));
 
         success((), xml)
     }
 
-    fn parse_attribute_values<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S, quote: &str)
-                                         -> ParseResult<'a, ()>
+    fn parse_attribute_values<'a, 's, S>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, sink: &'s mut S, quote: &str)
+                                         -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
 
-        peresil::zero_or_more(xml, |xml| {
-            self.parse_attribute_literal(xml, sink, quote)
-                .or_else(|| self.parse_attribute_reference(xml, sink))
+        pm.zero_or_more(xml, |pm, xml| {
+            pm.alternate()
+                .one(|_|  self.parse_attribute_literal(xml, sink, quote))
+                .one(|pm| self.parse_attribute_reference(pm, xml, sink))
+                .finish()
         }).map(|_| ())
     }
 
-    fn parse_attribute<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S)
-                                  -> ParseResult<'a, ()>
+    fn parse_attribute<'a, 's, S>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, sink: &'s mut S)
+                                  -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        let (_, xml) = try_parse!(xml.consume_space());
+        let (xml, _) = try_parse!(xml.expect_space());
 
-        let (name, xml) = try_parse!(xml.consume_prefixed_name());
+        let (xml, name) = try_parse!(xml.consume_prefixed_name().map_err(|_| Error::ExpectedAttribute));
 
         sink.attribute_start(name);
 
-        let (_, xml) = try_parse!(self.parse_eq(xml));
+        let (xml, _) = try_parse!(self.parse_eq(xml));
 
-        let (_, xml) = try_parse!(
-            self.parse_quoted_value(xml, |xml, quote| self.parse_attribute_values(xml, sink, quote))
+        let (xml, _) = try_parse!(
+            self.parse_quoted_value(pm, xml, |pm, xml, quote| self.parse_attribute_values(pm, xml, sink, quote))
         );
 
         sink.attribute_end(name);
@@ -307,99 +370,101 @@ impl Parser {
         success((), xml)
     }
 
-    fn parse_attributes<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S)
-                                   -> ParseResult<'a, ()>
+    fn parse_attributes<'a, 's, S>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, sink: &'s mut S)
+                                   -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        peresil::zero_or_more(xml, |xml| self.parse_attribute(xml, sink)).map(|_| ())
+        pm.zero_or_more(xml, |pm, xml| self.parse_attribute(pm, xml, sink)).map(|_| ())
     }
 
-    fn parse_element_end<'a>(&self, xml: Point<'a>) -> ParseResult<'a, PrefixedName<'a>> {
-        let (_, xml) = try_parse!(xml.consume_literal("</"));
-        let (name, xml) = try_parse!(xml.consume_prefixed_name());
-        let (_, xml) = xml.consume_space().optional(xml);
-        let (_, xml) = try_parse!(xml.consume_literal(">"));
+    fn parse_element_end<'a>(&self, xml: StringPoint<'a>) -> XmlProgress<'a, PrefixedName<'a>> {
+        let (xml, _) = try_parse!(xml.expect_literal("</"));
+        let (xml, name) = try_parse!(xml.consume_prefixed_name().map_err(|_| Error::ExpectedElementName));
+        let (xml, _) = xml.consume_space().optional(xml);
+        let (xml, _) = try_parse!(xml.expect_literal(">"));
         success(name, xml)
     }
 
-    fn parse_char_data<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S)
-                                  -> ParseResult<'a, ()>
+    fn parse_char_data<'a, 's, S>(&self, xml: StringPoint<'a>, sink: &'s mut S)
+                                  -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        let (text, xml) = try_parse!(xml.consume_char_data());
+        let (xml, text) = try_parse!(xml.consume_char_data());
 
         sink.text(text);
 
         success((), xml)
     }
 
-    fn parse_cdata<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S)
-                              -> ParseResult<'a, ()>
+    fn parse_cdata<'a, 's, S>(&self, xml: StringPoint<'a>, sink: &'s mut S)
+                              -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        let (_, xml) = try_parse!(xml.consume_literal("<![CDATA["));
-        let (text, xml) = try_parse!(xml.consume_cdata());
-        let (_, xml) = try_parse!(xml.consume_literal("]]>"));
+        let (xml, _) = try_parse!(xml.expect_literal("<![CDATA["));
+        let (xml, text) = try_parse!(xml.consume_cdata());
+        let (xml, _) = try_parse!(xml.expect_literal("]]>"));
 
         sink.text(text);
 
         success((), xml)
     }
 
-    fn parse_entity_ref<'a>(&self, xml: Point<'a>) -> ParseResult<'a, Reference<'a>> {
-        let (_, xml) = try_parse!(xml.consume_literal("&"));
-        let (name, xml) = try_parse!(xml.consume_name());
-        let (_, xml) = try_parse!(xml.consume_literal(";"));
+    fn parse_entity_ref<'a>(&self, xml: StringPoint<'a>) -> XmlProgress<'a, Reference<'a>> {
+        let (xml, _) = try_parse!(xml.consume_literal("&").map_err(|_| Error::ExpectedNamedReference));
+        let (xml, name) = try_parse!(xml.consume_name().map_err(|_| Error::ExpectedNamedReferenceValue));
+        let (xml, _) = try_parse!(xml.expect_literal(";"));
 
         success(EntityReference(name), xml)
     }
 
-    fn parse_decimal_char_ref<'a>(&self, xml: Point<'a>) -> ParseResult<'a, Reference<'a>> {
-        let (_, xml) = try_parse!(xml.consume_literal("&#"));
-        let (dec, xml) = try_parse!(xml.consume_decimal_chars());
-        let (_, xml) = try_parse!(xml.consume_literal(";"));
+    fn parse_decimal_char_ref<'a>(&self, xml: StringPoint<'a>) -> XmlProgress<'a, Reference<'a>> {
+        let (xml, _) = try_parse!(xml.consume_literal("&#").map_err(|_| Error::ExpectedDecimalReference));
+        let (xml, dec) = try_parse!(xml.consume_decimal_chars().map_err(|_| Error::ExpectedDecimalReferenceValue));
+        let (xml, _) = try_parse!(xml.expect_literal(";"));
 
         success(DecimalCharReference(dec), xml)
     }
 
-    fn parse_hex_char_ref<'a>(&self, xml: Point<'a>) -> ParseResult<'a, Reference<'a>> {
-        let (_, xml) = try_parse!(xml.consume_literal("&#x"));
-        let (hex, xml) = try_parse!(xml.consume_hex_chars());
-        let (_, xml) = try_parse!(xml.consume_literal(";"));
+    fn parse_hex_char_ref<'a>(&self, xml: StringPoint<'a>) -> XmlProgress<'a, Reference<'a>> {
+        let (xml, _) = try_parse!(xml.consume_literal("&#x").map_err(|_| Error::ExpectedHexReference));
+        let (xml, hex) = try_parse!(xml.consume_hex_chars());
+        let (xml, _) = try_parse!(xml.expect_literal(";"));
 
         success(HexCharReference(hex), xml)
     }
 
-    fn parse_reference<'a>(&self, xml: Point<'a>) -> ParseResult<'a, Reference<'a>> {
-        self.parse_entity_ref(xml)
-            .or_else(|| self.parse_decimal_char_ref(xml))
-            .or_else(|| self.parse_hex_char_ref(xml))
+    fn parse_reference<'a>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> XmlProgress<'a, Reference<'a>> {
+        pm.alternate()
+            .one(|_| self.parse_entity_ref(xml))
+            .one(|_| self.parse_decimal_char_ref(xml))
+            .one(|_| self.parse_hex_char_ref(xml))
+            .finish()
     }
 
-    fn parse_comment<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
+    fn parse_comment<'a, 's, S>(&self, xml: StringPoint<'a>, sink: &'s mut S) -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        let (_, xml) = try_parse!(xml.consume_literal("<!--"));
-        let (text, xml) = try_parse!(xml.consume_comment());
-        let (_, xml) = try_parse!(xml.consume_literal("-->"));
+        let (xml, _) = try_parse!(xml.consume_literal("<!--").map_err(|_| Error::ExpectedComment));
+        let (xml, text) = try_parse!(xml.consume_comment());
+        let (xml, _) = try_parse!(xml.expect_literal("-->"));
 
         sink.comment(text);
 
         success((), xml)
     }
 
-    fn parse_pi_value<'a>(&self, xml: Point<'a>) -> ParseResult<'a, &'a str> {
-        let (_, xml) = try_parse!(xml.consume_space());
+    fn parse_pi_value<'a>(&self, xml: StringPoint<'a>) -> XmlProgress<'a, &'a str> {
+        let (xml, _) = try_parse!(xml.expect_space());
         xml.consume_pi_value()
     }
 
-    fn parse_pi<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
+    fn parse_pi<'a, 's, S>(&self, xml: StringPoint<'a>, sink: &'s mut S) -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        let (_, xml) = try_parse!(xml.consume_literal("<?"));
-        let (target, xml) = try_parse!(xml.consume_name());
-        let (value, xml) = self.parse_pi_value(xml).optional(xml);
-        let (_, xml) = try_parse!(xml.consume_literal("?>"));
+        let (xml, _) = try_parse!(xml.consume_literal("<?").map_err(|_| Error::ExpectedProcessingInstruction));
+        let (xml, target) = try_parse!(xml.consume_name().map_err(|_| Error::ExpectedProcessingInstructionTarget));
+        let (xml, value) = self.parse_pi_value(xml).optional(xml);
+        let (xml, _) = try_parse!(xml.expect_literal("?>"));
 
         if target.eq_ignore_ascii_case("xml") {
             panic!("Can't use xml as a PI target");
@@ -410,55 +475,57 @@ impl Parser {
         success((), xml)
     }
 
-    fn parse_content_reference<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S)
-                                        -> ParseResult<'a, ()>
+    fn parse_content_reference<'a, 's, S>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, sink: &'s mut S)
+                                        -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        let (r, xml) = try_parse!(self.parse_reference(xml));
+        let (xml, r) = try_parse!(self.parse_reference(pm, xml));
         sink.reference(r);
 
         success((), xml)
     }
 
-    fn parse_rest_of_content<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S)
-                                        -> ParseResult<'a, ()>
+    fn parse_rest_of_content<'a, 's, S>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, sink: &'s mut S)
+                                        -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        let (_, xml) = try_parse!({
-            self.parse_element(xml, sink)
-                .or_else(|| self.parse_cdata(xml, sink))
-                .or_else(|| self.parse_content_reference(xml, sink))
-                .or_else(|| self.parse_comment(xml, sink))
-                .or_else(|| self.parse_pi(xml, sink))
+        let (xml, _) = try_parse!({
+            pm.alternate()
+                .one(|pm| self.parse_element(pm, xml, sink))
+                .one(|_|  self.parse_cdata(xml, sink))
+                .one(|pm| self.parse_content_reference(pm, xml, sink))
+                .one(|_|  self.parse_comment(xml, sink))
+                .one(|_|  self.parse_pi(xml, sink))
+                .finish()
         });
 
-        let (_, xml) = self.parse_char_data(xml, sink).optional(xml);
+        let (xml, _) = self.parse_char_data(xml, sink).optional(xml);
 
         success((), xml)
     }
 
-    fn parse_content<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
+    fn parse_content<'a, 's, S>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, sink: &'s mut S) -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        let (_, xml) = self.parse_char_data(xml, sink).optional(xml);
-        peresil::zero_or_more(xml, |xml| self.parse_rest_of_content(xml, sink)).map(|_| ())
+        let (xml, _) = self.parse_char_data(xml, sink).optional(xml);
+        pm.zero_or_more(xml, |pm, xml| self.parse_rest_of_content(pm, xml, sink)).map(|_| ())
     }
 
-    fn parse_empty_element_tail<'a>(&self, xml: Point<'a>) -> ParseResult<'a, ()> {
-        let (_, xml) = try_parse!(xml.consume_literal("/>"));
+    fn parse_empty_element_tail<'a>(&self, xml: StringPoint<'a>) -> XmlProgress<'a, ()> {
+        let (xml, _) = try_parse!(xml.consume_literal("/>").map_err(|_| Error::ExpectedElementSelfClosed));
 
         success((), xml)
     }
 
-    fn parse_non_empty_element_tail<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S, start_name: PrefixedName<'a>)
-                                               -> ParseResult<'a, ()>
+    fn parse_non_empty_element_tail<'a, 's, S>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, sink: &'s mut S, start_name: PrefixedName<'a>)
+                                               -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        let (_, xml) = try_parse!(xml.consume_literal(">"));
+        let (xml, _) = try_parse!(xml.consume_literal(">").map_err(|_| Error::ExpectedElementEnd));
 
-        let (_, f, xml) = try_partial_parse!(self.parse_content(xml, sink));
+        let (xml, _) = try_parse!(self.parse_content(pm, xml, sink));
 
-        let (end_name, xml) = try_resume_after_partial_failure!(f, self.parse_element_end(xml));
+        let (xml, end_name) = try_parse!(self.parse_element_end(xml));
 
         if start_name != end_name {
             panic!("tags do not match!");
@@ -467,37 +534,39 @@ impl Parser {
         success((), xml)
     }
 
-    fn parse_element<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S) -> ParseResult<'a, ()>
+    fn parse_element<'a, 's, S>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, sink: &'s mut S) -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        let (_, xml) = try_parse!(xml.consume_start_tag());
-        let (name, xml) = try_parse!(xml.consume_prefixed_name());
+        let (xml, _) = try_parse!(xml.consume_start_tag());
+        let (xml, name) = try_parse!(xml.consume_prefixed_name().map_err(|_| Error::ExpectedElementName));
 
         sink.element_start(name);
 
         sink.attributes_start();
-        let (_, f, xml) = try_partial_parse!(self.parse_attributes(xml, sink));
+        let (xml, _) = try_parse!(self.parse_attributes(pm, xml, sink));
         sink.attributes_end();
 
-        let (_, xml) = xml.consume_space().optional(xml);
+        let (xml, _) = xml.consume_space().optional(xml);
 
-        let (_, xml) = try_resume_after_partial_failure!(f, {
-            self.parse_empty_element_tail(xml)
-                .or_else(|| self.parse_non_empty_element_tail(xml, sink, name))
-        });
+        let (xml, _) = try_parse!(
+            pm.alternate()
+                .one(|_|  self.parse_empty_element_tail(xml))
+                .one(|pm| self.parse_non_empty_element_tail(pm, xml, sink, name))
+                .finish()
+        );
 
         sink.element_end(name);
 
         success((), xml)
     }
 
-    fn parse_document<'a, 's, S>(&self, xml: Point<'a>, sink: &'s mut S)
-                                 -> ParseResult<'a, ()>
+    fn parse_document<'a, 's, S>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, sink: &'s mut S)
+                                 -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        let (_, f, xml) = try_partial_parse!(self.parse_prolog(xml, sink));
-        let (_, xml) = try_resume_after_partial_failure!(f, self.parse_element(xml, sink));
-        let (_, xml) = self.parse_miscs(xml, sink).optional(xml);
+        let (xml, _) = try_parse!(self.parse_prolog(pm, xml, sink));
+        let (xml, _) = try_parse!(self.parse_element(pm, xml, sink));
+        let (xml, _) = self.parse_miscs(pm, xml, sink).optional(xml);
 
         success((), xml)
     }
@@ -507,17 +576,21 @@ impl Parser {
     pub fn parse(&self, xml: &str) -> Result<super::Package, usize> {
         // TODO: Evaluate how useful the error result is.
 
-        let xml = Point{offset: 0, s: xml};
+        let xml = StringPoint::new(xml);
         let package = super::Package::new();
 
         {
             let doc = package.as_document();
             let mut hydrator = SaxHydrator::new(&doc);
 
-            match self.parse_document(xml, &mut hydrator) {
-                peresil::Result::Success(..) => (),
-                peresil::Result::Partial{ failure: pf, .. } |
-                peresil::Result::Failure(pf) => return Err(pf.point.offset),
+            let mut pm = ParseMaster::new();
+            let r = self.parse_document(&mut pm, xml, &mut hydrator);
+
+            match pm.finish(r) {
+                peresil::Progress { status: peresil::Status::Success(..), .. } => (),
+                peresil::Progress { status: peresil::Status::Failure(..), point } => {
+                    return Err(point.offset);
+                }
             };
         }
 
