@@ -50,10 +50,10 @@
 
 #![crate_name = "document"]
 
-#![feature(collections)]
 #![feature(core)]
 #![feature(rustc_private)]
 #![feature(std_misc)]
+#![feature(str_char)]
 #![feature(test)]
 
 extern crate arena;
