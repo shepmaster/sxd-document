@@ -59,7 +59,8 @@ use super::PrefixedName;
 use super::dom4;
 use super::str::XmlStr;
 
-enum Error {
+#[derive(Debug,Copy,Clone,PartialEq)]
+pub enum Error {
     Expected(&'static str),
 
     ExpectedAttribute,
@@ -573,7 +574,7 @@ impl Parser {
 
     /// Parses a string into a DOM. On failure, the location of the
     /// parsing failure will be returned.
-    pub fn parse(&self, xml: &str) -> Result<super::Package, usize> {
+    pub fn parse(&self, xml: &str) -> Result<super::Package, (usize, Vec<Error>)> {
         // TODO: Evaluate how useful the error result is.
 
         let xml = StringPoint::new(xml);
@@ -588,8 +589,8 @@ impl Parser {
 
             match pm.finish(r) {
                 peresil::Progress { status: peresil::Status::Success(..), .. } => (),
-                peresil::Progress { status: peresil::Status::Failure(..), point } => {
-                    return Err(point.offset);
+                peresil::Progress { status: peresil::Status::Failure(e), point } => {
+                    return Err((point.offset, e));
                 }
             };
         }
@@ -857,7 +858,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
 
 #[cfg(test)]
 mod test {
-    use super::Parser;
+    use super::{Parser,Error};
     use super::super::{Package,IntoQName};
     use super::super::dom4;
 
@@ -865,7 +866,7 @@ mod test {
         ($l:expr, $r:expr) => (assert_eq!($l.into_qname(), $r.into_qname()));
     );
 
-    fn full_parse(xml: &str) -> Result<Package, usize> {
+    fn full_parse(xml: &str) -> Result<Package, (usize, Vec<Error>)> {
         Parser::new()
             .parse(xml)
     }
@@ -1208,92 +1209,131 @@ mod test {
         assert_eq!(pi.target(),    "world");
     }
 
+    // TODO: untested errors
+    //
+    // versionnumber
+    // prefixedname
+    // decimal chars
+    // hex chars
+    // chardata
+    // cdata
+    // commentbody
+    // pinstructionvalue
+
     #[test]
     fn failure_no_open_brace() {
+        use super::Error::*;
+
         let r = full_parse("hi />");
 
-        assert_eq!(r, Err(0));
+        assert_eq!(r, Err((0, vec![ExpectedComment, ExpectedProcessingInstruction, ExpectedWhitespace, ExpectedElement])));
     }
 
     #[test]
     fn failure_unclosed_tag() {
+        use super::Error::*;
+
         let r = full_parse("<hi");
 
-        assert_eq!(r, Err(3));
+        assert_eq!(r, Err((3, vec![ExpectedWhitespace, ExpectedElementSelfClosed, ExpectedElementEnd])));
     }
 
     #[test]
     fn failure_unexpected_space() {
+        use super::Error::*;
+
         let r = full_parse("<hi / >");
 
-        assert_eq!(r, Err(4));
+        assert_eq!(r, Err((4, vec![ExpectedAttribute, ExpectedElementSelfClosed, ExpectedElementEnd])));
     }
 
     #[test]
     fn failure_attribute_without_open_quote() {
+        use super::Error::*;
+
         let r = full_parse("<hi oops=value' />");
-        assert_eq!(r, Err(9));
+
+        assert_eq!(r, Err((9, vec![ExpectedOpeningQuote("\'"), ExpectedOpeningQuote("\"")])));
     }
 
     #[test]
     fn failure_attribute_without_close_quote() {
+        use super::Error::*;
+
         let r = full_parse("<hi oops='value />");
 
-        assert_eq!(r, Err(18));
+        assert_eq!(r, Err((18, vec![ExpectedNamedReference, ExpectedDecimalReference, ExpectedAttributeValue, ExpectedHexReference, ExpectedClosingQuote("\'")])));
     }
 
     #[test]
     fn failure_unclosed_attribute_and_tag() {
+        use super::Error::*;
+
         let r = full_parse("<hi oops='value");
 
-        assert_eq!(r, Err(15));
+        assert_eq!(r, Err((15, vec![ExpectedNamedReference, ExpectedDecimalReference, ExpectedAttributeValue, ExpectedHexReference, ExpectedClosingQuote("\'")])));
     }
 
     #[test]
     fn failure_nested_unclosed_tag() {
+        use super::Error::*;
+
         let r = full_parse("<hi><oops</hi>");
 
-        assert_eq!(r, Err(9));
+        assert_eq!(r, Err((9, vec![ExpectedWhitespace, ExpectedElementSelfClosed, ExpectedElementEnd])));
     }
 
     #[test]
     fn failure_nested_unexpected_space() {
+        use super::Error::*;
+
         let r = full_parse("<hi><oops / ></hi>");
 
-        assert_eq!(r, Err(10));
+        assert_eq!(r, Err((10, vec![ExpectedAttribute, ExpectedElementSelfClosed, ExpectedElementEnd])));
     }
 
     #[test]
     fn failure_malformed_entity_reference() {
+        use super::Error::*;
+
         let r = full_parse("<hi>Entity: &;</hi>");
 
-        assert_eq!(r, Err(13));
+        assert_eq!(r, Err((13, vec![ExpectedNamedReferenceValue])));
     }
 
     #[test]
     fn failure_nested_malformed_entity_reference() {
+        use super::Error::*;
+
         let r = full_parse("<hi><bye>Entity: &;</bye></hi>");
 
-        assert_eq!(r, Err(18));
+        assert_eq!(r, Err((18, vec![ExpectedNamedReferenceValue])));
     }
 
     #[test]
     fn failure_nested_attribute_without_open_quote() {
+        use super::Error::*;
+
         let r = full_parse("<hi><bye oops=value' /></hi>");
-        assert_eq!(r, Err(14));
+
+        assert_eq!(r, Err((14, vec![ExpectedOpeningQuote("\'"), ExpectedOpeningQuote("\"")])));
     }
 
     #[test]
     fn failure_nested_attribute_without_close_quote() {
+        use super::Error::*;
+
         let r = full_parse("<hi><bye oops='value /></hi>");
 
-        assert_eq!(r, Err(23));
+        assert_eq!(r, Err((23, vec![ExpectedNamedReference, ExpectedDecimalReference, ExpectedAttributeValue, ExpectedHexReference, ExpectedClosingQuote("\'")])));
     }
 
     #[test]
     fn failure_nested_unclosed_attribute_and_tag() {
+        use super::Error::*;
+
         let r = full_parse("<hi><bye oops='value</hi>");
 
-        assert_eq!(r, Err(20));
+        assert_eq!(r, Err((20, vec![ExpectedNamedReference, ExpectedDecimalReference, ExpectedAttributeValue, ExpectedHexReference, ExpectedClosingQuote("\'")])));
     }
 }
