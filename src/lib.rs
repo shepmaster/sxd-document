@@ -52,7 +52,6 @@
 
 #![feature(core)]
 #![feature(rustc_private)]
-#![feature(std_misc)]
 #![feature(str_char)]
 #![feature(test)]
 
