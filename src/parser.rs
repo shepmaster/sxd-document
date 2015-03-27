@@ -97,6 +97,7 @@ pub enum Error {
     ExpectedNamedReference,
 
     InvalidProcessingInstructionTarget,
+    MismatchedElementEndName,
 }
 
 impl Recoverable for Error {
@@ -380,12 +381,22 @@ impl Parser {
         pm.zero_or_more(xml, |pm, xml| self.parse_attribute(pm, xml, sink)).map(|_| ())
     }
 
-    fn parse_element_end<'a>(&self, xml: StringPoint<'a>) -> XmlProgress<'a, PrefixedName<'a>> {
+    fn parse_element_end<'a>(&self, xml: StringPoint<'a>, start_name: PrefixedName<'a>)
+                             -> XmlProgress<'a, ()>
+    {
         let (xml, _) = try_parse!(xml.expect_literal("</"));
+
+        let name_xml = xml;
         let (xml, name) = try_parse!(xml.consume_prefixed_name().map_err(|_| Error::ExpectedElementName));
+
         let (xml, _) = xml.consume_space().optional(xml);
         let (xml, _) = try_parse!(xml.expect_literal(">"));
-        success(name, xml)
+
+        if start_name != name {
+            return peresil::Progress::failure(name_xml, Error::MismatchedElementEndName);
+        }
+
+        success((), xml)
     }
 
     fn parse_char_data<'a, 's, S>(&self, xml: StringPoint<'a>, sink: &'s mut S)
@@ -529,11 +540,7 @@ impl Parser {
 
         let (xml, _) = try_parse!(self.parse_content(pm, xml, sink));
 
-        let (xml, end_name) = try_parse!(self.parse_element_end(xml));
-
-        if start_name != end_name {
-            panic!("tags do not match!");
-        }
+        let (xml, _) = try_parse!(self.parse_element_end(xml, start_name));
 
         success((), xml)
     }
@@ -1347,5 +1354,14 @@ mod test {
         let r = full_parse("<a><?xml?></a>");
 
         assert_eq!(r, Err((5, vec![InvalidProcessingInstructionTarget])));
+    }
+
+    #[test]
+    fn failure_end_tag_does_not_match() {
+        use super::Error::*;
+
+        let r = full_parse("<a></b>");
+
+        assert_eq!(r, Err((5, vec![MismatchedElementEndName])));
     }
 }
