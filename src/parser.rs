@@ -95,6 +95,8 @@ pub enum Error {
     ExpectedDecimalReference,
     ExpectedHexReference,
     ExpectedNamedReference,
+
+    InvalidProcessingInstructionTarget,
 }
 
 impl Recoverable for Error {
@@ -463,12 +465,13 @@ impl Parser {
         where S: ParserSink<'a>
     {
         let (xml, _) = try_parse!(xml.consume_literal("<?").map_err(|_| Error::ExpectedProcessingInstruction));
+        let target_xml = xml;
         let (xml, target) = try_parse!(xml.consume_name().map_err(|_| Error::ExpectedProcessingInstructionTarget));
         let (xml, value) = self.parse_pi_value(xml).optional(xml);
         let (xml, _) = try_parse!(xml.expect_literal("?>"));
 
         if target.eq_ignore_ascii_case("xml") {
-            panic!("Can't use xml as a PI target");
+            return peresil::Progress::failure(target_xml, Error::InvalidProcessingInstructionTarget);
         }
 
         sink.processing_instruction(target, value);
@@ -1335,5 +1338,14 @@ mod test {
         let r = full_parse("<hi><bye oops='value</hi>");
 
         assert_eq!(r, Err((20, vec![ExpectedNamedReference, ExpectedDecimalReference, ExpectedAttributeValue, ExpectedHexReference, ExpectedClosingQuote("\'")])));
+    }
+
+    #[test]
+    fn failure_pi_target_as_xml() {
+        use super::Error::*;
+
+        let r = full_parse("<a><?xml?></a>");
+
+        assert_eq!(r, Err((5, vec![InvalidProcessingInstructionTarget])));
     }
 }
