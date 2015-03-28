@@ -860,7 +860,7 @@ mod test {
         let doc = package.as_document();
         let top = top(&doc);
 
-        assert_eq!(top.attribute_value("scope").unwrap(), "world");
+        assert_eq!(top.attribute_value("scope"), Some("world"));
     }
 
     #[test]
@@ -869,7 +869,7 @@ mod test {
         let doc = package.as_document();
         let top = top(&doc);
 
-        assert_eq!(top.attribute_value("scope").unwrap(), "world");
+        assert_eq!(top.attribute_value("scope"), Some("world"));
     }
 
     #[test]
@@ -878,8 +878,8 @@ mod test {
         let doc = package.as_document();
         let top = top(&doc);
 
-        assert_eq!(top.attribute_value("scope").unwrap(), "world");
-        assert_eq!(top.attribute_value("happy").unwrap(), "true");
+        assert_eq!(top.attribute_value("scope"), Some("world"));
+        assert_eq!(top.attribute_value("happy"), Some("true"));
     }
 
     #[test]
@@ -900,7 +900,7 @@ mod test {
         let doc = package.as_document();
         let top = top(&doc);
 
-        assert_eq!(top.attribute_value("msg").unwrap(), "I <3 math");
+        assert_eq!(top.attribute_value("msg"), Some("I <3 math"));
     }
 
     #[test]
@@ -961,7 +961,7 @@ mod test {
         let hello = top(&doc);
         let world = hello.children()[0].element().unwrap();
 
-        assert_eq!(world.attribute_value("name").unwrap(), "Earth");
+        assert_eq!(world.attribute_value("name"), Some("Earth"));
     }
 
     #[test]
@@ -1070,7 +1070,7 @@ mod test {
         let pi2 = doc.root().children()[2].processing_instruction().unwrap();
 
         assert_eq!(pi1.target(), "output");
-        assert_eq!(pi1.value().unwrap(), "printer");
+        assert_eq!(pi1.value(), Some("printer"));
 
         assert_eq!(pi2.target(), "validated");
         assert_eq!(pi2.value(), None);
