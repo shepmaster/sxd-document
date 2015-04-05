@@ -47,7 +47,6 @@ use std::ascii::AsciiExt;
 use std::char::from_u32;
 use std::collections::HashMap;
 use std::mem::replace;
-use std::num::from_str_radix;
 use std::ops::Deref;
 use std::{iter};
 
@@ -549,13 +548,13 @@ fn decode_reference<T, F>(ref_data: Reference, cb: F) -> T
     let mut cb = cb;
     match ref_data {
         DecimalCharReference(d) => {
-            let code: u32 = from_str_radix(d, 10).unwrap();
+            let code = u32::from_str_radix(d, 10).unwrap();
             let c: char = from_u32(code).expect("Not a valid codepoint");
             let s: String = iter::repeat(c).take(1).collect();
             cb(&s)
         },
         HexCharReference(h) => {
-            let code: u32 = from_str_radix(h, 16).unwrap();
+            let code = u32::from_str_radix(h, 16).unwrap();
             let c: char = from_u32(code).expect("Not a valid codepoint");
             let s: String = iter::repeat(c).take(1).collect();
             cb(&s)
