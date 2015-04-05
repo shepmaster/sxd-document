@@ -58,6 +58,7 @@ impl Drop for Chunk {
     }
 }
 
+#[allow(raw_pointer_derive)]
 #[derive(Copy,Clone)]
 pub struct InternedString {
     data: *const u8,
