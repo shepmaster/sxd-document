@@ -30,7 +30,6 @@
 use std::borrow::ToOwned;
 use std::collections::HashMap;
 use std::io::{self,Write};
-use std::num::Int;
 use std::slice;
 
 use self::Content::*;
