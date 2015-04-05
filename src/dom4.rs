@@ -486,7 +486,7 @@ macro_rules! unpack(
 );
 
 /// Nodes that may occur as a child of the root node
-#[derive(PartialEq,Debug,Copy)]
+#[derive(Debug,Copy,Clone,PartialEq)]
 pub enum ChildOfRoot<'d> {
     Element(Element<'d>),
     Comment(Comment<'d>),
@@ -508,7 +508,7 @@ impl<'d> ChildOfRoot<'d> {
 }
 
 /// Nodes that may occur as a child of an element node
-#[derive(PartialEq,Debug,Copy)]
+#[derive(Debug,Copy,Clone,PartialEq)]
 pub enum ChildOfElement<'d> {
     Element(Element<'d>),
     Text(Text<'d>),
@@ -533,7 +533,7 @@ impl<'d> ChildOfElement<'d> {
 }
 
 /// Nodes that may occur as the parent of a child node
-#[derive(PartialEq,Debug,Copy)]
+#[derive(Debug,Copy,Clone,PartialEq)]
 pub enum ParentOfChild<'d> {
     Root(Root<'d>),
     Element(Element<'d>),

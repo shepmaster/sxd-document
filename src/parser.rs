@@ -70,13 +70,13 @@ fn success<'a, T>(data: T, point: Point<'a>) -> ParseResult<'a, T> {
 #[allow(missing_copy_implementations)]
 pub struct Parser;
 
-#[derive(Debug,Copy)]
+#[derive(Debug,Copy,Clone)]
 enum AttributeValue<'a> {
     ReferenceAttributeValue(Reference<'a>),
     LiteralAttributeValue(&'a str),
 }
 
-#[derive(Debug,Copy)]
+#[derive(Debug,Copy,Clone)]
 enum Reference<'a> {
     EntityReference(&'a str),
     DecimalCharReference(&'a str),

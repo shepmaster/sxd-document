@@ -58,7 +58,7 @@ impl Drop for Chunk {
     }
 }
 
-#[derive(Copy)]
+#[derive(Copy,Clone)]
 pub struct InternedString {
     data: *const u8,
     len: usize,

@@ -357,7 +357,7 @@ macro_rules! unpack(
     )
 );
 
-#[derive(PartialEq,Debug,Copy)]
+#[derive(Debug,Copy,Clone,PartialEq)]
 pub enum ChildOfRoot<'d> {
     Element(Element<'d>),
     Comment(Comment<'d>),
@@ -386,7 +386,7 @@ impl<'d> ChildOfRoot<'d> {
     }
 }
 
-#[derive(PartialEq,Debug,Copy)]
+#[derive(Debug,Copy,Clone,PartialEq)]
 pub enum ChildOfElement<'d> {
     Element(Element<'d>),
     Text(Text<'d>),
@@ -419,7 +419,7 @@ impl<'d> ChildOfElement<'d> {
     }
 }
 
-#[derive(PartialEq,Debug,Copy)]
+#[derive(Debug,Copy,Clone,PartialEq)]
 pub enum ParentOfChild<'d> {
     Root(Root<'d>),
     Element(Element<'d>),
