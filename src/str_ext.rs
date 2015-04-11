@@ -1,4 +1,4 @@
-use std::str::{Pattern,Searcher};
+use std::str::pattern::{Pattern,Searcher};
 
 #[derive(Copy,Clone,Debug,PartialEq)]
 pub enum SplitType<'a> {
