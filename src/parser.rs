@@ -44,11 +44,10 @@
 //! - http://www.scheidecker.net/2012/12/03/parser-combinators/
 
 use std::ascii::AsciiExt;
-use std::char::from_u32;
 use std::collections::HashMap;
 use std::mem::replace;
 use std::ops::Deref;
-use std::{iter};
+use std::{char,iter};
 
 use peresil::{self,StringPoint,ParseMaster,Recoverable};
 
@@ -98,11 +97,26 @@ pub enum Error {
 
     InvalidProcessingInstructionTarget,
     MismatchedElementEndName,
+
+    InvalidDecimalReference,
+    InvalidHexReference,
+    UnknownNamedReference,
 }
 
 impl Recoverable for Error {
     fn recoverable(&self) -> bool { true }
 }
+
+macro_rules! adapt_sink_result(
+    ($r:expr) => ({
+        match $r {
+            Ok(v) => v,
+            Err((span, e)) => {
+                return peresil::Progress { point: span.into_point(), status: peresil::Status::Failure(e) }
+            },
+        }
+    });
+);
 
 type XmlMaster<'a> = peresil::ParseMaster<StringPoint<'a>, Error>;
 type XmlProgress<'a, T> = peresil::Progress<StringPoint<'a>, T, Error>;
@@ -115,6 +129,33 @@ fn success<'a, T>(data: T, point: StringPoint<'a>) -> XmlProgress<'a, T> {
 #[allow(missing_copy_implementations)]
 pub struct Parser;
 
+/// A truncated point; the string ends before the end of input
+#[derive(Debug,Copy,Clone)]
+struct Span<'a> {
+    s: &'a str,
+    offset: usize,
+}
+
+impl<'a> Span<'a> {
+    fn new(a: StringPoint<'a>, b: StringPoint<'a>) -> Span<'a> {
+        let len = b.offset - a.offset;
+        Span { s: &a.s[0..len], offset: a.offset }
+    }
+
+    // Should this just be the return type of the parser methods?
+    fn parse<'z, F, T>(pt: StringPoint<'z>, f: F) -> XmlProgress<'z, Span<'z>>
+        where F: Fn(StringPoint<'z>) -> XmlProgress<'z, T>
+    {
+        let (after, _) = try_parse!(f(pt));
+        let span = Span::new(pt, after);
+        peresil::Progress { status: peresil::Status::Success(span), point: after }
+    }
+
+    fn into_point(self) -> StringPoint<'a> {
+        peresil::StringPoint { offset: self.offset, s: self.s }
+    }
+}
+
 #[derive(Debug,Copy,Clone)]
 enum AttributeValue<'a> {
     ReferenceAttributeValue(Reference<'a>),
@@ -123,9 +164,9 @@ enum AttributeValue<'a> {
 
 #[derive(Debug,Copy,Clone)]
 enum Reference<'a> {
-    EntityReference(&'a str),
-    DecimalCharReference(&'a str),
-    HexCharReference(&'a str),
+    EntityReference(Span<'a>),
+    DecimalCharReference(Span<'a>),
+    HexCharReference(Span<'a>),
 }
 
 /// Common reusable XML parsing methods
@@ -425,7 +466,7 @@ impl Parser {
 
     fn parse_entity_ref<'a>(&self, xml: StringPoint<'a>) -> XmlProgress<'a, Reference<'a>> {
         let (xml, _) = try_parse!(xml.consume_literal("&").map_err(|_| Error::ExpectedNamedReference));
-        let (xml, name) = try_parse!(xml.consume_name().map_err(|_| Error::ExpectedNamedReferenceValue));
+        let (xml, name) = try_parse!(Span::parse(xml, |xml| xml.consume_name().map_err(|_| Error::ExpectedNamedReferenceValue)));
         let (xml, _) = try_parse!(xml.expect_literal(";"));
 
         success(EntityReference(name), xml)
@@ -433,7 +474,7 @@ impl Parser {
 
     fn parse_decimal_char_ref<'a>(&self, xml: StringPoint<'a>) -> XmlProgress<'a, Reference<'a>> {
         let (xml, _) = try_parse!(xml.consume_literal("&#").map_err(|_| Error::ExpectedDecimalReference));
-        let (xml, dec) = try_parse!(xml.consume_decimal_chars().map_err(|_| Error::ExpectedDecimalReferenceValue));
+        let (xml, dec) = try_parse!(Span::parse(xml, |xml| xml.consume_decimal_chars().map_err(|_| Error::ExpectedDecimalReferenceValue)));
         let (xml, _) = try_parse!(xml.expect_literal(";"));
 
         success(DecimalCharReference(dec), xml)
@@ -441,7 +482,7 @@ impl Parser {
 
     fn parse_hex_char_ref<'a>(&self, xml: StringPoint<'a>) -> XmlProgress<'a, Reference<'a>> {
         let (xml, _) = try_parse!(xml.consume_literal("&#x").map_err(|_| Error::ExpectedHexReference));
-        let (xml, hex) = try_parse!(xml.consume_hex_chars());
+        let (xml, hex) = try_parse!(Span::parse(xml, |xml| xml.consume_hex_chars()));
         let (xml, _) = try_parse!(xml.expect_literal(";"));
 
         success(HexCharReference(hex), xml)
@@ -495,7 +536,7 @@ impl Parser {
         where S: ParserSink<'a>
     {
         let (xml, r) = try_parse!(self.parse_reference(pm, xml));
-        sink.reference(r);
+        adapt_sink_result!(sink.reference(r));
 
         success((), xml)
     }
@@ -555,7 +596,7 @@ impl Parser {
 
         sink.attributes_start();
         let (xml, _) = try_parse!(self.parse_attributes(pm, xml, sink));
-        sink.attributes_end();
+        adapt_sink_result!(sink.attributes_end());
 
         let (xml, _) = xml.consume_space().optional(xml);
 
@@ -611,46 +652,54 @@ impl Parser {
     }
 }
 
+type SinkResult<'x, T> = Result<T, (Span<'x>, Error)>;
+
 trait ParserSink<'x> {
     fn element_start(&mut self, name: PrefixedName<'x>);
     fn element_end(&mut self, name: PrefixedName<'x>);
     fn comment(&mut self, text: &'x str);
     fn processing_instruction(&mut self, target: &'x str, value: Option<&'x str>);
     fn text(&mut self, text: &'x str);
-    fn reference(&mut self, reference: Reference<'x>);
+    fn reference(&mut self, reference: Reference<'x>) -> SinkResult<'x, ()>;
     fn attributes_start(&mut self);
-    fn attributes_end(&mut self);
+    fn attributes_end(&mut self) -> SinkResult<'x, ()>;
     fn attribute_start(&mut self, name: PrefixedName<'x>);
     fn attribute_value(&mut self, value: AttributeValue<'x>);
     fn attribute_end(&mut self, name: PrefixedName<'x>);
 }
 
 
-fn decode_reference<T, F>(ref_data: Reference, cb: F) -> T
-    where F: FnMut(&str) -> T
+fn decode_reference<'x, T, F>(ref_data: Reference<'x>, cb: F) -> SinkResult<'x, T>
+    where F: FnMut(&str) -> SinkResult<'x, T>
 {
     let mut cb = cb;
     match ref_data {
-        DecimalCharReference(d) => {
-            let code = u32::from_str_radix(d, 10).unwrap();
-            let c: char = from_u32(code).expect("Not a valid codepoint");
-            let s: String = iter::repeat(c).take(1).collect();
-            cb(&s)
+        DecimalCharReference(span) => {
+            u32::from_str_radix(span.s, 10).ok()
+                .and_then(|code| char::from_u32(code))
+                .ok_or((span, Error::InvalidDecimalReference))
+                .and_then(|c| {
+                    let s: String = iter::repeat(c).take(1).collect();
+                    cb(&s)
+                })
         },
-        HexCharReference(h) => {
-            let code = u32::from_str_radix(h, 16).unwrap();
-            let c: char = from_u32(code).expect("Not a valid codepoint");
-            let s: String = iter::repeat(c).take(1).collect();
-            cb(&s)
+        HexCharReference(span) => {
+            u32::from_str_radix(span.s, 16).ok()
+                .and_then(|code| char::from_u32(code))
+                .ok_or((span, Error::InvalidHexReference))
+                .and_then(|c| {
+                    let s: String = iter::repeat(c).take(1).collect();
+                    cb(&s)
+                })
         },
-        EntityReference(e) => {
-            let s = match e {
+        EntityReference(span) => {
+            let s = match span.s {
                 "amp"  => "&",
                 "lt"   => "<",
                 "gt"   => ">",
                 "apos" => "'",
                 "quot" => "\"",
-                _      => panic!("unknown entity"),
+                _      => return Err((span, Error::UnknownNamedReference)),
             };
             cb(s)
         }
@@ -662,10 +711,10 @@ struct AttributeValueBuilder {
 }
 
 impl AttributeValueBuilder {
-    fn convert(values: &Vec<AttributeValue>) -> String {
+    fn convert<'x>(values: &Vec<AttributeValue<'x>>) -> SinkResult<'x, String> {
         let mut builder = AttributeValueBuilder::new();
-        builder.ingest(values);
-        builder.implode()
+        try!(builder.ingest(values));
+        Ok(builder.implode())
     }
 
     fn new() -> AttributeValueBuilder {
@@ -674,13 +723,15 @@ impl AttributeValueBuilder {
         }
     }
 
-    fn ingest(&mut self, values: &Vec<AttributeValue>) {
+    fn ingest<'x>(&mut self, values: &Vec<AttributeValue<'x>>) -> SinkResult<'x, ()> {
         for value in values.iter() {
             match value {
                 &LiteralAttributeValue(v) => self.value.push_str(v),
-                &ReferenceAttributeValue(r) => decode_reference(r, |s| self.value.push_str(s)),
+                &ReferenceAttributeValue(r) => try!(decode_reference(r, |s| Ok(self.value.push_str(s)))),
             }
         }
+
+        Ok(())
     }
 
     fn clear(&mut self) {
@@ -768,15 +819,16 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         self.append_text(text);
     }
 
-    fn reference(&mut self, reference: Reference) {
-        let text = decode_reference(reference, |s| self.doc.create_text(s));
+    fn reference(&mut self, reference: Reference<'x>) -> SinkResult<'x, ()> {
+        let text = try!(decode_reference(reference, |s| Ok(self.doc.create_text(s))));
         self.append_text(text);
+        Ok(())
     }
 
     fn attributes_start(&mut self) {
     }
 
-    fn attributes_end(&mut self) {
+    fn attributes_end(&mut self) -> SinkResult<'x, ()> {
         let deferred_element = self.element.take().unwrap();
         let attributes = replace(&mut self.attributes, Vec::new());
 
@@ -789,7 +841,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         let default_namespace = match &default_namespaces[..] {
             [] => None,
             [ref ns] => {
-                let value = AttributeValueBuilder::convert(&ns.values);
+                let value = try!(AttributeValueBuilder::convert(&ns.values));
                 Some(value)
             },
             _ => panic!("Cannot declare multiple default namespaces"),
@@ -797,7 +849,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
 
         let mut new_prefix_mappings = HashMap::new();
         for ns in namespaces.iter() {
-            let value = AttributeValueBuilder::convert(&ns.values);
+            let value = try!(AttributeValueBuilder::convert(&ns.values));
             new_prefix_mappings.insert(ns.name.local_part, value);
         }
         let new_prefix_mappings = new_prefix_mappings;
@@ -833,7 +885,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
 
         for attribute in attributes.iter() {
             builder.clear();
-            builder.ingest(&attribute.values);
+            try!(builder.ingest(&attribute.values));
             let value = &builder;
 
             if let Some(prefix) = attribute.name.prefix {
@@ -851,6 +903,8 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
                 element.set_attribute_value(attribute.name.local_part, &value);
             }
         }
+
+        Ok(())
     }
 
     fn attribute_start(&mut self, name: PrefixedName<'x>) {
@@ -1363,5 +1417,32 @@ mod test {
         let r = full_parse("<a></b>");
 
         assert_eq!(r, Err((5, vec![MismatchedElementEndName])));
+    }
+
+    #[test]
+    fn failure_invalid_decimal_reference() {
+        use super::Error::*;
+
+        let r = full_parse("<a>&#99999999;</a>");
+
+        assert_eq!(r, Err((5, vec![InvalidDecimalReference])));
+    }
+
+    #[test]
+    fn failure_invalid_hex_reference() {
+        use super::Error::*;
+
+        let r = full_parse("<a>&#x99999999;</a>");
+
+        assert_eq!(r, Err((6, vec![InvalidHexReference])));
+    }
+
+    #[test]
+    fn failure_unknown_named_reference() {
+        use super::Error::*;
+
+        let r = full_parse("<a>&fake;</a>");
+
+        assert_eq!(r, Err((4, vec![UnknownNamedReference])));
     }
 }
