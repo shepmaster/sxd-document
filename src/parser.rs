@@ -101,10 +101,26 @@ pub enum Error {
     InvalidDecimalReference,
     InvalidHexReference,
     UnknownNamedReference,
+
+    MultipleDefaultNamespaces,
 }
 
 impl Recoverable for Error {
-    fn recoverable(&self) -> bool { true }
+    fn recoverable(&self) -> bool {
+        use self::Error::*;
+
+        match *self {
+            InvalidProcessingInstructionTarget |
+            MismatchedElementEndName           |
+            InvalidDecimalReference            |
+            InvalidHexReference                |
+            UnknownNamedReference              |
+            MultipleDefaultNamespaces          => {
+                false
+            },
+            _ => true
+        }
+    }
 }
 
 macro_rules! adapt_sink_result(
@@ -295,7 +311,7 @@ impl Parser {
             peresil::Progress::success(xml, start_point.to(xml))
         }
 
-        let (xml, _) = try_parse!(xml.expect_space().map_err(|_| Error::ExpectedWhitespace));
+        let (xml, _) = try_parse!(xml.expect_space());
         let (xml, _) = try_parse!(xml.expect_literal("version"));
         let (xml, _) = try_parse!(self.parse_eq(xml));
         let (xml, version) = try_parse!(
@@ -400,9 +416,10 @@ impl Parser {
     {
         let (xml, _) = try_parse!(xml.expect_space());
 
+        let offset = xml.offset;
         let (xml, name) = try_parse!(xml.consume_prefixed_name().map_err(|_| Error::ExpectedAttribute));
 
-        sink.attribute_start(name);
+        sink.attribute_start(offset, name);
 
         let (xml, _) = try_parse!(self.parse_eq(xml));
 
@@ -663,7 +680,7 @@ trait ParserSink<'x> {
     fn reference(&mut self, reference: Reference<'x>) -> SinkResult<'x, ()>;
     fn attributes_start(&mut self);
     fn attributes_end(&mut self) -> SinkResult<'x, ()>;
-    fn attribute_start(&mut self, name: PrefixedName<'x>);
+    fn attribute_start(&mut self, offset: usize, name: PrefixedName<'x>);
     fn attribute_value(&mut self, value: AttributeValue<'x>);
     fn attribute_end(&mut self, name: PrefixedName<'x>);
 }
@@ -751,7 +768,9 @@ impl Deref for AttributeValueBuilder {
     }
 }
 
+#[derive(Debug)]
 struct DeferredAttribute<'d> {
+    offset: usize,
     name: PrefixedName<'d>,
     values: Vec<AttributeValue<'d>>,
 }
@@ -844,7 +863,10 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
                 let value = try!(AttributeValueBuilder::convert(&ns.values));
                 Some(value)
             },
-            _ => panic!("Cannot declare multiple default namespaces"),
+            rest => {
+                let last_namespace = rest.iter().max_by(|ns| ns.offset).unwrap();
+                return Err((Span { s: "", offset: last_namespace.offset }, Error::MultipleDefaultNamespaces))
+            },
         };
 
         let mut new_prefix_mappings = HashMap::new();
@@ -907,8 +929,8 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         Ok(())
     }
 
-    fn attribute_start(&mut self, name: PrefixedName<'x>) {
-        let attr = DeferredAttribute { name: name, values: Vec::new() };
+    fn attribute_start(&mut self, offset: usize, name: PrefixedName<'x>) {
+        let attr = DeferredAttribute { offset: offset, name: name, values: Vec::new() };
         self.attributes.push(attr);
     }
 
@@ -1444,5 +1466,14 @@ mod test {
         let r = full_parse("<a>&fake;</a>");
 
         assert_eq!(r, Err((4, vec![UnknownNamedReference])));
+    }
+
+    #[test]
+    fn failure_duplicate_default_namespace() {
+        use super::Error::*;
+
+        let r = full_parse("<a xmlns='a' xmlns='b'/>");
+
+        assert_eq!(r, Err((13, vec![MultipleDefaultNamespaces])));
     }
 }
