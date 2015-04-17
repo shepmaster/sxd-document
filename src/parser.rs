@@ -103,6 +103,7 @@ pub enum Error {
     UnknownNamedReference,
 
     MultipleDefaultNamespaces,
+    UnknownNamespacePrefix,
 }
 
 impl Recoverable for Error {
@@ -115,7 +116,8 @@ impl Recoverable for Error {
             InvalidDecimalReference            |
             InvalidHexReference                |
             UnknownNamedReference              |
-            MultipleDefaultNamespaces          => {
+            MultipleDefaultNamespaces          |
+            UnknownNamespacePrefix             => {
                 false
             },
             _ => true
@@ -919,7 +921,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
                                                            &value);
                     attr.set_preferred_prefix(Some(prefix));
                 } else {
-                    panic!("Unknown namespace prefix '{}'", prefix);
+                    return Err((Span { s: "", offset: attribute.offset }, Error::UnknownNamespacePrefix))
                 }
             } else {
                 element.set_attribute_value(attribute.name.local_part, &value);
@@ -1475,5 +1477,14 @@ mod test {
         let r = full_parse("<a xmlns='a' xmlns='b'/>");
 
         assert_eq!(r, Err((13, vec![MultipleDefaultNamespaces])));
+    }
+
+    #[test]
+    fn failure_unknown_attribute_namespace_prefix() {
+        use super::Error::*;
+
+        let r = full_parse("<a b:foo='a'/>");
+
+        assert_eq!(r, Err((3, vec![UnknownNamespacePrefix])));
     }
 }
