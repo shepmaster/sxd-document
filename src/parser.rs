@@ -149,28 +149,29 @@ pub struct Parser;
 
 /// A truncated point; the string ends before the end of input
 #[derive(Debug,Copy,Clone)]
-struct Span<'a> {
-    s: &'a str,
+struct Span<T> {
     offset: usize,
+    value: T,
 }
 
-impl<'a> Span<'a> {
-    fn new(a: StringPoint<'a>, b: StringPoint<'a>) -> Span<'a> {
-        let len = b.offset - a.offset;
-        Span { s: &a.s[0..len], offset: a.offset }
-    }
-
+impl<T> Span<T> {
     // Should this just be the return type of the parser methods?
-    fn parse<'z, F, T>(pt: StringPoint<'z>, f: F) -> XmlProgress<'z, Span<'z>>
-        where F: Fn(StringPoint<'z>) -> XmlProgress<'z, T>
+    fn parse<'a, F>(pt: StringPoint<'a>, f: F) -> XmlProgress<'a, Span<T>>
+        where F: Fn(StringPoint<'a>) -> XmlProgress<'a, T>
     {
-        let (after, _) = try_parse!(f(pt));
-        let span = Span::new(pt, after);
+        let (after, v) = try_parse!(f(pt));
+        let span = Span { value: v, offset: pt.offset };
         peresil::Progress { status: peresil::Status::Success(span), point: after }
     }
 
-    fn into_point(self) -> StringPoint<'a> {
-        peresil::StringPoint { offset: self.offset, s: self.s }
+    fn map<F, U>(self, f: F) -> Span<U>
+        where F: FnOnce(T) -> U
+    {
+        Span { value: f(self.value), offset: self.offset }
+    }
+
+    fn into_point(self) -> StringPoint<'static> {
+        peresil::StringPoint { offset: self.offset, s: "" }
     }
 }
 
@@ -182,9 +183,9 @@ enum AttributeValue<'a> {
 
 #[derive(Debug,Copy,Clone)]
 enum Reference<'a> {
-    EntityReference(Span<'a>),
-    DecimalCharReference(Span<'a>),
-    HexCharReference(Span<'a>),
+    EntityReference(Span<&'a str>),
+    DecimalCharReference(Span<&'a str>),
+    HexCharReference(Span<&'a str>),
 }
 
 /// Common reusable XML parsing methods
@@ -418,10 +419,9 @@ impl Parser {
     {
         let (xml, _) = try_parse!(xml.expect_space());
 
-        let offset = xml.offset;
-        let (xml, name) = try_parse!(xml.consume_prefixed_name().map_err(|_| Error::ExpectedAttribute));
+        let (xml, name) = try_parse!(Span::parse(xml, |xml| xml.consume_prefixed_name().map_err(|_| Error::ExpectedAttribute)));
 
-        sink.attribute_start(offset, name);
+        sink.attribute_start(name);
 
         let (xml, _) = try_parse!(self.parse_eq(xml));
 
@@ -671,7 +671,7 @@ impl Parser {
     }
 }
 
-type SinkResult<'x, T> = Result<T, (Span<'x>, Error)>;
+type SinkResult<T> = Result<T, (Span<()>, Error)>;
 
 trait ParserSink<'x> {
     fn element_start(&mut self, name: PrefixedName<'x>);
@@ -679,46 +679,46 @@ trait ParserSink<'x> {
     fn comment(&mut self, text: &'x str);
     fn processing_instruction(&mut self, target: &'x str, value: Option<&'x str>);
     fn text(&mut self, text: &'x str);
-    fn reference(&mut self, reference: Reference<'x>) -> SinkResult<'x, ()>;
+    fn reference(&mut self, reference: Reference<'x>) -> SinkResult<()>;
     fn attributes_start(&mut self);
-    fn attributes_end(&mut self) -> SinkResult<'x, ()>;
-    fn attribute_start(&mut self, offset: usize, name: PrefixedName<'x>);
+    fn attributes_end(&mut self) -> SinkResult<()>;
+    fn attribute_start(&mut self, name: Span<PrefixedName<'x>>);
     fn attribute_value(&mut self, value: AttributeValue<'x>);
-    fn attribute_end(&mut self, name: PrefixedName<'x>);
+    fn attribute_end(&mut self, name: Span<PrefixedName<'x>>);
 }
 
 
-fn decode_reference<'x, T, F>(ref_data: Reference<'x>, cb: F) -> SinkResult<'x, T>
-    where F: FnMut(&str) -> SinkResult<'x, T>
+fn decode_reference<T, F>(ref_data: Reference, cb: F) -> SinkResult<T>
+    where F: FnMut(&str) -> SinkResult<T>
 {
     let mut cb = cb;
     match ref_data {
         DecimalCharReference(span) => {
-            u32::from_str_radix(span.s, 10).ok()
+            u32::from_str_radix(span.value, 10).ok()
                 .and_then(|code| char::from_u32(code))
-                .ok_or((span, Error::InvalidDecimalReference))
+                .ok_or((span.map(|_| ()), Error::InvalidDecimalReference))
                 .and_then(|c| {
                     let s: String = iter::repeat(c).take(1).collect();
                     cb(&s)
                 })
         },
         HexCharReference(span) => {
-            u32::from_str_radix(span.s, 16).ok()
+            u32::from_str_radix(span.value, 16).ok()
                 .and_then(|code| char::from_u32(code))
-                .ok_or((span, Error::InvalidHexReference))
+                .ok_or((span.map(|_| ()), Error::InvalidHexReference))
                 .and_then(|c| {
                     let s: String = iter::repeat(c).take(1).collect();
                     cb(&s)
                 })
         },
         EntityReference(span) => {
-            let s = match span.s {
+            let s = match span.value {
                 "amp"  => "&",
                 "lt"   => "<",
                 "gt"   => ">",
                 "apos" => "'",
                 "quot" => "\"",
-                _      => return Err((span, Error::UnknownNamedReference)),
+                _      => return Err((span.map(|_| ()), Error::UnknownNamedReference)),
             };
             cb(s)
         }
@@ -730,7 +730,7 @@ struct AttributeValueBuilder {
 }
 
 impl AttributeValueBuilder {
-    fn convert<'x>(values: &Vec<AttributeValue<'x>>) -> SinkResult<'x, String> {
+    fn convert(values: &Vec<AttributeValue>) -> SinkResult<String> {
         let mut builder = AttributeValueBuilder::new();
         try!(builder.ingest(values));
         Ok(builder.implode())
@@ -742,7 +742,7 @@ impl AttributeValueBuilder {
         }
     }
 
-    fn ingest<'x>(&mut self, values: &Vec<AttributeValue<'x>>) -> SinkResult<'x, ()> {
+    fn ingest(&mut self, values: &Vec<AttributeValue>) -> SinkResult<()> {
         for value in values.iter() {
             match value {
                 &LiteralAttributeValue(v) => self.value.push_str(v),
@@ -772,8 +772,7 @@ impl Deref for AttributeValueBuilder {
 
 #[derive(Debug)]
 struct DeferredAttribute<'d> {
-    offset: usize,
-    name: PrefixedName<'d>,
+    name: Span<PrefixedName<'d>>,
     values: Vec<AttributeValue<'d>>,
 }
 
@@ -840,7 +839,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         self.append_text(text);
     }
 
-    fn reference(&mut self, reference: Reference<'x>) -> SinkResult<'x, ()> {
+    fn reference(&mut self, reference: Reference) -> SinkResult<()> {
         let text = try!(decode_reference(reference, |s| Ok(self.doc.create_text(s))));
         self.append_text(text);
         Ok(())
@@ -849,15 +848,15 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
     fn attributes_start(&mut self) {
     }
 
-    fn attributes_end(&mut self) -> SinkResult<'x, ()> {
+    fn attributes_end(&mut self) -> SinkResult<()> {
         let deferred_element = self.element.take().unwrap();
         let attributes = replace(&mut self.attributes, Vec::new());
 
         let (namespaces, attributes): (Vec<_>, Vec<_>) =
-            attributes.into_iter().partition(|attr| attr.name.prefix == Some("xmlns"));
+            attributes.into_iter().partition(|attr| attr.name.value.prefix == Some("xmlns"));
 
         let (default_namespaces, attributes): (Vec<_>, Vec<_>) =
-            attributes.into_iter().partition(|attr| attr.name.local_part == "xmlns");
+            attributes.into_iter().partition(|attr| attr.name.value.local_part == "xmlns");
 
         let default_namespace = match &default_namespaces[..] {
             [] => None,
@@ -866,15 +865,15 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
                 Some(value)
             },
             rest => {
-                let last_namespace = rest.iter().max_by(|ns| ns.offset).unwrap();
-                return Err((Span { s: "", offset: last_namespace.offset }, Error::MultipleDefaultNamespaces))
+                let last_namespace = rest.iter().max_by(|ns| ns.name.offset).unwrap();
+                return Err((Span { value: (), offset: last_namespace.name.offset }, Error::MultipleDefaultNamespaces))
             },
         };
 
         let mut new_prefix_mappings = HashMap::new();
         for ns in namespaces.iter() {
             let value = try!(AttributeValueBuilder::convert(&ns.values));
-            new_prefix_mappings.insert(ns.name.local_part, value);
+            new_prefix_mappings.insert(ns.name.value.local_part, value);
         }
         let new_prefix_mappings = new_prefix_mappings;
 
@@ -908,31 +907,33 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         let mut builder = AttributeValueBuilder::new();
 
         for attribute in attributes.iter() {
+            let name = &attribute.name.value;
+
             builder.clear();
             try!(builder.ingest(&attribute.values));
             let value = &builder;
 
-            if let Some(prefix) = attribute.name.prefix {
+            if let Some(prefix) = name.prefix {
                 let ns_uri = new_prefix_mappings.get(prefix).map(|p| &p[..]);
                 let ns_uri = ns_uri.or_else(|| self.namespace_uri_for_prefix(prefix));
 
                 if let Some(ns_uri) = ns_uri {
-                    let attr = element.set_attribute_value((ns_uri, attribute.name.local_part),
+                    let attr = element.set_attribute_value((ns_uri, name.local_part),
                                                            &value);
                     attr.set_preferred_prefix(Some(prefix));
                 } else {
-                    return Err((Span { s: "", offset: attribute.offset }, Error::UnknownNamespacePrefix))
+                    return Err((Span { value: (), offset: attribute.name.offset }, Error::UnknownNamespacePrefix))
                 }
             } else {
-                element.set_attribute_value(attribute.name.local_part, &value);
+                element.set_attribute_value(name.local_part, &value);
             }
         }
 
         Ok(())
     }
 
-    fn attribute_start(&mut self, offset: usize, name: PrefixedName<'x>) {
-        let attr = DeferredAttribute { offset: offset, name: name, values: Vec::new() };
+    fn attribute_start(&mut self, name: Span<PrefixedName<'x>>) {
+        let attr = DeferredAttribute { name: name, values: Vec::new() };
         self.attributes.push(attr);
     }
 
@@ -940,7 +941,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         self.attributes.last_mut().unwrap().values.push(value);
     }
 
-    fn attribute_end(&mut self, _name: PrefixedName) {
+    fn attribute_end(&mut self, _name: Span<PrefixedName>) {
     }
 }
 
