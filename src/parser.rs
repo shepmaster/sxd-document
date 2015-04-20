@@ -609,7 +609,7 @@ impl Parser {
         where S: ParserSink<'a>
     {
         let (xml, _) = try_parse!(xml.consume_start_tag());
-        let (xml, name) = try_parse!(xml.consume_prefixed_name().map_err(|_| Error::ExpectedElementName));
+        let (xml, name) = try_parse!(Span::parse(xml, |xml| xml.consume_prefixed_name().map_err(|_| Error::ExpectedElementName)));
 
         sink.element_start(name);
 
@@ -622,7 +622,7 @@ impl Parser {
         let (xml, _) = try_parse!(
             pm.alternate()
                 .one(|_|  self.parse_empty_element_tail(xml))
-                .one(|pm| self.parse_non_empty_element_tail(pm, xml, sink, name))
+                .one(|pm| self.parse_non_empty_element_tail(pm, xml, sink, name.value))
                 .finish()
         );
 
@@ -674,8 +674,8 @@ impl Parser {
 type SinkResult<T> = Result<T, (Span<()>, Error)>;
 
 trait ParserSink<'x> {
-    fn element_start(&mut self, name: PrefixedName<'x>);
-    fn element_end(&mut self, name: PrefixedName<'x>);
+    fn element_start(&mut self, name: Span<PrefixedName<'x>>);
+    fn element_end(&mut self, name: Span<PrefixedName<'x>>);
     fn comment(&mut self, text: &'x str);
     fn processing_instruction(&mut self, target: &'x str, value: Option<&'x str>);
     fn text(&mut self, text: &'x str);
@@ -779,7 +779,7 @@ struct DeferredAttribute<'d> {
 struct SaxHydrator<'d, 'x> {
     doc: &'d dom4::Document<'d>,
     stack: Vec<dom4::Element<'d>>,
-    element: Option<PrefixedName<'x>>,
+    element: Option<Span<PrefixedName<'x>>>,
     attributes: Vec<DeferredAttribute<'x>>,
 }
 
@@ -816,11 +816,11 @@ impl<'d, 'x> SaxHydrator<'d, 'x> {
 }
 
 impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
-    fn element_start(&mut self, name: PrefixedName<'x>) {
+    fn element_start(&mut self, name: Span<PrefixedName<'x>>) {
         self.element = Some(name);
     }
 
-    fn element_end(&mut self, _name: PrefixedName) {
+    fn element_end(&mut self, _name: Span<PrefixedName>) {
         self.stack.pop();
     }
 
@@ -877,24 +877,26 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         }
         let new_prefix_mappings = new_prefix_mappings;
 
-        let element = if let Some(prefix) = deferred_element.prefix {
+        let element_name = &deferred_element.value;
+
+        let element = if let Some(prefix) = element_name.prefix {
             let ns_uri = new_prefix_mappings.get(prefix).map(|p| &p[..]);
             let ns_uri = ns_uri.or_else(|| self.namespace_uri_for_prefix(prefix));
 
             if let Some(ns_uri) = ns_uri {
-                let element = self.doc.create_element((ns_uri, deferred_element.local_part));
+                let element = self.doc.create_element((ns_uri, element_name.local_part));
                 element.set_preferred_prefix(Some(prefix));
                 element
             } else {
-                panic!("Unknown namespace prefix '{}'", prefix);
+                return Err((Span { value: (), offset: deferred_element.offset }, Error::UnknownNamespacePrefix));
             }
         } else if let Some(ns_uri) = default_namespace {
             let ns_uri = &ns_uri[..];
-            let element = self.doc.create_element((ns_uri, deferred_element.local_part));
+            let element = self.doc.create_element((ns_uri, element_name.local_part));
             element.set_default_namespace_uri(Some(ns_uri));
             element
         } else {
-            self.doc.create_element(deferred_element.local_part)
+            self.doc.create_element(element_name.local_part)
         };
 
         for (prefix, ns_uri) in new_prefix_mappings.iter() {
@@ -1487,5 +1489,14 @@ mod test {
         let r = full_parse("<a b:foo='a'/>");
 
         assert_eq!(r, Err((3, vec![UnknownNamespacePrefix])));
+    }
+
+    #[test]
+    fn failure_unknown_element_namespace_prefix() {
+        use super::Error::*;
+
+        let r = full_parse("<b:a/>");
+
+        assert_eq!(r, Err((1, vec![UnknownNamespacePrefix])));
     }
 }
