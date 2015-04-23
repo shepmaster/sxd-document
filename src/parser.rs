@@ -14,34 +14,6 @@
 //! </data>"#;
 //! let doc = parser.parse(xml).ok().expect("Failed to parse");
 //! ```
-//!
-//! ### Error handling
-//!
-//! When an error occurs in an alternation,
-//! we return the most interesting failure.
-//!
-//! When an error occurs while parsing zero-or-more items,
-//! we return the items parsed in addition to the failure point.
-//! If the next required item fails,
-//! we return the more interesting error of the two.
-//!
-//! When we have multiple errors,
-//! the *most interesting error* is the one that occurred last in the input.
-//! We assume that this will be closest to what the user intended.
-//!
-//! ### Unresolved questions:
-//!
-//! - Should zero-or-one mimic zero-or-more?
-//! - Should we restart from both the failure point and the original start point?
-//! - Should we preserve a tree of all the failures?
-//!
-//! ### Known issues
-//!
-//! - `panic!` is used in recoverable situations.
-//!
-//! ### Influences
-//!
-//! - http://www.scheidecker.net/2012/12/03/parser-combinators/
 
 use std::ascii::AsciiExt;
 use std::collections::HashMap;
