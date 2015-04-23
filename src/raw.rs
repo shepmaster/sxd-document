@@ -1,4 +1,4 @@
-use super::{QName,IntoQName};
+use super::QName;
 
 use arena::TypedArena;
 use string_pool::{StringPool,InternedString};
@@ -271,9 +271,9 @@ impl Storage {
     }
 
     pub fn create_element<'n, N>(&self, name: N) -> *mut Element
-        where N: IntoQName<'n>
+        where N: Into<QName<'n>>
     {
-        let name = name.into_qname();
+        let name = name.into();
         let name = self.intern_qname(name);
 
         self.elements.alloc(Element {
@@ -288,9 +288,9 @@ impl Storage {
     }
 
     pub fn create_attribute<'n, N>(&self, name: N, value: &str) -> *mut Attribute
-        where N: IntoQName<'n>
+        where N: Into<QName<'n>>
     {
-        let name = name.into_qname();
+        let name = name.into();
         let name = self.intern_qname(name);
         let value = self.intern(value);
 
@@ -333,9 +333,9 @@ impl Storage {
     }
 
     pub fn element_set_name<'n, N>(&self, element: *mut Element, name: N)
-        where N: IntoQName<'n>
+        where N: Into<QName<'n>>
     {
-        let name = name.into_qname();
+        let name = name.into();
         let name = self.intern_qname(name);
         let element_r = unsafe { &mut * element };
         element_r.name = name;
@@ -575,9 +575,9 @@ impl Connections {
     }
 
     pub fn attribute<'n, N>(&self, element: *mut Element, name: N) -> Option<*mut Attribute>
-        where N: IntoQName<'n>
+        where N: Into<QName<'n>>
     {
-        let name = name.into_qname();
+        let name = name.into();
         let element_r = unsafe { &*element };
         element_r.attributes.iter().find(|a| {
             let a_r: &Attribute = unsafe { &***a };

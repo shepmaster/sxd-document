@@ -4,7 +4,7 @@
 use std::cell::RefCell;
 use std::{fmt,hash};
 
-use super::{QName,IntoQName};
+use super::QName;
 use super::raw;
 
 type SiblingFn<T> = unsafe fn(&raw::Connections, T) -> raw::SiblingIter;
@@ -71,7 +71,7 @@ impl<'d> Document<'d> {
     }
 
     pub fn create_element<'n, N>(&'d self, name: N) -> Element<'d>
-        where N: IntoQName<'n>
+        where N: Into<QName<'n>>
     {
         self.wrap_element(self.storage.create_element(name))
     }
@@ -200,7 +200,7 @@ impl<'d> Element<'d> {
     pub fn name(&self) -> QName<'d> { self.node().name() }
 
     pub fn set_name<'n, N>(&self, name: N)
-        where N: IntoQName<'n>
+        where N: Into<QName<'n>>
     {
         self.document.storage.element_set_name(self.node, name)
     }
@@ -289,7 +289,7 @@ impl<'d> Element<'d> {
     }
 
     pub fn attribute<'n, N>(&self, name: N) -> Option<Attribute<'d>>
-        where N: IntoQName<'n>
+        where N: Into<QName<'n>>
     {
         let connections = self.document.connections.borrow();
         connections.attribute(self.node, name).map(|n| {
@@ -309,7 +309,7 @@ impl<'d> Element<'d> {
     }
 
     pub fn set_attribute_value<'n, N>(&self, name: N, value: &str) -> Attribute<'d>
-        where N: IntoQName<'n>
+        where N: Into<QName<'n>>
     {
         let attr = self.document.storage.create_attribute(name, value);
         let connections = self.document.connections.borrow_mut();
@@ -318,7 +318,7 @@ impl<'d> Element<'d> {
     }
 
     pub fn attribute_value<'n, N>(&self, name: N) -> Option<&'d str>
-        where N: IntoQName<'n>
+        where N: Into<QName<'n>>
     {
         let connections = self.document.connections.borrow();
         connections.attribute(self.node, name).map(|a| {
@@ -598,11 +598,11 @@ impl<'d> IntoChildOfElement<'d> for ChildOfRoot<'d> {
 
 #[cfg(test)]
 mod test {
-    use super::super::{Package,IntoQName};
+    use super::super::{Package,QName};
     use super::{ChildOfRoot,ChildOfElement,ParentOfChild};
 
     macro_rules! assert_qname_eq(
-        ($l:expr, $r:expr) => (assert_eq!($l.into_qname(), $r.into_qname()));
+        ($l:expr, $r:expr) => (assert_eq!(Into::<QName>::into($l), $r.into()));
     );
 
     #[test]
