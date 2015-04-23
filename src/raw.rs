@@ -106,14 +106,6 @@ impl ChildOfRoot {
         }
     }
 
-    fn into_child_of_element(self) -> ChildOfElement {
-        match self {
-            ChildOfRoot::Element(n) => ChildOfElement::Element(n),
-            ChildOfRoot::Comment(n) => ChildOfElement::Comment(n),
-            ChildOfRoot::ProcessingInstruction(n) => ChildOfElement::ProcessingInstruction(n),
-        }
-    }
-
     fn replace_parent(&self, parent: *mut Root) {
         match self {
             &ChildOfRoot::Element(n) => {
@@ -152,7 +144,7 @@ fn replace_parent(child: ChildOfRoot, parent: ParentOfChild, parent_field: &mut 
             },
             ParentOfChild::Element(e) => {
                 let e_r = unsafe { &mut *e };
-                let as_element_child = child.into_child_of_element();
+                let as_element_child = child.into();
                 e_r.children.retain(|n| *n != as_element_child);
             },
         }
@@ -199,35 +191,43 @@ pub enum ParentOfChild {
 }
 
 macro_rules! conversion_trait(
-    ($tr_name:ident, $method:ident, $res_type:ident,
-        { $($leaf_type:ident => $variant:expr),* }
-    ) => (
-        trait $tr_name {
-            fn $method(self) -> $res_type;
-        }
-
-        impl $tr_name for $res_type {
-            fn $method(self) -> $res_type {
-                self
-            }
-        }
-
-        $(impl $tr_name for *mut $leaf_type {
-            fn $method(self) -> $res_type {
+    ($res_type:ident, {
+        $($leaf_type:ident => $variant:expr),*
+    }) => (
+        $(impl Into<$res_type> for *mut $leaf_type {
+            fn into(self) -> $res_type {
                 $variant(self)
             }
         })*
     )
 );
 
-conversion_trait!(IntoChildOfElement, into_child_of_element, ChildOfElement, {
-    Element => ChildOfElement::Element,
-    Text => ChildOfElement::Text
-});
+conversion_trait!(
+    ChildOfElement, {
+        Element               => ChildOfElement::Element,
+        Text                  => ChildOfElement::Text,
+        Comment               => ChildOfElement::Comment,
+        ProcessingInstruction => ChildOfElement::ProcessingInstruction
+    }
+);
 
-conversion_trait!(IntoChildOfRoot, into_child_of_root, ChildOfRoot, {
-    Element => ChildOfRoot::Element
-});
+conversion_trait!(
+    ChildOfRoot, {
+        Element               => ChildOfRoot::Element,
+        Comment               => ChildOfRoot::Comment,
+        ProcessingInstruction => ChildOfRoot::ProcessingInstruction
+    }
+);
+
+impl Into<ChildOfElement> for ChildOfRoot {
+    fn into(self) -> ChildOfElement {
+        match self {
+            ChildOfRoot::Element(n)               => ChildOfElement::Element(n),
+            ChildOfRoot::Comment(n)               => ChildOfElement::Comment(n),
+            ChildOfRoot::ProcessingInstruction(n) => ChildOfElement::ProcessingInstruction(n),
+        }
+    }
+}
 
 pub struct Storage {
     strings: StringPool,
@@ -427,9 +427,9 @@ impl Connections {
     }
 
     pub fn append_root_child<C>(&self, child: C) where
-        C: IntoChildOfRoot
+        C: Into<ChildOfRoot>
     {
-        let child = child.into_child_of_root();
+        let child = child.into();
         let parent_r = unsafe { &mut *self.root };
 
         child.replace_parent(self.root);
@@ -437,9 +437,9 @@ impl Connections {
     }
 
     pub fn append_element_child<C>(&self, parent: *mut Element, child: C)
-        where C: IntoChildOfElement
+        where C: Into<ChildOfElement>
     {
-        let child = child.into_child_of_element();
+        let child = child.into();
         let parent_r = unsafe { &mut *parent };
 
         child.replace_parent(parent);
@@ -754,7 +754,7 @@ impl<'d> Iterator for SiblingIter<'d> {
     fn next(&mut self) -> Option<ChildOfElement> {
         match self.data {
             SiblingData::FromRoot(ref mut children) => {
-                children.next().map(|sib| sib.into_child_of_element())
+                children.next().map(|&sib| sib.into())
             },
             SiblingData::FromElement(ref mut children) => {
                 children.next().map(|&sib| sib)
