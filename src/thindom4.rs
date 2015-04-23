@@ -102,16 +102,16 @@ impl<'d> Connections<'d> {
     }
 
     pub fn append_root_child<C>(&mut self, child: C)
-        where C: IntoChildOfRoot<'d>
+        where C: Into<ChildOfRoot<'d>>
     {
-        let child = child.into_child_of_root();
+        let child = child.into();
         self.connections.append_root_child(child.as_raw())
     }
 
     pub fn append_element_child<C>(&mut self, parent: Element<'d>, child: C)
-        where C: IntoChildOfElement<'d>
+        where C: Into<ChildOfElement<'d>>
     {
-        let child = child.into_child_of_element();
+        let child = child.into();
         self.connections.append_element_child(parent.node, child.as_raw())
     }
 
@@ -438,45 +438,39 @@ impl<'d> ParentOfChild<'d> {
 }
 
 macro_rules! conversion_trait(
-    ($tr_name:ident, $method:ident, $res_type:ident,
-        { $($leaf_type:ident => $variant:expr),* }
-    ) => (
-        pub trait $tr_name<'d> {
-            fn $method(self) -> $res_type<'d>;
-        }
-
-        impl<'d> $tr_name<'d> for $res_type<'d> {
-            fn $method(self) -> $res_type<'d> {
-                self
-            }
-        }
-
-        $(impl<'d> $tr_name<'d> for $leaf_type<'d> {
-            fn $method(self) -> $res_type<'d> {
+    ($res_type:ident, {
+        $($leaf_type:ident => $variant:expr),*
+    }) => (
+        $(impl<'d> Into<$res_type<'d>> for $leaf_type<'d> {
+            fn into(self) -> $res_type<'d> {
                 $variant(self)
             }
         })*
     )
 );
 
-conversion_trait!(IntoChildOfRoot, into_child_of_root, ChildOfRoot, {
-    Element => ChildOfRoot::Element,
-    Comment => ChildOfRoot::Comment,
-    ProcessingInstruction => ChildOfRoot::ProcessingInstruction
-});
+conversion_trait!(
+    ChildOfRoot, {
+        Element               => ChildOfRoot::Element,
+        Comment               => ChildOfRoot::Comment,
+        ProcessingInstruction => ChildOfRoot::ProcessingInstruction
+    }
+);
 
-conversion_trait!(IntoChildOfElement, into_child_of_element, ChildOfElement, {
-    Element => ChildOfElement::Element,
-    Text => ChildOfElement::Text,
-    Comment => ChildOfElement::Comment,
-    ProcessingInstruction => ChildOfElement::ProcessingInstruction
-});
+conversion_trait!(
+    ChildOfElement, {
+        Element               => ChildOfElement::Element,
+        Text                  => ChildOfElement::Text,
+        Comment               => ChildOfElement::Comment,
+        ProcessingInstruction => ChildOfElement::ProcessingInstruction
+    }
+);
 
-impl<'d> IntoChildOfElement<'d> for ChildOfRoot<'d> {
-    fn into_child_of_element(self) -> ChildOfElement<'d> {
+impl<'d> Into<ChildOfElement<'d>> for ChildOfRoot<'d> {
+    fn into(self) -> ChildOfElement<'d> {
         match self {
-            ChildOfRoot::Element(n) => ChildOfElement::Element(n),
-            ChildOfRoot::Comment(n) => ChildOfElement::Comment(n),
+            ChildOfRoot::Element(n)               => ChildOfElement::Element(n),
+            ChildOfRoot::Comment(n)               => ChildOfElement::Comment(n),
             ChildOfRoot::ProcessingInstruction(n) => ChildOfElement::ProcessingInstruction(n),
         }
     }
