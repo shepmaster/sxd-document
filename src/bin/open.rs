@@ -31,7 +31,7 @@ fn process_input<R>(input: R)
 
     let package = match p.parse(&data) {
         Ok(d) => d,
-        Err(point) => panic!("Unable to parse: {}", pretty_error(&data, point)),
+        Err((point, _)) => panic!("Unable to parse: {}", pretty_error(&data, point)),
     };
 
     let mut out = io::stdout();

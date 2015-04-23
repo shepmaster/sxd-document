@@ -10,4 +10,4 @@ compile_failure = []
 
 [dependencies]
 
-peresil = "0.1.0"
+peresil = "0.2.0"
