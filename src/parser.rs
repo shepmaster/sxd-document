@@ -778,11 +778,11 @@ impl<'d, 'x> SaxHydrator<'d, 'x> {
     }
 
     fn append_to_either<T>(&self, child: T)
-        where T: dom4::IntoChildOfRoot<'d>
+        where T: Into<dom4::ChildOfRoot<'d>>
     {
         match self.stack.last() {
             None => self.doc.root().append_child(child),
-            Some(parent) => parent.append_child(child.into_child_of_root()),
+            Some(parent) => parent.append_child(child.into()),
         }
     }
 }
