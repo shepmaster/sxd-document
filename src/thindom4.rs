@@ -346,12 +346,10 @@ impl<'d> fmt::Debug for ProcessingInstruction<'d> {
 
 macro_rules! unpack(
     ($enum_name:ident, $name:ident, $wrapper:ident, $inner:ident) => (
-        impl<'d> $enum_name<'d> {
-            pub fn $name(self) -> Option<$inner<'d>> {
-                match self {
-                    $enum_name::$wrapper(n) => Some(n),
-                    _ => None,
-                }
+        pub fn $name(self) -> Option<$inner<'d>> {
+            match self {
+                $enum_name::$wrapper(n) => Some(n),
+                _ => None,
             }
         }
     )
@@ -364,11 +362,11 @@ pub enum ChildOfRoot<'d> {
     ProcessingInstruction(ProcessingInstruction<'d>),
 }
 
-unpack!(ChildOfRoot, element, Element, Element);
-unpack!(ChildOfRoot, comment, Comment, Comment);
-unpack!(ChildOfRoot, processing_instruction, ProcessingInstruction, ProcessingInstruction);
-
 impl<'d> ChildOfRoot<'d> {
+    unpack!(ChildOfRoot, element, Element, Element);
+    unpack!(ChildOfRoot, comment, Comment, Comment);
+    unpack!(ChildOfRoot, processing_instruction, ProcessingInstruction, ProcessingInstruction);
+
     pub fn wrap(node: raw::ChildOfRoot) -> ChildOfRoot<'d> {
         match node {
             raw::ChildOfRoot::Element(n)               => ChildOfRoot::Element(Element::wrap(n)),
@@ -394,12 +392,12 @@ pub enum ChildOfElement<'d> {
     ProcessingInstruction(ProcessingInstruction<'d>),
 }
 
-unpack!(ChildOfElement, element, Element, Element);
-unpack!(ChildOfElement, text, Text, Text);
-unpack!(ChildOfElement, comment, Comment, Comment);
-unpack!(ChildOfElement, processing_instruction, ProcessingInstruction, ProcessingInstruction);
-
 impl<'d> ChildOfElement<'d> {
+    unpack!(ChildOfElement, element, Element, Element);
+    unpack!(ChildOfElement, text, Text, Text);
+    unpack!(ChildOfElement, comment, Comment, Comment);
+    unpack!(ChildOfElement, processing_instruction, ProcessingInstruction, ProcessingInstruction);
+
     pub fn wrap(node: raw::ChildOfElement) -> ChildOfElement<'d> {
         match node {
             raw::ChildOfElement::Element(n)               => ChildOfElement::Element(Element::wrap(n)),
@@ -425,10 +423,10 @@ pub enum ParentOfChild<'d> {
     Element(Element<'d>),
 }
 
-unpack!(ParentOfChild, root, Root, Root);
-unpack!(ParentOfChild, element, Element, Element);
-
 impl<'d> ParentOfChild<'d> {
+    unpack!(ParentOfChild, root, Root, Root);
+    unpack!(ParentOfChild, element, Element, Element);
+
     pub fn wrap(node: raw::ParentOfChild) -> ParentOfChild<'d> {
         match node {
             raw::ParentOfChild::Root(n) => ParentOfChild::Root(Root::wrap(n)),

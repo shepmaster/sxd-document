@@ -474,12 +474,10 @@ impl<'d> fmt::Debug for ProcessingInstruction<'d> {
 
 macro_rules! unpack(
     ($enum_name:ident, $name:ident, $wrapper:ident, $inner:ident) => (
-        impl<'d> $enum_name<'d> {
-            pub fn $name(self) -> Option<$inner<'d>> {
-                match self {
-                    $enum_name::$wrapper(n) => Some(n),
-                    _ => None,
-                }
+        pub fn $name(self) -> Option<$inner<'d>> {
+            match self {
+                $enum_name::$wrapper(n) => Some(n),
+                _ => None,
             }
         }
     )
@@ -493,11 +491,12 @@ pub enum ChildOfRoot<'d> {
     ProcessingInstruction(ProcessingInstruction<'d>),
 }
 
-unpack!(ChildOfRoot, element, Element, Element);
-unpack!(ChildOfRoot, comment, Comment, Comment);
-unpack!(ChildOfRoot, processing_instruction, ProcessingInstruction, ProcessingInstruction);
 
 impl<'d> ChildOfRoot<'d> {
+    unpack!(ChildOfRoot, element, Element, Element);
+    unpack!(ChildOfRoot, comment, Comment, Comment);
+    unpack!(ChildOfRoot, processing_instruction, ProcessingInstruction, ProcessingInstruction);
+
     fn as_raw(&self) -> raw::ChildOfRoot {
         match self {
             &ChildOfRoot::Element(n) => raw::ChildOfRoot::Element(n.node),
@@ -516,12 +515,12 @@ pub enum ChildOfElement<'d> {
     ProcessingInstruction(ProcessingInstruction<'d>),
 }
 
-unpack!(ChildOfElement, element, Element, Element);
-unpack!(ChildOfElement, text, Text, Text);
-unpack!(ChildOfElement, comment, Comment, Comment);
-unpack!(ChildOfElement, processing_instruction, ProcessingInstruction, ProcessingInstruction);
-
 impl<'d> ChildOfElement<'d> {
+    unpack!(ChildOfElement, element, Element, Element);
+    unpack!(ChildOfElement, text, Text, Text);
+    unpack!(ChildOfElement, comment, Comment, Comment);
+    unpack!(ChildOfElement, processing_instruction, ProcessingInstruction, ProcessingInstruction);
+
     fn as_raw(&self) -> raw::ChildOfElement {
         match self {
             &ChildOfElement::Element(n) => raw::ChildOfElement::Element(n.node),
@@ -539,8 +538,10 @@ pub enum ParentOfChild<'d> {
     Element(Element<'d>),
 }
 
-unpack!(ParentOfChild, root, Root, Root);
-unpack!(ParentOfChild, element, Element, Element);
+impl<'d> ParentOfChild<'d> {
+    unpack!(ParentOfChild, root, Root, Root);
+    unpack!(ParentOfChild, element, Element, Element);
+}
 
 macro_rules! conversion_trait(
     ($res_type:ident, {
