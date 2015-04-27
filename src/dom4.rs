@@ -546,9 +546,9 @@ macro_rules! conversion_trait(
     ($res_type:ident, {
         $($leaf_type:ident => $variant:expr),*
     }) => (
-        $(impl<'d> Into<$res_type<'d>> for $leaf_type<'d> {
-            fn into(self) -> $res_type<'d> {
-                $variant(self)
+        $(impl<'d> From<$leaf_type<'d>> for $res_type<'d> {
+            fn from(v: $leaf_type<'d>) -> $res_type<'d> {
+                $variant(v)
             }
         })*
     )
@@ -571,9 +571,9 @@ conversion_trait!(
     }
 );
 
-impl<'d> Into<ChildOfElement<'d>> for ChildOfRoot<'d> {
-    fn into(self) -> ChildOfElement<'d> {
-        match self {
+impl<'d> From<ChildOfRoot<'d>> for ChildOfElement<'d> {
+    fn from(v: ChildOfRoot<'d>) -> ChildOfElement<'d> {
+        match v {
             ChildOfRoot::Element(n) => ChildOfElement::Element(n),
             ChildOfRoot::Comment(n) => ChildOfElement::Comment(n),
             ChildOfRoot::ProcessingInstruction(n) => ChildOfElement::ProcessingInstruction(n),

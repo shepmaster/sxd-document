@@ -130,12 +130,16 @@ impl<'s> QName<'s> {
     pub fn local_part(&self) -> &'s str { self.local_part }
 }
 
-impl<'s> Into<QName<'s>> for (&'s str, &'s str) {
-    fn into(self) -> QName<'s> { QName { namespace_uri: Some(self.0), local_part: self.1 } }
+impl<'s> From<(&'s str, &'s str)> for QName<'s> {
+    fn from(v: (&'s str, &'s str)) -> QName<'s> {
+        QName { namespace_uri: Some(v.0), local_part: v.1 }
+    }
 }
 
-impl<'s> Into<QName<'s>> for &'s str {
-    fn into(self) -> QName<'s> { QName { namespace_uri: None, local_part: self } }
+impl<'s> From<&'s str> for QName<'s> {
+    fn from(v: &'s str) -> QName<'s> {
+        QName { namespace_uri: None, local_part: v }
+    }
 }
 
 /// The main entrypoint to an XML document
