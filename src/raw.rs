@@ -1,6 +1,6 @@
 use super::QName;
 
-use arena::TypedArena;
+use typed_arena::Arena;
 use string_pool::{StringPool,InternedString};
 use std::collections::HashMap;
 use std::slice;
@@ -231,24 +231,24 @@ impl Into<ChildOfElement> for ChildOfRoot {
 
 pub struct Storage {
     strings: StringPool,
-    roots: TypedArena<Root>,
-    elements: TypedArena<Element>,
-    attributes: TypedArena<Attribute>,
-    texts: TypedArena<Text>,
-    comments: TypedArena<Comment>,
-    processing_instructions: TypedArena<ProcessingInstruction>,
+    roots: Arena<Root>,
+    elements: Arena<Element>,
+    attributes: Arena<Attribute>,
+    texts: Arena<Text>,
+    comments: Arena<Comment>,
+    processing_instructions: Arena<ProcessingInstruction>,
 }
 
 impl Storage {
     pub fn new() -> Storage {
         Storage {
             strings: StringPool::new(),
-            roots: TypedArena::new(),
-            elements: TypedArena::new(),
-            attributes: TypedArena::new(),
-            texts: TypedArena::new(),
-            comments: TypedArena::new(),
-            processing_instructions: TypedArena::new(),
+            roots: Arena::new(),
+            elements: Arena::new(),
+            attributes: Arena::new(),
+            texts: Arena::new(),
+            comments: Arena::new(),
+            processing_instructions: Arena::new(),
         }
     }
 

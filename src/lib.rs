@@ -51,12 +51,9 @@
 #![crate_name = "document"]
 
 #![feature(core)]
-#![feature(rustc_private)]
-#![feature(str_char)]
 #![feature(test)]
-#![feature(slice_patterns)]
 
-extern crate arena;
+extern crate typed_arena;
 extern crate test;
 
 #[macro_use]
