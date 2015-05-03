@@ -6,7 +6,6 @@ use std::borrow::Borrow;
 use std::cell::{Cell,RefCell};
 use std::cmp::max;
 use std::collections::LinkedList;
-use std::collections::hash_map::Entry::{Occupied,Vacant};
 use std::collections::hash_map::HashMap;
 use std::default::Default;
 use std::ops::Deref;
@@ -155,10 +154,8 @@ impl StringPool {
 
         let search_string = InternedString::from_str(s);
 
-        let interned_str = match self.index.borrow_mut().entry(search_string) {
-            Occupied(entry) => *entry.get(),
-            Vacant(entry) => *entry.insert(self.do_intern(s)),
-        };
+        let mut index = self.index.borrow_mut();
+        let interned_str = *index.entry(search_string).or_insert_with(|| self.do_intern(s));
 
         // The lifetime is really matched to us
         unsafe { mem::transmute(interned_str) }
