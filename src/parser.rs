@@ -830,14 +830,15 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         let (default_namespaces, attributes): (Vec<_>, Vec<_>) =
             attributes.into_iter().partition(|attr| attr.name.value.local_part == "xmlns");
 
-        let default_namespace = match &default_namespaces[..] {
-            [] => None,
-            [ref ns] => {
+        let default_namespace = match default_namespaces.len() {
+            0 => None,
+            1 => {
+                let ns = &default_namespaces[0];
                 let value = try!(AttributeValueBuilder::convert(&ns.values));
                 Some(value)
             },
-            rest => {
-                let last_namespace = rest.iter().max_by(|ns| ns.name.offset).unwrap();
+            _ => {
+                let last_namespace = default_namespaces.iter().max_by(|ns| ns.name.offset).unwrap();
                 return Err((Span { value: (), offset: last_namespace.name.offset }, Error::MultipleDefaultNamespaces))
             },
         };

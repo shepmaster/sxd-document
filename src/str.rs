@@ -60,7 +60,7 @@ impl<'a> XmlStr for &'a str {
             return None;
         }
 
-        let (quote_char, _) = quote.slice_shift_char().expect("Cant have null quote");
+        let quote_char = quote.chars().next().expect("Cant have null quote");
 
         let mut positions = self.char_indices().skip_while(|&(_, c)| c != '&' && c != '<' && c != quote_char);
 
