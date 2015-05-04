@@ -252,42 +252,40 @@ impl XmlChar for char {
 
 #[cfg(test)]
 mod test {
+    use super::XmlStr;
 
-use super::XmlStr;
+    #[test]
+    fn end_of_char_data_leading_ampersand() {
+        assert_eq!("&".end_of_char_data(), None);
+    }
 
-#[test]
-fn end_of_char_data_leading_ampersand() {
-    assert_eq!("&".end_of_char_data(), None);
-}
+    #[test]
+    fn end_of_char_data_leading_less_than() {
+        assert_eq!("<".end_of_char_data(), None);
+    }
 
-#[test]
-fn end_of_char_data_leading_less_than() {
-    assert_eq!("<".end_of_char_data(), None);
-}
+    #[test]
+    fn end_of_char_data_leading_cdata_end() {
+        assert_eq!("]]>".end_of_char_data(), None);
+    }
 
-#[test]
-fn end_of_char_data_leading_cdata_end() {
-    assert_eq!("]]>".end_of_char_data(), None);
-}
+    #[test]
+    fn end_of_char_data_until_ampersand() {
+        assert_eq!("hello&world".end_of_char_data(), Some("hello".len()));
+    }
 
-#[test]
-fn end_of_char_data_until_ampersand() {
-    assert_eq!("hello&world".end_of_char_data(), Some("hello".len()));
-}
+    #[test]
+    fn end_of_char_data_until_less_than() {
+        assert_eq!("hello<world".end_of_char_data(), Some("hello".len()));
+    }
 
-#[test]
-fn end_of_char_data_until_less_than() {
-    assert_eq!("hello<world".end_of_char_data(), Some("hello".len()));
-}
+    #[test]
+    fn end_of_char_data_until_cdata_end() {
+        assert_eq!("hello]]>world".end_of_char_data(), Some("hello".len()));
+    }
 
-#[test]
-fn end_of_char_data_until_cdata_end() {
-    assert_eq!("hello]]>world".end_of_char_data(), Some("hello".len()));
-}
-
-#[test]
-fn end_of_char_data_includes_right_square() {
-    assert_eq!("hello]world".end_of_char_data(), Some("hello]world".len()));
-}
-
+    #[test]
+    fn end_of_char_data_includes_right_square() {
+        assert_eq!("hello]world".end_of_char_data(), Some("hello]world".len()));
+    }
 }
