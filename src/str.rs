@@ -78,9 +78,9 @@ impl<'a> XmlStr for &'a str {
             return None
         }
 
-        // Using a hex literal because emacs' rust-mode doesn't
-        // understand ] in a char literal. :-(
-        let mut positions = self.char_indices().skip_while(|&(_, c)| c != '<' && c != '&' && c != '\x5d');
+        let mut positions = self.char_indices().skip_while(|&(_, c)| {
+            c != '<' && c != '&' && c != ']'
+        });
 
         loop {
             match positions.next() {
