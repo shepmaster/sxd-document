@@ -78,11 +78,13 @@ impl<'a> XmlStr for &'a str {
             return None
         }
 
-        let mut positions = self.char_indices().skip_while(|&(_, c)| {
-            c != '<' && c != '&' && c != ']'
-        });
+        let mut indices = self.char_indices();
 
         loop {
+            let mut positions = indices.by_ref().skip_while(|&(_, c)| {
+                c != '<' && c != '&' && c != ']'
+            });
+
             match positions.next() {
                 None => return Some(self.len()),
                 Some((offset, c)) if c == '<' || c == '&' => return Some(offset),
@@ -287,5 +289,10 @@ mod test {
     #[test]
     fn end_of_char_data_includes_right_square() {
         assert_eq!("hello]world".end_of_char_data(), Some("hello]world".len()));
+    }
+
+    #[test]
+    fn end_of_char_data_includes_multiple_right_squares() {
+        assert_eq!("hello]]world".end_of_char_data(), Some("hello]]world".len()));
     }
 }
