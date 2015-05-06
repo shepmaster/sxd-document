@@ -102,10 +102,7 @@ impl<'a> XmlStr for &'a str {
     }
 
     fn end_of_cdata(&self) -> Option<usize> {
-        match self.find("]]>") {
-            None => None,
-            Some(offset) => Some(offset),
-        }
+        self.find("]]>")
     }
 
     fn end_of_decimal_chars(&self) -> Option<usize> {
@@ -122,17 +119,11 @@ impl<'a> XmlStr for &'a str {
         // This deliberately does not include the >. -- is not allowed
         // in a comment, so we can just test the end if it matches the
         // complete close delimiter.
-        match self.find("--") {
-            None => None,
-            Some(offset) => Some(offset),
-        }
+        self.find("--")
     }
 
     fn end_of_pi_value(&self) -> Option<usize> {
-        match self.find("?>") {
-            None => None,
-            Some(offset) => Some(offset),
-        }
+        self.find("?>")
     }
 
     fn end_of_name(&self) -> Option<usize> {
