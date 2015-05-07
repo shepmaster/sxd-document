@@ -53,8 +53,8 @@ pub trait XmlStr {
 impl<'a> XmlStr for &'a str {
     fn end_of_attribute(&self, quote: &str) -> Option<usize> {
         if self.len() == 0 ||
-           self.starts_with("&") ||
-           self.starts_with("<") ||
+           self.starts_with('&') ||
+           self.starts_with('<') ||
            self.starts_with(quote)
         {
             return None;
