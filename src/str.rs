@@ -62,12 +62,7 @@ impl<'a> XmlStr for &'a str {
 
         let quote_char = quote.chars().next().expect("Cant have null quote");
 
-        let mut positions = self.char_indices().skip_while(|&(_, c)| c != '&' && c != '<' && c != quote_char);
-
-        match positions.next() {
-            Some((offset, _)) => Some(offset),
-            None => Some(self.len())
-        }
+        self.find(&['&', '<', quote_char][..]).or(Some(self.len()))
     }
 
     fn end_of_char_data(&self) -> Option<usize> {
