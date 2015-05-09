@@ -50,7 +50,6 @@
 
 #![crate_name = "document"]
 
-#![feature(core)]
 #![cfg_attr(feature = "unstable", feature(core))]
 #![cfg_attr(feature = "unstable", feature(test))]
 
