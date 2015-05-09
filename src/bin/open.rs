@@ -1,7 +1,5 @@
 #![cfg_attr(test, allow(dead_code))]
 
-#![feature(collections)]
-
 extern crate document;
 
 use std::env;
@@ -11,10 +9,10 @@ use std::io::{self,Read,Write};
 
 use document::parser::Parser;
 
-fn pretty_error(xml: &str, position: usize) -> &str {
+fn pretty_error(xml: &str, position: usize) -> String {
     let s = &xml[position..];
     let l = s.chars().count();
-    s.slice_chars(0, min(l, 15))
+    s.chars().take(min(l, 15)).collect()
 }
 
 fn process_input<R>(input: R)

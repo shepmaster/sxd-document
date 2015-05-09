@@ -787,6 +787,27 @@ impl<'d, 'x> SaxHydrator<'d, 'x> {
     }
 }
 
+#[cfg(not(feature = "unstable"))]
+fn find_last_namespace<'a>(ts: &'a [DeferredAttribute<'a>]) -> Option<&'a DeferredAttribute<'a>> {
+    ts.iter().fold(None, |max, t| {
+        match max {
+            None => Some(t),
+            Some(old) => {
+                if t.name.offset >= old.name.offset {
+                    Some(t)
+                } else {
+                    Some(old)
+                }
+            }
+        }
+    })
+}
+
+#[cfg(feature = "unstable")]
+fn find_last_namespace<'a>(ts: &'a [DeferredAttribute<'a>]) -> Option<&'a DeferredAttribute<'a>> {
+    ts.iter().max_by(|ns| ns.name.offset)
+}
+
 impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
     fn element_start(&mut self, name: Span<PrefixedName<'x>>) {
         self.element = Some(name);
@@ -838,7 +859,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
                 Some(value)
             },
             _ => {
-                let last_namespace = default_namespaces.iter().max_by(|ns| ns.name.offset).unwrap();
+                let last_namespace = find_last_namespace(&default_namespaces).unwrap();
                 return Err((Span { value: (), offset: last_namespace.name.offset }, Error::MultipleDefaultNamespaces))
             },
         };
