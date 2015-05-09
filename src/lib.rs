@@ -51,10 +51,9 @@
 #![crate_name = "document"]
 
 #![feature(core)]
-#![feature(test)]
+#![cfg_attr(feature = "unstable", feature(test))]
 
 extern crate typed_arena;
-extern crate test;
 
 #[macro_use]
 extern crate peresil;

@@ -285,9 +285,11 @@ mod test {
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "unstable")]
 mod bench {
-    use test::Bencher;
+    extern crate test;
+
+    use self::test::Bencher;
 
     use super::StringPool;
 
