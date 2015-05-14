@@ -64,8 +64,8 @@ mod raw;
 mod str;
 
 #[doc(hidden)]
-pub mod thindom4;
-pub mod dom4;
+pub mod thindom;
+pub mod dom;
 pub mod parser;
 pub mod writer;
 
@@ -155,14 +155,14 @@ impl Package {
         }
     }
 
-    pub fn as_document(&self) -> dom4::Document {
-        dom4::Document::new(&self.storage, &self.connections)
+    pub fn as_document(&self) -> dom::Document {
+        dom::Document::new(&self.storage, &self.connections)
     }
 
     #[doc(hidden)]
-    pub fn as_thin_document(&self) -> (thindom4::Storage, thindom4::Connections) {
-        let s = thindom4::Storage::new(&self.storage);
-        let c = thindom4::Connections::new(&self.connections);
+    pub fn as_thin_document(&self) -> (thindom::Storage, thindom::Connections) {
+        let s = thindom::Storage::new(&self.storage);
+        let c = thindom::Connections::new(&self.connections);
         (s, c)
     }
 }

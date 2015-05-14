@@ -36,8 +36,8 @@ use self::Content::*;
 
 use super::QName;
 
-use super::dom4;
-use super::dom4::{ChildOfElement,ChildOfRoot};
+use super::dom;
+use super::dom::{ChildOfElement,ChildOfRoot};
 
 trait WriteStr: Write {
     fn write_str(&mut self, s: &str) -> io::Result<()> {
@@ -143,7 +143,7 @@ impl<'d> PrefixMapping<'d> {
         self.scopes.last().unwrap().defined_prefixes.iter()
     }
 
-    fn populate_scope(&mut self, element: &dom4::Element<'d>, attributes: &[dom4::Attribute<'d>]) {
+    fn populate_scope(&mut self, element: &dom::Element<'d>, attributes: &[dom::Attribute<'d>]) {
         self.scopes.last_mut().unwrap().default_namespace_uri = element.default_namespace_uri();
 
         if let Some(prefix) = element.preferred_prefix() {
@@ -259,11 +259,11 @@ impl<'d> PrefixMapping<'d> {
 }
 
 enum Content<'d> {
-    Element(dom4::Element<'d>),
-    ElementEnd(dom4::Element<'d>),
-    Text(dom4::Text<'d>),
-    Comment(dom4::Comment<'d>),
-    ProcessingInstruction(dom4::ProcessingInstruction<'d>),
+    Element(dom::Element<'d>),
+    ElementEnd(dom::Element<'d>),
+    Text(dom::Text<'d>),
+    Comment(dom::Comment<'d>),
+    ProcessingInstruction(dom::ProcessingInstruction<'d>),
 }
 
 fn format_qname<'d, W>(q: QName<'d>,
@@ -309,7 +309,7 @@ fn format_attribute_value<W>(value: &str, writer: &mut W) -> io::Result<()>
     Ok(())
 }
 
-fn format_element<'d, W>(element: dom4::Element<'d>,
+fn format_element<'d, W>(element: dom::Element<'d>,
                          todo: &mut Vec<Content<'d>>,
                          mapping: &mut PrefixMapping<'d>,
                          writer: &mut W)
@@ -363,7 +363,7 @@ fn format_element<'d, W>(element: dom4::Element<'d>,
     }
 }
 
-fn format_element_end<'d, W>(element: dom4::Element<'d>,
+fn format_element_end<'d, W>(element: dom::Element<'d>,
                              mapping: &mut PrefixMapping<'d>,
                              writer: &mut W)
                              -> io::Result<()>
@@ -376,7 +376,7 @@ fn format_element_end<'d, W>(element: dom4::Element<'d>,
 
 use super::str_ext::{SplitKeepingDelimiterExt,SplitType};
 
-fn format_text<W>(text: dom4::Text, writer: &mut W) -> io::Result<()>
+fn format_text<W>(text: dom::Text, writer: &mut W) -> io::Result<()>
     where W: Write
 {
     for item in text.text().split_keeping_delimiter(&['<', '>', '&'][..]) {
@@ -391,13 +391,13 @@ fn format_text<W>(text: dom4::Text, writer: &mut W) -> io::Result<()>
     Ok(())
 }
 
-fn format_comment<W>(comment: dom4::Comment, writer: &mut W) -> io::Result<()>
+fn format_comment<W>(comment: dom::Comment, writer: &mut W) -> io::Result<()>
     where W: Write
 {
     write!(writer, "<!--{}-->", comment.text())
 }
 
-fn format_processing_instruction<W>(pi: dom4::ProcessingInstruction, writer: &mut W) -> io::Result<()>
+fn format_processing_instruction<W>(pi: dom::ProcessingInstruction, writer: &mut W) -> io::Result<()>
     where W: Write
 {
     match pi.value() {
@@ -429,7 +429,7 @@ fn format_one<'d, W>(content: Content<'d>,
     }
 }
 
-fn format_body<W>(element: dom4::Element, writer: &mut W) -> io::Result<()>
+fn format_body<W>(element: dom::Element, writer: &mut W) -> io::Result<()>
     where W: Write
 {
     let mut todo = vec![Element(element)];
@@ -443,7 +443,7 @@ fn format_body<W>(element: dom4::Element, writer: &mut W) -> io::Result<()>
 }
 
 /// Formats a document into a Write
-pub fn format_document<'d, W>(doc: &'d dom4::Document<'d>, writer: &mut W) -> io::Result<()>
+pub fn format_document<'d, W>(doc: &'d dom::Document<'d>, writer: &mut W) -> io::Result<()>
     where W: Write
 {
     try!(writer.write_str("<?xml version='1.0'?>"));
@@ -462,10 +462,10 @@ pub fn format_document<'d, W>(doc: &'d dom4::Document<'d>, writer: &mut W) -> io
 #[cfg(test)]
 mod test {
     use super::super::Package;
-    use super::super::dom4;
+    use super::super::dom;
     use super::format_document;
 
-    fn format_xml<'d>(doc: &'d dom4::Document<'d>) -> String {
+    fn format_xml<'d>(doc: &'d dom::Document<'d>) -> String {
         let mut w = Vec::new();
         format_document(doc, &mut w).ok().expect("Not formatted");
         String::from_utf8(w).ok().expect("Not a string")

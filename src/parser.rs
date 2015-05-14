@@ -27,7 +27,7 @@ use self::AttributeValue::*;
 use self::Reference::*;
 
 use super::PrefixedName;
-use super::dom4;
+use super::dom;
 use super::str::XmlStr;
 
 #[derive(Debug,Copy,Clone,PartialEq)]
@@ -749,14 +749,14 @@ struct DeferredAttribute<'d> {
 }
 
 struct SaxHydrator<'d, 'x> {
-    doc: &'d dom4::Document<'d>,
-    stack: Vec<dom4::Element<'d>>,
+    doc: &'d dom::Document<'d>,
+    stack: Vec<dom::Element<'d>>,
     element: Option<Span<PrefixedName<'x>>>,
     attributes: Vec<DeferredAttribute<'x>>,
 }
 
 impl<'d, 'x> SaxHydrator<'d, 'x> {
-    fn new(doc: &'d dom4::Document<'d>) -> SaxHydrator<'d, 'x> {
+    fn new(doc: &'d dom::Document<'d>) -> SaxHydrator<'d, 'x> {
         SaxHydrator {
             doc: doc,
             stack: Vec::new(),
@@ -765,7 +765,7 @@ impl<'d, 'x> SaxHydrator<'d, 'x> {
         }
     }
 
-    fn current_element(&self) -> &dom4::Element<'d> {
+    fn current_element(&self) -> &dom::Element<'d> {
         self.stack.last().expect("No element to append to")
     }
 
@@ -773,12 +773,12 @@ impl<'d, 'x> SaxHydrator<'d, 'x> {
         self.stack.last().and_then(|e| e.namespace_uri_for_prefix(prefix))
     }
 
-    fn append_text(&self, text: dom4::Text<'d>) {
+    fn append_text(&self, text: dom::Text<'d>) {
         self.current_element().append_child(text);
     }
 
     fn append_to_either<T>(&self, child: T)
-        where T: Into<dom4::ChildOfRoot<'d>>
+        where T: Into<dom::ChildOfRoot<'d>>
     {
         match self.stack.last() {
             None => self.doc.root().append_child(child),
@@ -945,7 +945,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
 mod test {
     use super::{Parser,Error};
     use super::super::{Package,QName};
-    use super::super::dom4;
+    use super::super::dom;
 
     macro_rules! assert_qname_eq(
         ($l:expr, $r:expr) => (assert_eq!(Into::<QName>::into($l), $r.into()));
@@ -962,7 +962,7 @@ mod test {
             .expect("Failed to parse the XML string")
     }
 
-    fn top<'d>(doc: &'d dom4::Document<'d>) -> dom4::Element<'d> {
+    fn top<'d>(doc: &'d dom::Document<'d>) -> dom::Element<'d> {
         doc.root().children()[0].element().unwrap()
     }
 
