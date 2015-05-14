@@ -16,11 +16,6 @@
 //! format_document(&doc, &mut output).ok().expect("unable to output XML");
 //! ```
 //!
-//! ### Known issues
-//!
-//! Output is not escaped in any way,
-//! it's very easy to create malformed XML!
-//!
 //! ### Potential options to support
 //!
 //! - Space before `/>`
