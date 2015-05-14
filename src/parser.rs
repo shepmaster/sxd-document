@@ -3,7 +3,7 @@
 //! ### Example
 //!
 //! ```
-//! use document::parser::Parser;
+//! use sxd_document::parser::Parser;
 //! let parser = Parser::new();
 //! let xml = r#"<?xml version="1.0"?>
 //! <!-- Awesome data incoming -->

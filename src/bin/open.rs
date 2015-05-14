@@ -1,13 +1,13 @@
 #![cfg_attr(test, allow(dead_code))]
 
-extern crate document;
+extern crate sxd_document;
 
 use std::env;
 use std::cmp::min;
 use std::fs::File;
 use std::io::{self,Read,Write};
 
-use document::parser::Parser;
+use sxd_document::parser::Parser;
 
 fn pretty_error(xml: &str, position: usize) -> String {
     let s = &xml[position..];
@@ -35,7 +35,7 @@ fn process_input<R>(input: R)
     let mut out = io::stdout();
     let d = package.as_document();
 
-    document::writer::format_document(&d, &mut out).ok().expect("I can't output");
+    sxd_document::writer::format_document(&d, &mut out).ok().expect("I can't output");
     // Remove when we move back to stdout_raw + buffer or when stdout flushed at program exit
     out.flush().unwrap();
 }

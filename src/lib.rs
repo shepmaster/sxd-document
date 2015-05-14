@@ -1,6 +1,6 @@
 //!
 //! ```
-//! use document::Package;
+//! use sxd_document::Package;
 //! let package = Package::new();
 //! let doc = package.as_document();
 //!
@@ -47,8 +47,6 @@
 //! ### Design decisions
 //!
 //! Try to leverage the type system as much as possible.
-
-#![crate_name = "document"]
 
 #![cfg_attr(feature = "unstable", feature(core))]
 #![cfg_attr(feature = "unstable", feature(test))]

@@ -2,8 +2,8 @@
 //!
 //! ### Example
 //! ```
-//! use document::Package;
-//! use document::writer::format_document;
+//! use sxd_document::Package;
+//! use sxd_document::writer::format_document;
 //!
 //! let package = Package::new();
 //! let doc = package.as_document();
