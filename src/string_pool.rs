@@ -23,9 +23,7 @@ impl Chunk {
         let start = slab.as_mut_ptr();
 
         // We will manually track the buffer and then drop it ourselves
-        unsafe {
-            mem::forget(slab);
-        }
+        mem::forget(slab);
 
         Chunk {
             start: start,
