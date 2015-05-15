@@ -1,15 +1,22 @@
 [package]
-
 name = "sxd-document"
 version = "0.0.1"
 authors = ["Jake Goulding <jake.goulding@gmail.com>"]
 
-[features]
+description = "A Rust XML DOM library"
+readme = "README.md"
+keywords = ["xml"]
 
+homepage = "https://github.com/shepmaster/sxd-document"
+repository = "https://github.com/shepmaster/sxd-document"
+documentation = "https://shepmaster.github.io/sxd-document/"
+
+license = "MIT"
+
+[features]
 compile_failure = []
 unstable = []
 
 [dependencies]
-
 peresil = "0.2.0"
 typed-arena = "1.0"
