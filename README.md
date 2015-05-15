@@ -2,6 +2,10 @@
 
 An XML library in Rust.
 
+[![Build Status](https://travis-ci.org/shepmaster/sxd-document.svg?branch=master)](https://travis-ci.org/shepmaster/sxd-document)
+
+[Documentation](https://shepmaster.github.io/sxd-document/)
+
 ## Overview
 
 The project is currently broken into two crates:

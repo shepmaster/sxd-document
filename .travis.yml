@@ -1,15 +1,19 @@
 language: rust
 sudo: false
 rust:
-  - nightly
-  - beta
+- nightly
+- beta
 env:
+  matrix:
   - FEATURES=""
   - FEATURES="unstable"
+  global:
+    secure: WPH3AcdfXVt8QBD5oNTZtBGDqnV4dt9LA0pxJJ0QjJZgZtjp+HfTG+l6NnX+8C8WPLOubYnphTdGg6tOCq/x5wJpltYMUNubF9ivhavyCkG2UfItyuejdjmf7edeHk3maNqY0cml9L/Gh5ysrf3/ti5+LZXzdnX9QhQvoL1TFZg=
 matrix:
   exclude:
-    - rust: beta
-      env: FEATURES="unstable"
+  - rust: beta
+    env: FEATURES="unstable"
 script: |
   cargo build --verbose --features "${FEATURES}"
   cargo test --verbose --features "${FEATURES}"
+after_success: "./deploy_gh_pages.sh"
