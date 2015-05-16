@@ -9,6 +9,7 @@ use super::raw;
 type SiblingFn<T> = unsafe fn(&raw::Connections, T) -> raw::SiblingIter;
 
 /// An XML document
+#[derive(Copy,Clone)]
 pub struct Document<'d> {
     storage: &'d raw::Storage,
     connections: &'d raw::Connections,
@@ -16,7 +17,7 @@ pub struct Document<'d> {
 
 macro_rules! wrapper(
     ($name:ident, $wrapper:ident, $inner:ty) => (
-        fn $name(&'d self, node: *mut $inner) -> $wrapper<'d> {
+        fn $name(self, node: *mut $inner) -> $wrapper<'d> {
             $wrapper {
                 document: self,
                 node: node,
@@ -41,14 +42,14 @@ impl<'d> Document<'d> {
         }
     }
 
-    fn wrap_parent_of_child(&'d self, node: raw::ParentOfChild) -> ParentOfChild<'d> {
+    fn wrap_parent_of_child(self, node: raw::ParentOfChild) -> ParentOfChild<'d> {
         match node {
             raw::ParentOfChild::Root(n) => ParentOfChild::Root(self.wrap_root(n)),
             raw::ParentOfChild::Element(n) => ParentOfChild::Element(self.wrap_element(n)),
         }
     }
 
-    fn wrap_child_of_root(&'d self, node: raw::ChildOfRoot) -> ChildOfRoot<'d> {
+    fn wrap_child_of_root(self, node: raw::ChildOfRoot) -> ChildOfRoot<'d> {
         match node {
             raw::ChildOfRoot::Element(n) => ChildOfRoot::Element(self.wrap_element(n)),
             raw::ChildOfRoot::Comment(n) => ChildOfRoot::Comment(self.wrap_comment(n)),
@@ -56,7 +57,7 @@ impl<'d> Document<'d> {
         }
     }
 
-    fn wrap_child_of_element(&'d self, node: raw::ChildOfElement) -> ChildOfElement<'d> {
+    fn wrap_child_of_element(self, node: raw::ChildOfElement) -> ChildOfElement<'d> {
         match node {
             raw::ChildOfElement::Element(n) => ChildOfElement::Element(self.wrap_element(n)),
             raw::ChildOfElement::Text(n) => ChildOfElement::Text(self.wrap_text(n)),
@@ -65,29 +66,29 @@ impl<'d> Document<'d> {
         }
     }
 
-    pub fn root(&'d self) -> Root<'d> {
+    pub fn root(self) -> Root<'d> {
         self.wrap_root(self.connections.root())
     }
 
-    pub fn create_element<'n, N>(&'d self, name: N) -> Element<'d>
+    pub fn create_element<'n, N>(self, name: N) -> Element<'d>
         where N: Into<QName<'n>>
     {
         self.wrap_element(self.storage.create_element(name))
     }
 
-    pub fn create_text(&'d self, text: &str) -> Text<'d> {
+    pub fn create_text(self, text: &str) -> Text<'d> {
         self.wrap_text(self.storage.create_text(text))
     }
 
-    pub fn create_comment(&'d self, text: &str) -> Comment<'d> {
+    pub fn create_comment(self, text: &str) -> Comment<'d> {
         self.wrap_comment(self.storage.create_comment(text))
     }
 
-    pub fn create_processing_instruction(&'d self, target: &str, value: Option<&str>) -> ProcessingInstruction<'d> {
+    pub fn create_processing_instruction(self, target: &str, value: Option<&str>) -> ProcessingInstruction<'d> {
         self.wrap_pi(self.storage.create_processing_instruction(target, value))
     }
 
-    fn siblings<T>(&'d self, f: SiblingFn<T>, node: T) -> Vec<ChildOfElement<'d>> {
+    fn siblings<T>(self, f: SiblingFn<T>, node: T) -> Vec<ChildOfElement<'d>> {
         // This is safe because we don't allow the connection
         // information to leak outside of this method.
         unsafe {
@@ -98,7 +99,8 @@ impl<'d> Document<'d> {
 
 impl<'d> PartialEq for Document<'d> {
     fn eq(&self, other: &Document<'d>) -> bool {
-        self as *const Document == other as *const Document
+        (self.storage as *const raw::Storage, self.connections as *const raw::Connections)
+            == (other.storage as *const raw::Storage, other.connections as *const raw::Connections)
     }
 }
 
@@ -114,7 +116,7 @@ macro_rules! node(
         #[allow(raw_pointer_derive)]
         #[derive(Copy,Clone)]
         pub struct $name<'d> {
-            document: &'d Document<'d>,
+            document: Document<'d>,
             node: *mut $raw,
         }
 
@@ -122,7 +124,7 @@ macro_rules! node(
             #[allow(dead_code)]
             fn node(&self) -> &'d $raw { unsafe { &*self.node } }
 
-            pub fn document(&self) -> &'d Document<'d> { self.document }
+            pub fn document(&self) -> Document<'d> { self.document }
         }
 
         impl<'d> PartialEq for $name<'d> {
@@ -578,7 +580,7 @@ mod test {
 
         let root = doc.root();
 
-        assert_eq!(&doc, root.document());
+        assert_eq!(doc, root.document());
     }
 
     #[test]
@@ -663,7 +665,7 @@ mod test {
 
         let element = doc.create_element("alpha");
 
-        assert_eq!(&doc, element.document());
+        assert_eq!(doc, element.document());
     }
 
     #[test]
@@ -822,7 +824,7 @@ mod test {
         let element = doc.create_element("alpha");
         let attr = element.set_attribute_value("hello", "world");
 
-        assert_eq!(&doc, attr.document());
+        assert_eq!(doc, attr.document());
     }
 
     #[test]
@@ -888,7 +890,7 @@ mod test {
 
         let text = doc.create_text("Now is the winter of our discontent.");
 
-        assert_eq!(&doc, text.document());
+        assert_eq!(doc, text.document());
     }
 
     #[test]
@@ -968,7 +970,7 @@ mod test {
 
         let comment = doc.create_comment("Now is the winter of our discontent.");
 
-        assert_eq!(&doc, comment.document());
+        assert_eq!(doc, comment.document());
     }
 
     #[test]
@@ -1048,7 +1050,7 @@ mod test {
 
         let pi = doc.create_processing_instruction("device", None);
 
-        assert_eq!(&doc, pi.document());
+        assert_eq!(doc, pi.document());
     }
 
     #[test]
