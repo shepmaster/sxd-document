@@ -26,7 +26,7 @@ use peresil::{self,StringPoint,ParseMaster,Recoverable};
 use self::AttributeValue::*;
 use self::Reference::*;
 
-use super::PrefixedName;
+use super::{PrefixedName,QName};
 use super::dom;
 use super::str::XmlStr;
 
@@ -775,6 +775,10 @@ impl<'d, 'x> SaxHydrator<'d, 'x> {
         self.stack.last().expect("No element to append to")
     }
 
+    fn default_namespace_uri(&self) -> Option<&str> {
+        self.stack.last().and_then(|e| e.recursive_default_namespace_uri())
+    }
+
     fn namespace_uri_for_prefix(&self, prefix: &str) -> Option<&str> {
         self.stack.last().and_then(|e| e.namespace_uri_for_prefix(prefix))
     }
@@ -929,7 +933,9 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
             element.set_default_namespace_uri(Some(ns_uri));
             element
         } else {
-            self.doc.create_element(element_name.local_part)
+            let ns_uri = self.default_namespace_uri();
+            let name = QName::with_namespace_uri(ns_uri, element_name.local_part);
+            self.doc.create_element(name)
         };
 
         for (prefix, ns_uri) in new_prefix_mappings.iter() {
@@ -1147,6 +1153,16 @@ mod test {
         let world = hello.children()[0].element().unwrap();
 
         assert_eq!(world.preferred_prefix(), Some("ns1"));
+        assert_qname_eq!(world.name(), ("outer", "world"));
+    }
+
+    #[test]
+    fn nested_elements_with_inherited_default_namespace() {
+        let package = quick_parse("<hello xmlns='outer'><world/></hello>");
+        let doc = package.as_document();
+        let hello = top(&doc);
+        let world = hello.children()[0].element().unwrap();
+
         assert_qname_eq!(world.name(), ("outer", "world"));
     }
 

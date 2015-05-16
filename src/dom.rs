@@ -209,6 +209,10 @@ impl<'d> Element<'d> {
         self.node().default_namespace_uri()
     }
 
+    pub fn recursive_default_namespace_uri(&self) -> Option<&'d str> {
+        self.document.connections.element_default_namespace_uri(self.node)
+    }
+
     /// Map a prefix to a namespace URI. Any existing prefix on this
     /// element will be replaced.
     pub fn register_prefix(&self, prefix: &str, namespace_uri: &str) {

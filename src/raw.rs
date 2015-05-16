@@ -679,6 +679,24 @@ impl Connections {
 
         NamespacesInScope { iter: namespaces.into_iter() }
     }
+
+    pub fn element_default_namespace_uri(&self, element: *mut Element) -> Option<&str> {
+        let mut element = element;
+        loop {
+            let element_r = unsafe { &*element };
+
+            if let Some(ns_uri) = element_r.default_namespace_uri() {
+                return Some(ns_uri);
+            }
+
+            match element_r.parent {
+                Some(ParentOfChild::Element(parent)) => element = parent,
+                _ => break,
+            }
+        }
+
+        None
+    }
 }
 
 struct NamespacesInScope<'a> {
