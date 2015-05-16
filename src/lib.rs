@@ -73,7 +73,7 @@ pub use str::XmlChar;
 
 /// A prefixed name. This represents what is found in the string form
 /// of an XML document, and does not apply any namespace mapping.
-#[derive(Debug,Copy,Clone,PartialEq)]
+#[derive(Debug,Copy,Clone,PartialEq,Eq,PartialOrd,Ord)]
 pub struct PrefixedName<'a> {
     prefix: Option<&'a str>,
     local_part: &'a str,

@@ -74,7 +74,9 @@ pub enum Error {
     InvalidHexReference,
     UnknownNamedReference,
 
-    MultipleDefaultNamespaces,
+    DuplicateAttribute,
+    RedefinedNamespace,
+    RedefinedDefaultNamespace,
     UnknownNamespacePrefix,
 }
 
@@ -88,7 +90,9 @@ impl Recoverable for Error {
             InvalidDecimalReference            |
             InvalidHexReference                |
             UnknownNamedReference              |
-            MultipleDefaultNamespaces          |
+            DuplicateAttribute                 |
+            RedefinedNamespace                 |
+            RedefinedDefaultNamespace          |
             UnknownNamespacePrefix             => {
                 false
             },
@@ -795,13 +799,37 @@ struct DeferredAttributes<'a> {
 
 impl<'a> DeferredAttributes<'a> {
     fn new(attributes: Vec<DeferredAttribute<'a>>) -> DeferredAttributes<'a> {
-        let (namespaces, attributes): (Vec<_>, Vec<_>) =
+        let (mut namespaces, attributes): (Vec<_>, Vec<_>) =
             attributes.into_iter().partition(|attr| attr.name.value.prefix == Some("xmlns"));
 
-        let (default_namespaces, attributes): (Vec<_>, Vec<_>) =
+        let (mut default_namespaces, mut attributes): (Vec<_>, Vec<_>) =
             attributes.into_iter().partition(|attr| attr.name.value.local_part == "xmlns");
 
+        fn sort_by_name(a: &DeferredAttribute, b: &DeferredAttribute) -> ::std::cmp::Ordering {
+            a.name.value.cmp(&b.name.value)
+        }
+
+        attributes.sort_by(sort_by_name);
+        namespaces.sort_by(sort_by_name);
+        default_namespaces.sort_by(sort_by_name);
+
         DeferredAttributes { attributes: attributes, namespaces: namespaces, default_namespaces: default_namespaces }
+    }
+
+    fn check_duplicates(&self) -> SinkResult<()> {
+        for w in self.attributes.windows(2) {
+            if w[0].name.value == w[1].name.value {
+                return Err((w[1].name.map(|_| ()), Error::DuplicateAttribute));
+            }
+        }
+
+        for w in self.namespaces.windows(2) {
+            if w[0].name.value == w[1].name.value {
+                return Err((w[1].name.map(|_| ()), Error::RedefinedNamespace));
+            }
+        }
+
+        Ok(())
     }
 
     fn attributes(&self) -> &[DeferredAttribute<'a>] {
@@ -822,7 +850,7 @@ impl<'a> DeferredAttributes<'a> {
             },
             _ => {
                 let last_namespace = self.last_namespace().unwrap();
-                Err((Span { value: (), offset: last_namespace.name.offset }, Error::MultipleDefaultNamespaces))
+                Err((Span { value: (), offset: last_namespace.name.offset }, Error::RedefinedDefaultNamespace))
             },
         }
     }
@@ -886,6 +914,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         let deferred_element = self.element.take().unwrap();
         let attributes = DeferredAttributes::new(replace(&mut self.attributes, Vec::new()));
 
+        try!(attributes.check_duplicates());
         let default_namespace = try!(attributes.default_namespace());
 
         let mut new_prefix_mappings = HashMap::new();
@@ -1491,13 +1520,32 @@ mod test {
         assert_eq!(r, Err((4, vec![UnknownNamedReference])));
     }
 
+
     #[test]
-    fn failure_duplicate_default_namespace() {
+    fn failure_duplicate_attribute() {
+        use super::Error::*;
+
+        let r = full_parse("<a b='c' b='d'/>");
+
+        assert_eq!(r, Err((9, vec![DuplicateAttribute])));
+    }
+
+    #[test]
+    fn failure_redefined_namespace() {
+        use super::Error::*;
+
+        let r = full_parse("<a xmlns:b='c' xmlns:b='d'/>");
+
+        assert_eq!(r, Err((15, vec![RedefinedNamespace])));
+    }
+
+    #[test]
+    fn failure_redefined_default_namespace() {
         use super::Error::*;
 
         let r = full_parse("<a xmlns='a' xmlns='b'/>");
 
-        assert_eq!(r, Err((13, vec![MultipleDefaultNamespaces])));
+        assert_eq!(r, Err((13, vec![RedefinedDefaultNamespace])));
     }
 
     #[test]
