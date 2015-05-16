@@ -77,6 +77,7 @@ pub enum Error {
     DuplicateAttribute,
     RedefinedNamespace,
     RedefinedDefaultNamespace,
+    EmptyNamespace,
     UnknownNamespacePrefix,
 }
 
@@ -93,6 +94,7 @@ impl Recoverable for Error {
             DuplicateAttribute                 |
             RedefinedNamespace                 |
             RedefinedDefaultNamespace          |
+            EmptyNamespace                     |
             UnknownNamespacePrefix             => {
                 false
             },
@@ -899,6 +901,11 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
         let mut new_prefix_mappings = HashMap::new();
         for ns in attributes.namespaces() {
             let value = try!(AttributeValueBuilder::convert(&ns.values));
+
+            if value.is_empty() {
+                return Err((ns.name.map(|_| ()), Error::EmptyNamespace));
+            }
+
             new_prefix_mappings.insert(ns.name.value.local_part, value);
         }
         let new_prefix_mappings = new_prefix_mappings;
@@ -1523,6 +1530,15 @@ mod test {
         let r = full_parse("<a xmlns='a' xmlns='b'/>");
 
         assert_eq!(r, Err((13, vec![RedefinedDefaultNamespace])));
+    }
+
+    #[test]
+    fn failure_empty_namespace() {
+        use super::Error::*;
+
+        let r = full_parse("<a xmlns:b=''/>");
+
+        assert_eq!(r, Err((3, vec![EmptyNamespace])));
     }
 
     #[test]
