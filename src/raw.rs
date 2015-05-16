@@ -3,6 +3,7 @@ use super::QName;
 use typed_arena::Arena;
 use string_pool::{StringPool,InternedString};
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::slice;
 
 static XML_NS_PREFIX: &'static str = "xml";
@@ -602,20 +603,17 @@ impl Connections {
         attr_r.parent = Some(parent);
     }
 
-    pub fn element_namespace_uri_for_prefix(&self, element: *mut Element, prefix: &str) -> Option<&str> {
-        let mut element = element;
-        loop {
-            let element_r = unsafe { &*element };
+    fn element_parents(&self, element: *mut Element) -> ElementParents {
+        ElementParents { element: Some(element), marker: PhantomData }
+    }
 
+    pub fn element_namespace_uri_for_prefix(&self, element: *mut Element, prefix: &str) -> Option<&str> {
+        for element_r in self.element_parents(element) {
             if let Some(ns_uri) = element_r.prefix_to_namespace.get(prefix) {
                 return Some(ns_uri);
             }
-
-            match element_r.parent {
-                Some(ParentOfChild::Element(parent)) => element = parent,
-                _ => return None,
-            }
         }
+        None
     }
 
     pub fn element_prefix_for_namespace_uri(&self,
@@ -624,10 +622,7 @@ impl Connections {
                                             preferred_prefix: Option<&str>)
                                             -> Option<&str>
     {
-        let mut element = element;
-        loop {
-            let element_r = unsafe { &*element };
-
+        for element_r in self.element_parents(element) {
             let prefixes: Vec<_> = element_r.prefix_to_namespace.iter()
                 .filter_map(|(&prefix, ns_uri)| {
                     if ns_uri == namespace_uri { Some(prefix) } else { None }
@@ -645,12 +640,8 @@ impl Connections {
                 Some(prefix) => return Some(prefix.as_slice()),
                 _ => {}
             }
-
-            match element_r.parent {
-                Some(ParentOfChild::Element(parent)) => element = parent,
-                _ => return None,
-            }
         }
+        None
     }
 
     pub fn element_namespaces_in_scope(&self, element: *mut Element)
@@ -660,20 +651,12 @@ impl Connections {
 
         namespaces.push((XML_NS_PREFIX, XML_NS_URI));
 
-        let mut element = element;
-        loop {
-            let element_r = unsafe { &*element };
-
+        for element_r in self.element_parents(element) {
             for (&prefix, &uri) in element_r.prefix_to_namespace.iter() {
                 let namespace = (prefix.as_slice(), uri.as_slice());
                 if !namespaces.iter().any(|ns| ns.0 == namespace.0) {
                     namespaces.push(namespace)
                 }
-            }
-
-            match element_r.parent {
-                Some(ParentOfChild::Element(parent)) => element = parent,
-                _ => break,
             }
         }
 
@@ -681,21 +664,35 @@ impl Connections {
     }
 
     pub fn element_default_namespace_uri(&self, element: *mut Element) -> Option<&str> {
-        let mut element = element;
-        loop {
-            let element_r = unsafe { &*element };
-
+        for element_r in self.element_parents(element) {
             if let Some(ns_uri) = element_r.default_namespace_uri() {
                 return Some(ns_uri);
             }
-
-            match element_r.parent {
-                Some(ParentOfChild::Element(parent)) => element = parent,
-                _ => break,
-            }
         }
-
         None
+    }
+}
+
+struct ElementParents<'a> {
+    element: Option<*const Element>,
+    marker: PhantomData<&'a Element>,
+}
+
+impl<'a> Iterator for ElementParents<'a> {
+    type Item = &'a Element;
+
+    fn next(&mut self) -> Option<&'a Element> {
+        let element_ref = match self.element {
+            None => return None,
+            Some(e) => unsafe { &*e },
+        };
+
+        self.element = match element_ref.parent {
+            Some(ParentOfChild::Element(parent)) => Some(parent),
+            _ => None,
+        };
+
+        Some(element_ref)
     }
 }
 
