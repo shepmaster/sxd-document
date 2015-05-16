@@ -939,21 +939,19 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
 
             builder.clear();
             try!(builder.ingest(&attribute.values));
-            let value = &builder;
 
             if let Some(prefix) = name.prefix {
                 let ns_uri = new_prefix_mappings.get(prefix).map(|p| &p[..]);
                 let ns_uri = ns_uri.or_else(|| self.namespace_uri_for_prefix(prefix));
 
                 if let Some(ns_uri) = ns_uri {
-                    let attr = element.set_attribute_value((ns_uri, name.local_part),
-                                                           &value);
+                    let attr = element.set_attribute_value((ns_uri, name.local_part), &builder);
                     attr.set_preferred_prefix(Some(prefix));
                 } else {
                     return Err((attribute.name.map(|_| ()), Error::UnknownNamespacePrefix))
                 }
             } else {
-                element.set_attribute_value(name.local_part, &value);
+                element.set_attribute_value(name.local_part, &builder);
             }
         }
 
