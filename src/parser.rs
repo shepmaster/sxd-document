@@ -787,25 +787,66 @@ impl<'d, 'x> SaxHydrator<'d, 'x> {
     }
 }
 
-#[cfg(not(feature = "unstable"))]
-fn find_last_namespace<'a>(ts: &'a [DeferredAttribute<'a>]) -> Option<&'a DeferredAttribute<'a>> {
-    ts.iter().fold(None, |max, t| {
-        match max {
-            None => Some(t),
-            Some(old) => {
-                if t.name.offset >= old.name.offset {
-                    Some(t)
-                } else {
-                    Some(old)
-                }
-            }
-        }
-    })
+struct DeferredAttributes<'a> {
+    attributes: Vec<DeferredAttribute<'a>>,
+    namespaces: Vec<DeferredAttribute<'a>>,
+    default_namespaces: Vec<DeferredAttribute<'a>>,
 }
 
-#[cfg(feature = "unstable")]
-fn find_last_namespace<'a>(ts: &'a [DeferredAttribute<'a>]) -> Option<&'a DeferredAttribute<'a>> {
-    ts.iter().max_by(|ns| ns.name.offset)
+impl<'a> DeferredAttributes<'a> {
+    fn new(attributes: Vec<DeferredAttribute<'a>>) -> DeferredAttributes<'a> {
+        let (namespaces, attributes): (Vec<_>, Vec<_>) =
+            attributes.into_iter().partition(|attr| attr.name.value.prefix == Some("xmlns"));
+
+        let (default_namespaces, attributes): (Vec<_>, Vec<_>) =
+            attributes.into_iter().partition(|attr| attr.name.value.local_part == "xmlns");
+
+        DeferredAttributes { attributes: attributes, namespaces: namespaces, default_namespaces: default_namespaces }
+    }
+
+    fn attributes(&self) -> &[DeferredAttribute<'a>] {
+        &self.attributes
+    }
+
+    fn namespaces(&self) -> &[DeferredAttribute<'a>] {
+        &self.namespaces
+    }
+
+    fn default_namespace(&self) -> SinkResult<Option<String>> {
+        match self.default_namespaces.len() {
+            0 => Ok(None),
+            1 => {
+                let ns = &self.default_namespaces[0];
+                let value = try!(AttributeValueBuilder::convert(&ns.values));
+                Ok(Some(value))
+            },
+            _ => {
+                let last_namespace = self.last_namespace().unwrap();
+                Err((Span { value: (), offset: last_namespace.name.offset }, Error::MultipleDefaultNamespaces))
+            },
+        }
+    }
+
+    #[cfg(not(feature = "unstable"))]
+    fn last_namespace(&'a self) -> Option<&'a DeferredAttribute<'a>> {
+        self.default_namespaces.iter().fold(None, |max, t| {
+            match max {
+                None => Some(t),
+                Some(old) => {
+                    if t.name.offset >= old.name.offset {
+                        Some(t)
+                    } else {
+                        Some(old)
+                    }
+                }
+            }
+        })
+    }
+
+    #[cfg(feature = "unstable")]
+    fn last_namespace(&'a self) -> Option<&'a DeferredAttribute<'a>> {
+        self.default_namespaces.iter().max_by(|ns| ns.name.offset)
+    }
 }
 
 impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
@@ -843,29 +884,12 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
 
     fn attributes_end(&mut self) -> SinkResult<()> {
         let deferred_element = self.element.take().unwrap();
-        let attributes = replace(&mut self.attributes, Vec::new());
+        let attributes = DeferredAttributes::new(replace(&mut self.attributes, Vec::new()));
 
-        let (namespaces, attributes): (Vec<_>, Vec<_>) =
-            attributes.into_iter().partition(|attr| attr.name.value.prefix == Some("xmlns"));
-
-        let (default_namespaces, attributes): (Vec<_>, Vec<_>) =
-            attributes.into_iter().partition(|attr| attr.name.value.local_part == "xmlns");
-
-        let default_namespace = match default_namespaces.len() {
-            0 => None,
-            1 => {
-                let ns = &default_namespaces[0];
-                let value = try!(AttributeValueBuilder::convert(&ns.values));
-                Some(value)
-            },
-            _ => {
-                let last_namespace = find_last_namespace(&default_namespaces).unwrap();
-                return Err((Span { value: (), offset: last_namespace.name.offset }, Error::MultipleDefaultNamespaces))
-            },
-        };
+        let default_namespace = try!(attributes.default_namespace());
 
         let mut new_prefix_mappings = HashMap::new();
-        for ns in namespaces.iter() {
+        for ns in attributes.namespaces() {
             let value = try!(AttributeValueBuilder::convert(&ns.values));
             new_prefix_mappings.insert(ns.name.value.local_part, value);
         }
@@ -902,7 +926,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
 
         let mut builder = AttributeValueBuilder::new();
 
-        for attribute in attributes.iter() {
+        for attribute in attributes.attributes() {
             let name = &attribute.name.value;
 
             builder.clear();
