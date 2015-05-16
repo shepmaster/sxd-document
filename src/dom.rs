@@ -216,7 +216,7 @@ impl<'d> Element<'d> {
     }
 
     /// Recursively resolve the prefix to a namespace URI.
-    pub fn namespace_uri_for_prefix(&self, prefix: &str) -> Option<&str> {
+    pub fn namespace_uri_for_prefix(&self, prefix: &str) -> Option<&'d str> {
         self.document.connections.element_namespace_uri_for_prefix(self.node, prefix)
     }
 
@@ -239,7 +239,7 @@ impl<'d> Element<'d> {
         }).collect()
     }
 
-    pub fn preferred_prefix(&self) -> Option<&str> {
+    pub fn preferred_prefix(&self) -> Option<&'d str> {
         self.node().preferred_prefix()
     }
 
@@ -327,9 +327,9 @@ node!(
 
 impl<'d> Attribute<'d> {
     pub fn name(&self)  -> QName<'d> { self.node().name() }
-    pub fn value(&self) -> &str { self.node().value() }
+    pub fn value(&self) -> &'d str { self.node().value() }
 
-    pub fn preferred_prefix(&self) -> Option<&str> {
+    pub fn preferred_prefix(&self) -> Option<&'d str> {
         self.node().preferred_prefix()
     }
 
@@ -356,7 +356,7 @@ node!(
 );
 
 impl<'d> Text<'d> {
-    pub fn text(&self) -> &str { self.node().text() }
+    pub fn text(&self) -> &'d str { self.node().text() }
 
     pub fn set_text(&self, text: &str) {
         self.document.storage.text_set_text(self.node, text)
@@ -389,7 +389,7 @@ node!(
 );
 
 impl<'d> Comment<'d> {
-    pub fn text(&self) -> &str { self.node().text() }
+    pub fn text(&self) -> &'d str { self.node().text() }
 
     pub fn set_text(&self, new_text: &str) {
         self.document.storage.comment_set_text(self.node, new_text)
