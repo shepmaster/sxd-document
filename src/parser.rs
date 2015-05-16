@@ -914,7 +914,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
                 element.set_preferred_prefix(Some(prefix));
                 element
             } else {
-                return Err((Span { value: (), offset: deferred_element.offset }, Error::UnknownNamespacePrefix));
+                return Err((deferred_element.map(|_| ()), Error::UnknownNamespacePrefix));
             }
         } else if let Some(ns_uri) = default_namespace {
             let ns_uri = &ns_uri[..];
@@ -950,7 +950,7 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
                                                            &value);
                     attr.set_preferred_prefix(Some(prefix));
                 } else {
-                    return Err((Span { value: (), offset: attribute.name.offset }, Error::UnknownNamespacePrefix))
+                    return Err((attribute.name.map(|_| ()), Error::UnknownNamespacePrefix))
                 }
             } else {
                 element.set_attribute_value(name.local_part, &value);
