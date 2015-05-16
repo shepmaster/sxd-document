@@ -1,7 +1,6 @@
 //! A traditional DOM tree interface for navigating and manipulating
 //! XML documents.
 
-use std::cell::RefCell;
 use std::{fmt,hash};
 
 use super::QName;
@@ -12,7 +11,7 @@ type SiblingFn<T> = unsafe fn(&raw::Connections, T) -> raw::SiblingIter;
 /// An XML document
 pub struct Document<'d> {
     storage: &'d raw::Storage,
-    connections: RefCell<&'d raw::Connections>,
+    connections: &'d raw::Connections,
 }
 
 macro_rules! wrapper(
@@ -38,7 +37,7 @@ impl<'d> Document<'d> {
     pub fn new(storage: &'d raw::Storage, connections: &'d raw::Connections) -> Document<'d> {
         Document {
             storage: storage,
-            connections: RefCell::new(connections),
+            connections: connections,
         }
     }
 
@@ -67,7 +66,7 @@ impl<'d> Document<'d> {
     }
 
     pub fn root(&'d self) -> Root<'d> {
-        self.wrap_root(self.connections.borrow().root())
+        self.wrap_root(self.connections.root())
     }
 
     pub fn create_element<'n, N>(&'d self, name: N) -> Element<'d>
@@ -89,12 +88,10 @@ impl<'d> Document<'d> {
     }
 
     fn siblings<T>(&'d self, f: SiblingFn<T>, node: T) -> Vec<ChildOfElement<'d>> {
-        let connections = self.connections.borrow();
-
         // This is safe because we don't allow the connection
         // information to leak outside of this method.
         unsafe {
-            f(*connections, node).map(|n| self.wrap_child_of_element(n)).collect()
+            f(self.connections, node).map(|n| self.wrap_child_of_element(n)).collect()
         }
     }
 }
@@ -156,17 +153,14 @@ impl<'d> Root<'d> {
         where C: Into<ChildOfRoot<'d>>
     {
         let child = child.into();
-        let connections = self.document.connections.borrow_mut();
-        connections.append_root_child(child.as_raw())
+        self.document.connections.append_root_child(child.as_raw());
     }
 
     pub fn children(&self) -> Vec<ChildOfRoot<'d>> {
-        let connections = self.document.connections.borrow();
         // This is safe because we copy of the children, and the
         // children are never deallocated.
         unsafe {
-            let raw_children = connections.root_children();
-            raw_children.iter().map(|n| {
+            self.document.connections.root_children().iter().map(|n| {
                 self.document.wrap_child_of_root(*n)
             }).collect()
         }
@@ -221,8 +215,7 @@ impl<'d> Element<'d> {
 
     /// Recursively resolve the prefix to a namespace URI.
     pub fn namespace_uri_for_prefix(&self, prefix: &str) -> Option<&str> {
-        let connections = self.document.connections.borrow();
-        connections.element_namespace_uri_for_prefix(self.node, prefix)
+        self.document.connections.element_namespace_uri_for_prefix(self.node, prefix)
     }
 
     /// Recursively find a prefix for the namespace URI. Since
@@ -231,15 +224,15 @@ impl<'d> Element<'d> {
     pub fn prefix_for_namespace_uri(&self, namespace_uri: &str, preferred: Option<&str>)
                                     -> Option<&'d str>
     {
-        let connections = self.document.connections.borrow();
-        connections.element_prefix_for_namespace_uri(self.node, namespace_uri, preferred)
+        self.document.connections.element_prefix_for_namespace_uri(
+            self.node, namespace_uri, preferred
+        )
     }
 
     /// Retrieve all namespaces that are in scope, recursively walking
     /// up the document tree.
     pub fn namespaces_in_scope(&self) -> Vec<Namespace<'d>> {
-        let connections = self.document.connections.borrow();
-        connections.element_namespaces_in_scope(self.node).map(|(prefix, uri)|{
+        self.document.connections.element_namespaces_in_scope(self.node).map(|(prefix, uri)| {
             Namespace { prefix: prefix, uri: uri }
         }).collect()
     }
@@ -253,9 +246,7 @@ impl<'d> Element<'d> {
     }
 
     pub fn parent(&self) -> Option<ParentOfChild<'d>> {
-        let connections = self.document.connections.borrow();
-
-        connections.element_parent(self.node).map(|n| {
+        self.document.connections.element_parent(self.node).map(|n| {
             self.document.wrap_parent_of_child(n)
         })
     }
@@ -264,17 +255,14 @@ impl<'d> Element<'d> {
         where C: Into<ChildOfElement<'d>>
     {
         let child = child.into();
-        let connections = self.document.connections.borrow_mut();
-        connections.append_element_child(self.node, child.as_raw())
+        self.document.connections.append_element_child(self.node, child.as_raw());
     }
 
     pub fn children(&self) -> Vec<ChildOfElement<'d>> {
-        let connections = self.document.connections.borrow();
         // This is safe because we make a copy of the children, and
         // the children are never deallocated.
         unsafe {
-            let raw_children = connections.element_children(self.node);
-            raw_children.iter().map(|n| {
+            self.document.connections.element_children(self.node).iter().map(|n| {
                 self.document.wrap_child_of_element(*n)
             }).collect()
         }
@@ -291,18 +279,16 @@ impl<'d> Element<'d> {
     pub fn attribute<'n, N>(&self, name: N) -> Option<Attribute<'d>>
         where N: Into<QName<'n>>
     {
-        let connections = self.document.connections.borrow();
-        connections.attribute(self.node, name).map(|n| {
+        self.document.connections.attribute(self.node, name).map(|n| {
             self.document.wrap_attribute(n)
         })
     }
 
     pub fn attributes(&self) -> Vec<Attribute<'d>> {
-        let connections = self.document.connections.borrow();
         // This is safe because we make a copy of the children, and
         // the children are never deallocated.
         unsafe {
-            connections.attributes(self.node).iter().map(|n| {
+            self.document.connections.attributes(self.node).iter().map(|n| {
                 self.document.wrap_attribute(*n)
             }).collect()
         }
@@ -312,16 +298,14 @@ impl<'d> Element<'d> {
         where N: Into<QName<'n>>
     {
         let attr = self.document.storage.create_attribute(name, value);
-        let connections = self.document.connections.borrow_mut();
-        connections.set_attribute(self.node, attr);
+        self.document.connections.set_attribute(self.node, attr);
         self.document.wrap_attribute(attr)
     }
 
     pub fn attribute_value<'n, N>(&self, name: N) -> Option<&'d str>
         where N: Into<QName<'n>>
     {
-        let connections = self.document.connections.borrow();
-        connections.attribute(self.node, name).map(|a| {
+        self.document.connections.attribute(self.node, name).map(|a| {
             let a_r = unsafe { &*a };
             a_r.value()
         })
@@ -352,8 +336,7 @@ impl<'d> Attribute<'d> {
     }
 
     pub fn parent(&self) -> Option<Element<'d>> {
-        let connections = self.document.connections.borrow();
-        connections.attribute_parent(self.node).map(|n| {
+        self.document.connections.attribute_parent(self.node).map(|n| {
             self.document.wrap_element(n)
         })
     }
@@ -378,8 +361,7 @@ impl<'d> Text<'d> {
     }
 
     pub fn parent(&self) -> Option<Element<'d>> {
-        let connections = self.document.connections.borrow();
-        connections.text_parent(self.node).map(|n| {
+        self.document.connections.text_parent(self.node).map(|n| {
             self.document.wrap_element(n)
         })
     }
@@ -412,8 +394,7 @@ impl<'d> Comment<'d> {
     }
 
     pub fn parent(&self) -> Option<ParentOfChild<'d>> {
-        let connections = self.document.connections.borrow();
-        connections.comment_parent(self.node).map(|n| {
+        self.document.connections.comment_parent(self.node).map(|n| {
             self.document.wrap_parent_of_child(n)
         })
     }
@@ -451,8 +432,7 @@ impl<'d> ProcessingInstruction<'d> {
     }
 
     pub fn parent(&self) -> Option<ParentOfChild<'d>> {
-        let connections = self.document.connections.borrow();
-        connections.processing_instruction_parent(self.node).map(|n| {
+        self.document.connections.processing_instruction_parent(self.node).map(|n| {
             self.document.wrap_parent_of_child(n)
         })
     }
