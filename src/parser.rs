@@ -849,31 +849,10 @@ impl<'a> DeferredAttributes<'a> {
                 Ok(Some(value))
             },
             _ => {
-                let last_namespace = self.last_namespace().unwrap();
-                Err((Span { value: (), offset: last_namespace.name.offset }, Error::RedefinedDefaultNamespace))
+                let last_namespace = self.default_namespaces.last().unwrap();
+                Err((last_namespace.name.map(|_| ()), Error::RedefinedDefaultNamespace))
             },
         }
-    }
-
-    #[cfg(not(feature = "unstable"))]
-    fn last_namespace(&'a self) -> Option<&'a DeferredAttribute<'a>> {
-        self.default_namespaces.iter().fold(None, |max, t| {
-            match max {
-                None => Some(t),
-                Some(old) => {
-                    if t.name.offset >= old.name.offset {
-                        Some(t)
-                    } else {
-                        Some(old)
-                    }
-                }
-            }
-        })
-    }
-
-    #[cfg(feature = "unstable")]
-    fn last_namespace(&'a self) -> Option<&'a DeferredAttribute<'a>> {
-        self.default_namespaces.iter().max_by(|ns| ns.name.offset)
     }
 }
 
