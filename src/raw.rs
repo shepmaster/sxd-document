@@ -607,13 +607,13 @@ impl Connections {
         ElementParents { element: Some(element), marker: PhantomData }
     }
 
-    pub fn element_namespace_uri_for_prefix(&self, element: *mut Element, prefix: &str) -> Option<&str> {
-        for element_r in self.element_parents(element) {
-            if let Some(ns_uri) = element_r.prefix_to_namespace.get(prefix) {
-                return Some(ns_uri);
-            }
-        }
-        None
+    pub fn element_namespace_uri_for_prefix(&self, element: *mut Element, prefix: &str)
+                                            -> Option<&str>
+    {
+        self.element_parents(element)
+            .filter_map(|e| e.prefix_to_namespace.get(prefix))
+            .next()
+            .map(|s| s.as_slice())
     }
 
     pub fn element_prefix_for_namespace_uri(&self,
@@ -630,15 +630,13 @@ impl Connections {
                 .collect();
 
             if let Some(preferred_prefix) = preferred_prefix {
-                match prefixes.iter().find(|&prefix| prefix == preferred_prefix) {
-                    Some(prefix) => return Some(prefix.as_slice()),
-                    _ => {}
+                if let Some(prefix) = prefixes.iter().find(|&prefix| prefix == preferred_prefix) {
+                    return Some(prefix.as_slice());
                 }
             }
 
-            match prefixes.first() {
-                Some(prefix) => return Some(prefix.as_slice()),
-                _ => {}
+            if let Some(prefix) = prefixes.first() {
+                return Some(prefix.as_slice());
             }
         }
         None
@@ -651,12 +649,14 @@ impl Connections {
 
         namespaces.push((XML_NS_PREFIX, XML_NS_URI));
 
-        for element_r in self.element_parents(element) {
-            for (&prefix, &uri) in element_r.prefix_to_namespace.iter() {
-                let namespace = (prefix.as_slice(), uri.as_slice());
-                if !namespaces.iter().any(|ns| ns.0 == namespace.0) {
-                    namespaces.push(namespace)
-                }
+        let all_namespaces =
+            self.element_parents(element)
+            .flat_map(|e| e.prefix_to_namespace.iter());
+
+        for (&prefix, &uri) in all_namespaces {
+            let namespace = (prefix.as_slice(), uri.as_slice());
+            if !namespaces.iter().any(|ns| ns.0 == namespace.0) {
+                namespaces.push(namespace)
             }
         }
 
@@ -664,12 +664,9 @@ impl Connections {
     }
 
     pub fn element_default_namespace_uri(&self, element: *mut Element) -> Option<&str> {
-        for element_r in self.element_parents(element) {
-            if let Some(ns_uri) = element_r.default_namespace_uri() {
-                return Some(ns_uri);
-            }
-        }
-        None
+        self.element_parents(element)
+            .filter_map(|e| e.default_namespace_uri())
+            .next()
     }
 }
 
