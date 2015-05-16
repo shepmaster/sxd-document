@@ -928,10 +928,15 @@ impl<'d, 'x> ParserSink<'x> for SaxHydrator<'d, 'x> {
                 return Err((deferred_element.map(|_| ()), Error::UnknownNamespacePrefix));
             }
         } else if let Some(ns_uri) = default_namespace {
-            let ns_uri = &ns_uri[..];
-            let element = self.doc.create_element((ns_uri, element_name.local_part));
-            element.set_default_namespace_uri(Some(ns_uri));
-            element
+            if ns_uri.is_empty() {
+                let element = self.doc.create_element(element_name.local_part);
+                element.set_default_namespace_uri(None);
+                element
+            } else {
+                let element = self.doc.create_element((&ns_uri[..], element_name.local_part));
+                element.set_default_namespace_uri(Some(&ns_uri));
+                element
+            }
         } else {
             let ns_uri = self.default_namespace_uri();
             let name = QName::with_namespace_uri(ns_uri, element_name.local_part);
@@ -1164,6 +1169,16 @@ mod test {
         let world = hello.children()[0].element().unwrap();
 
         assert_qname_eq!(world.name(), ("outer", "world"));
+    }
+
+    #[test]
+    fn nested_elements_with_reset_default_namespace() {
+        let package = quick_parse("<hello xmlns='outer'><world xmlns=''/></hello>");
+        let doc = package.as_document();
+        let hello = top(&doc);
+        let world = hello.children()[0].element().unwrap();
+
+        assert_qname_eq!(world.name(), "world");
     }
 
     #[test]
