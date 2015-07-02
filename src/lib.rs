@@ -48,7 +48,7 @@
 //!
 //! Try to leverage the type system as much as possible.
 
-#![cfg_attr(feature = "unstable", feature(core))]
+#![cfg_attr(feature = "unstable", feature(pattern))]
 #![cfg_attr(feature = "unstable", feature(test))]
 
 extern crate typed_arena;
