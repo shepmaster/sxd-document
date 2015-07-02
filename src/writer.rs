@@ -40,7 +40,7 @@ trait WriteStr: Write {
     }
 }
 
-impl<W> WriteStr for W where W: Write {}
+impl<W: ?Sized> WriteStr for W where W: Write {}
 
 // TODO: Duplicating the String seems inefficient...
 struct PrefixScope<'d> {
@@ -261,11 +261,11 @@ enum Content<'d> {
     ProcessingInstruction(dom::ProcessingInstruction<'d>),
 }
 
-fn format_qname<'d, W>(q: QName<'d>,
-                       mapping: &mut PrefixMapping<'d>,
-                       preferred_prefix: Option<&str>,
-                       writer: &mut W)
-                       -> io::Result<()>
+fn format_qname<'d, W: ?Sized>(q: QName<'d>,
+                               mapping: &mut PrefixMapping<'d>,
+                               preferred_prefix: Option<&str>,
+                               writer: &mut W)
+                               -> io::Result<()>
     where W: Write
 {
     // Can something without a namespace be prefixed? No, because
@@ -287,7 +287,7 @@ fn format_qname<'d, W>(q: QName<'d>,
     writer.write_str(q.local_part)
 }
 
-fn format_attribute_value<W>(value: &str, writer: &mut W) -> io::Result<()>
+fn format_attribute_value<W: ?Sized>(value: &str, writer: &mut W) -> io::Result<()>
     where W: Write
 {
     for item in value.split_keeping_delimiter(&['<', '>', '&', '\'', '"'][..]) {
@@ -304,11 +304,11 @@ fn format_attribute_value<W>(value: &str, writer: &mut W) -> io::Result<()>
     Ok(())
 }
 
-fn format_element<'d, W>(element: dom::Element<'d>,
-                         todo: &mut Vec<Content<'d>>,
-                         mapping: &mut PrefixMapping<'d>,
-                         writer: &mut W)
-                         -> io::Result<()>
+fn format_element<'d, W: ?Sized>(element: dom::Element<'d>,
+                                 todo: &mut Vec<Content<'d>>,
+                                 mapping: &mut PrefixMapping<'d>,
+                                 writer: &mut W)
+                                 -> io::Result<()>
     where W: Write
 {
     let attrs = element.attributes();
@@ -358,10 +358,10 @@ fn format_element<'d, W>(element: dom::Element<'d>,
     }
 }
 
-fn format_element_end<'d, W>(element: dom::Element<'d>,
-                             mapping: &mut PrefixMapping<'d>,
-                             writer: &mut W)
-                             -> io::Result<()>
+fn format_element_end<'d, W: ?Sized>(element: dom::Element<'d>,
+                                     mapping: &mut PrefixMapping<'d>,
+                                     writer: &mut W)
+                                     -> io::Result<()>
     where W: Write
 {
     try!(writer.write_str("</"));
@@ -371,7 +371,7 @@ fn format_element_end<'d, W>(element: dom::Element<'d>,
 
 use super::str_ext::{SplitKeepingDelimiterExt,SplitType};
 
-fn format_text<W>(text: dom::Text, writer: &mut W) -> io::Result<()>
+fn format_text<W: ?Sized>(text: dom::Text, writer: &mut W) -> io::Result<()>
     where W: Write
 {
     for item in text.text().split_keeping_delimiter(&['<', '>', '&'][..]) {
@@ -386,13 +386,14 @@ fn format_text<W>(text: dom::Text, writer: &mut W) -> io::Result<()>
     Ok(())
 }
 
-fn format_comment<W>(comment: dom::Comment, writer: &mut W) -> io::Result<()>
+fn format_comment<W: ?Sized>(comment: dom::Comment, writer: &mut W) -> io::Result<()>
     where W: Write
 {
     write!(writer, "<!--{}-->", comment.text())
 }
 
-fn format_processing_instruction<W>(pi: dom::ProcessingInstruction, writer: &mut W) -> io::Result<()>
+fn format_processing_instruction<W: ?Sized>(pi: dom::ProcessingInstruction, writer: &mut W)
+                                            -> io::Result<()>
     where W: Write
 {
     match pi.value() {
@@ -401,11 +402,11 @@ fn format_processing_instruction<W>(pi: dom::ProcessingInstruction, writer: &mut
     }
 }
 
-fn format_one<'d, W>(content: Content<'d>,
-                     todo: &mut Vec<Content<'d>>,
-                     mapping: &mut PrefixMapping<'d>,
-                     writer: &mut W)
-                     -> io::Result<()>
+fn format_one<'d, W: ?Sized>(content: Content<'d>,
+                             todo: &mut Vec<Content<'d>>,
+                             mapping: &mut PrefixMapping<'d>,
+                             writer: &mut W)
+                             -> io::Result<()>
     where W: Write
 {
     match content {
@@ -424,7 +425,7 @@ fn format_one<'d, W>(content: Content<'d>,
     }
 }
 
-fn format_body<W>(element: dom::Element, writer: &mut W) -> io::Result<()>
+fn format_body<W: ?Sized>(element: dom::Element, writer: &mut W) -> io::Result<()>
     where W: Write
 {
     let mut todo = vec![Element(element)];
@@ -438,7 +439,7 @@ fn format_body<W>(element: dom::Element, writer: &mut W) -> io::Result<()>
 }
 
 /// Formats a document into a Write
-pub fn format_document<'d, W>(doc: &'d dom::Document<'d>, writer: &mut W) -> io::Result<()>
+pub fn format_document<'d, W: ?Sized>(doc: &'d dom::Document<'d>, writer: &mut W) -> io::Result<()>
     where W: Write
 {
     try!(writer.write_str("<?xml version='1.0'?>"));
