@@ -48,6 +48,7 @@ pub trait XmlStr {
     fn end_of_space(&self) -> Option<usize>;
     /// Find the end of the starting tag
     fn end_of_start_tag(&self) -> Option<usize>;
+    fn end_of_encoding(&self) -> Option<usize>;
 }
 
 impl<'a> XmlStr for &'a str {
@@ -150,6 +151,10 @@ impl<'a> XmlStr for &'a str {
             None => Some(self.len()),
         }
     }
+
+    fn end_of_encoding(&self) -> Option<usize> {
+        self.end_of_start_rest(|c| c.is_encoding_start_char(), |c| c.is_encoding_rest_char())
+    }
 }
 
 /// Predicates used when parsing an characters in an XML document.
@@ -166,6 +171,8 @@ pub trait XmlChar {
     fn is_space_char(self) -> bool;
     fn is_decimal_char(self) -> bool;
     fn is_hex_char(self) -> bool;
+    fn is_encoding_start_char(self) -> bool;
+    fn is_encoding_rest_char(self) -> bool;
 }
 
 impl XmlChar for char {
@@ -236,6 +243,27 @@ impl XmlChar for char {
             _ => false,
         }
     }
+
+    fn is_encoding_start_char(self) -> bool {
+        match self {
+            'A'...'Z' |
+            'a'...'z' => true,
+            _ => false,
+        }
+    }
+
+    fn is_encoding_rest_char(self) -> bool {
+        match self {
+            'A'...'Z' |
+            'a'...'z' |
+            '0'...'9' |
+            '.' |
+            '_' |
+            '-' => true,
+            _ => false,
+        }
+    }
+
 }
 
 #[cfg(test)]

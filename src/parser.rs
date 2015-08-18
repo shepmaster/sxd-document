@@ -54,6 +54,7 @@ pub enum Error {
     ExpectedProcessingInstructionValue,
 
     ExpectedVersionNumber,
+    ExpectedEncoding,
     ExpectedWhitespace,
 
     ExpectedClosingQuote(&'static str),
@@ -86,6 +87,7 @@ impl Recoverable for Error {
         use self::Error::*;
 
         match *self {
+            ExpectedEncoding |
             InvalidProcessingInstructionTarget |
             MismatchedElementEndName           |
             InvalidDecimalReference            |
@@ -218,6 +220,7 @@ trait PrivateXmlParseExt<'a> {
     fn consume_comment(&self) -> XmlProgress<'a, &'a str>;
     fn consume_pi_value(&self) -> XmlProgress<'a, &'a str>;
     fn consume_start_tag(&self) -> XmlProgress<'a, &'a str>;
+    fn consume_encoding(&self) -> XmlProgress<'a, &'a str>;
 }
 
 impl<'a> PrivateXmlParseExt<'a> for StringPoint<'a> {
@@ -251,6 +254,10 @@ impl<'a> PrivateXmlParseExt<'a> for StringPoint<'a> {
 
     fn consume_start_tag(&self) -> XmlProgress<'a, &'a str> {
         self.consume_to(self.s.end_of_start_tag()).map_err(|_| Error::ExpectedElement)
+    }
+
+    fn consume_encoding(&self) -> XmlProgress<'a, &'a str> {
+        self.consume_to(self.s.end_of_encoding()).map_err(|_| Error::ExpectedEncoding)
     }
 }
 
@@ -302,10 +309,25 @@ impl Parser {
         success(version, xml)
     }
 
+    fn parse_encoding_declaration<'a>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>)
+                                      -> XmlProgress<'a, &'a str>
+    {
+        let (xml, _) = try_parse!(xml.expect_space());
+        let (xml, _) = try_parse!(xml.expect_literal("encoding"));
+        let (xml, _) = try_parse!(self.parse_eq(xml));
+        let (xml, encoding) = try_parse!(
+            self.parse_quoted_value(pm, xml, |_, xml, _| xml.consume_encoding())
+        );
+
+        success(encoding, xml)
+    }
+
     fn parse_xml_declaration<'a>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> XmlProgress<'a, ()> {
         let (xml, _) = try_parse!(xml.expect_literal("<?xml"));
         let (xml, _version) = try_parse!(self.parse_version_info(pm, xml));
-        // let (xml, encoding) = self.parse_encoding_declaration(xml).optional(xml));
+        let (xml, _encoding) = try_parse!(pm.optional(xml, |pm, xml| {
+            self.parse_encoding_declaration(pm, xml)
+        }));
         // let (xml, standalone) = self.parse_standalone_declaration(xml).optional(xml);
         let (xml, _) = xml.consume_space().optional(xml);
         let (xml, _) = try_parse!(xml.expect_literal("?>"));
@@ -332,7 +354,9 @@ impl Parser {
     fn parse_prolog<'a, 's, S>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, sink: &'s mut S) -> XmlProgress<'a, ()>
         where S: ParserSink<'a>
     {
-        let (xml, _) = self.parse_xml_declaration(pm, xml).optional(xml);
+        let (xml, _) = try_parse!(pm.optional(xml, |pm, xml| {
+            self.parse_xml_declaration(pm, xml)
+        }));
         self.parse_miscs(pm, xml, sink)
     }
 
@@ -1033,6 +1057,15 @@ mod test {
     }
 
     #[test]
+    fn a_prolog_with_an_encoding() {
+        let package = quick_parse("<?xml version='1.0' encoding='UTF-8' ?><hello />");
+        let doc = package.as_document();
+        let top = top(&doc);
+
+        assert_qname_eq!(top.name(), "hello");
+    }
+
+    #[test]
     fn a_document_with_a_single_element() {
         let package = quick_parse("<hello />");
         let doc = package.as_document();
@@ -1372,6 +1405,15 @@ mod test {
     // cdata
     // commentbody
     // pinstructionvalue
+
+    #[test]
+    fn failure_invalid_encoding() {
+        use super::Error::*;
+
+        let r = full_parse("<?xml version='1.0' encoding='8BIT' ?><hi/>");
+
+        assert_eq!(r, Err((30, vec![ExpectedEncoding])));
+    }
 
     #[test]
     fn failure_no_open_brace() {
