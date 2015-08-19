@@ -18,5 +18,5 @@ compile_failure = []
 unstable = []
 
 [dependencies]
-peresil = "0.2.0"
+peresil = "0.2.1"
 typed-arena = "1.0"
