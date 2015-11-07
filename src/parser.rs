@@ -55,6 +55,7 @@ pub enum Error {
 
     ExpectedVersionNumber,
     ExpectedEncoding,
+    ExpectedYesNo,
     ExpectedWhitespace,
 
     ExpectedClosingQuote(&'static str),
@@ -87,7 +88,8 @@ impl Recoverable for Error {
         use self::Error::*;
 
         match *self {
-            ExpectedEncoding |
+            ExpectedEncoding                   |
+            ExpectedYesNo                      |
             InvalidProcessingInstructionTarget |
             MismatchedElementEndName           |
             InvalidDecimalReference            |
@@ -322,13 +324,34 @@ impl Parser {
         success(encoding, xml)
     }
 
+    fn parse_standalone_declaration<'a>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>)
+                                        -> XmlProgress<'a, &'a str>
+    {
+        let (xml, _) = try_parse!(xml.expect_space());
+        let (xml, _) = try_parse!(xml.expect_literal("standalone"));
+        let (xml, _) = try_parse!(self.parse_eq(xml));
+        let (xml, standalone) = try_parse!(
+            self.parse_quoted_value(pm, xml, |pm, xml, _| {
+                pm.alternate()
+                    .one(|_| xml.expect_literal("yes"))
+                    .one(|_| xml.expect_literal("no"))
+                    .finish()
+                    .map_err(|_| Error::ExpectedYesNo)
+            })
+        );
+
+        success(standalone, xml)
+    }
+
     fn parse_xml_declaration<'a>(&self, pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> XmlProgress<'a, ()> {
         let (xml, _) = try_parse!(xml.expect_literal("<?xml"));
         let (xml, _version) = try_parse!(self.parse_version_info(pm, xml));
         let (xml, _encoding) = try_parse!(pm.optional(xml, |pm, xml| {
             self.parse_encoding_declaration(pm, xml)
         }));
-        // let (xml, standalone) = self.parse_standalone_declaration(xml).optional(xml);
+        let (xml, _standalone) = try_parse!(pm.optional(xml, |pm, xml| {
+            self.parse_standalone_declaration(pm, xml)
+        }));
         let (xml, _) = xml.consume_space().optional(xml);
         let (xml, _) = try_parse!(xml.expect_literal("?>"));
 
@@ -1066,6 +1089,24 @@ mod test {
     }
 
     #[test]
+    fn a_non_standalone_prolog() {
+        let package = quick_parse("<?xml version='1.0' standalone='no'?><hello/>");
+        let doc = package.as_document();
+        let top = top(&doc);
+
+        assert_qname_eq!(top.name(), "hello");
+    }
+
+    #[test]
+    fn a_complete_prolog() {
+        let package = quick_parse("<?xml version='1.0' encoding='UTF-8' standalone='yes'?><hello/>");
+        let doc = package.as_document();
+        let top = top(&doc);
+
+        assert_qname_eq!(top.name(), "hello");
+    }
+
+    #[test]
     fn a_document_with_a_single_element() {
         let package = quick_parse("<hello />");
         let doc = package.as_document();
@@ -1413,6 +1454,15 @@ mod test {
         let r = full_parse("<?xml version='1.0' encoding='8BIT' ?><hi/>");
 
         assert_eq!(r, Err((30, vec![ExpectedEncoding])));
+    }
+
+    #[test]
+    fn failure_invalid_standalone() {
+        use super::Error::*;
+
+        let r = full_parse("<?xml version='1.0' standalone='invalid'?><hello/>");
+
+        assert_eq!(r, Err((32, vec![ExpectedYesNo])));
     }
 
     #[test]
