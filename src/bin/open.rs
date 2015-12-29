@@ -7,7 +7,7 @@ use std::cmp::min;
 use std::fs::File;
 use std::io::{self,Read,Write};
 
-use sxd_document::parser::Parser;
+use sxd_document::parser;
 
 fn pretty_error(xml: &str, position: usize) -> String {
     let s = &xml[position..];
@@ -25,14 +25,13 @@ fn process_input<R>(input: R)
         panic!("Can't read: {}", x);
     }
 
-    let p = Parser::new();
-
-    let package = match p.parse(&data) {
+    let package = match parser::parse(&data) {
         Ok(d) => d,
         Err((point, _)) => panic!("Unable to parse: {}", pretty_error(&data, point)),
     };
 
-    let mut out = io::stdout();
+    // let mut out = io::stdout();
+    let mut out = io::sink();
     let d = package.as_document();
 
     sxd_document::writer::format_document(&d, &mut out).ok().expect("I can't output");
