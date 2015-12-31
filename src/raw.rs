@@ -1,8 +1,8 @@
 use super::QName;
+use super::lazy_hash_map::LazyHashMap;
 
 use typed_arena::Arena;
 use string_pool::{StringPool,InternedString};
-use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::slice;
 
@@ -34,7 +34,7 @@ pub struct Element {
     children: Vec<ChildOfElement>,
     parent: Option<ParentOfChild>,
     attributes: Vec<*mut Attribute>,
-    prefix_to_namespace: HashMap<InternedString, InternedString>,
+    prefix_to_namespace: LazyHashMap<InternedString, InternedString>,
 }
 
 impl Element {
@@ -284,7 +284,7 @@ impl Storage {
             children: Vec::new(),
             parent: None,
             attributes: Vec::new(),
-            prefix_to_namespace: HashMap::new(),
+            prefix_to_namespace: LazyHashMap::new(),
         })
     }
 

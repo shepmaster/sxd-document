@@ -23,7 +23,6 @@
 //! - Fixed ordering of attributes
 
 use std::borrow::ToOwned;
-use std::collections::HashMap;
 use std::io::{self,Write};
 use std::slice;
 
@@ -33,6 +32,7 @@ use super::QName;
 
 use super::dom;
 use super::dom::{ChildOfElement,ChildOfRoot};
+use super::lazy_hash_map::LazyHashMap;
 
 trait WriteStr: Write {
     fn write_str(&mut self, s: &str) -> io::Result<()> {
@@ -44,8 +44,8 @@ impl<W: ?Sized> WriteStr for W where W: Write {}
 
 // TODO: Duplicating the String seems inefficient...
 struct PrefixScope<'d> {
-    ns_to_prefix: HashMap<&'d str, String>,
-    prefix_to_ns: HashMap<String, &'d str>,
+    ns_to_prefix: LazyHashMap<&'d str, String>,
+    prefix_to_ns: LazyHashMap<String, &'d str>,
     defined_prefixes: Vec<(String, &'d str)>,
     default_namespace_uri: Option<&'d str>,
 }
@@ -53,8 +53,8 @@ struct PrefixScope<'d> {
 impl<'d> PrefixScope<'d> {
     fn new() -> PrefixScope<'d> {
         PrefixScope {
-            ns_to_prefix: HashMap::new(),
-            prefix_to_ns: HashMap::new(),
+            ns_to_prefix: LazyHashMap::new(),
+            prefix_to_ns: LazyHashMap::new(),
             defined_prefixes: Vec::new(),
             default_namespace_uri: None,
         }
