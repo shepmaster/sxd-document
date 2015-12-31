@@ -290,7 +290,7 @@ fn format_qname<'d, W: ?Sized>(q: QName<'d>,
 fn format_attribute_value<W: ?Sized>(value: &str, writer: &mut W) -> io::Result<()>
     where W: Write
 {
-    for item in value.split_keeping_delimiter(&['<', '>', '&', '\'', '"'][..]) {
+    for item in value.split_keeping_delimiter(|c| c == '<' || c == '>' || c == '&' || c == '\'' || c == '"') {
         match item {
             SplitType::Match(t)        => try!(writer.write_str(t)),
             SplitType::Delimiter("<")  => try!(writer.write_str("&lt;")),
@@ -374,7 +374,7 @@ use super::str_ext::{SplitKeepingDelimiterExt,SplitType};
 fn format_text<W: ?Sized>(text: dom::Text, writer: &mut W) -> io::Result<()>
     where W: Write
 {
-    for item in text.text().split_keeping_delimiter(&['<', '>', '&'][..]) {
+    for item in text.text().split_keeping_delimiter(|c| c == '<' || c == '>' || c == '&') {
         match item {
             SplitType::Match(t)       => try!(writer.write_str(t)),
             SplitType::Delimiter("<") => try!(writer.write_str("&lt;")),
