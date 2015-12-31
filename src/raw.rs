@@ -693,7 +693,7 @@ impl<'a> Iterator for ElementParents<'a> {
     }
 }
 
-struct NamespacesInScope<'a> {
+pub struct NamespacesInScope<'a> {
     // There's probably a more efficient way instead of building up
     // the entire vector, but this has the right API for now.
     iter: ::std::vec::IntoIter<(&'a str, &'a str)>,
