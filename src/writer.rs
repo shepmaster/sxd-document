@@ -463,8 +463,8 @@ mod test {
 
     fn format_xml<'d>(doc: &'d dom::Document<'d>) -> String {
         let mut w = Vec::new();
-        format_document(doc, &mut w).ok().expect("Not formatted");
-        String::from_utf8(w).ok().expect("Not a string")
+        format_document(doc, &mut w).expect("Not formatted");
+        String::from_utf8(w).expect("Not a string")
     }
 
     #[test]
