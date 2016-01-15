@@ -964,7 +964,7 @@ struct AttributeValueBuilder {
 }
 
 impl AttributeValueBuilder {
-    fn convert(values: &Vec<AttributeValue>) -> DomBuilderResult<String> {
+    fn convert(values: &[AttributeValue]) -> DomBuilderResult<String> {
         let mut builder = AttributeValueBuilder::new();
         try!(builder.ingest(values));
         Ok(builder.implode())
@@ -976,7 +976,7 @@ impl AttributeValueBuilder {
         }
     }
 
-    fn ingest(&mut self, values: &Vec<AttributeValue>) -> DomBuilderResult<()> {
+    fn ingest(&mut self, values: &[AttributeValue]) -> DomBuilderResult<()> {
         use self::AttributeValue::*;
 
         for value in values.iter() {
