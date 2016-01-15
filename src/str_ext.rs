@@ -8,7 +8,7 @@ pub enum SplitType<'a> {
 }
 
 #[cfg(feature = "unstable")]
-struct SplitKeepingDelimiter<'p, P>
+pub struct SplitKeepingDelimiter<'p, P>
     where P: Pattern<'p>
 {
     searcher: P::Searcher,
@@ -65,7 +65,7 @@ pub trait SplitKeepingDelimiterExt: ::std::ops::Index<::std::ops::RangeFull, Out
 }
 
 #[cfg(not(feature = "unstable"))]
-struct SplitKeepingDelimiter<'a> {
+pub struct SplitKeepingDelimiter<'a> {
     haystack: &'a str,
     chars: &'a [char],
     start: usize,

@@ -30,7 +30,7 @@ use super::{PrefixedName,QName};
 use super::dom;
 use super::str::XmlStr;
 
-#[derive(Debug,Copy,Clone,PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Error {
     Expected(&'static str),
 
@@ -1447,13 +1447,39 @@ mod test {
     // commentbody
     // pinstructionvalue
 
+    type ParseResult<T, E> = Result<T, (usize, Vec<E>)>;
+
+    fn sort_parse_result<T, E>(e: ParseResult<T, E>) -> ParseResult<T, E>
+        where E: ::std::cmp::Ord
+    {
+        match e {
+            Ok(t) => Ok(t),
+            Err((p, mut e)) => {
+                e.sort();
+                Err((p, e))
+            }
+        }
+    }
+
+    macro_rules! assert_parse_failure {
+        ($actual:expr, $pos:expr, $($err:expr),+) => {
+            {
+                let errors = vec![$($err),+];
+                let constructed = Err(($pos, errors));
+                let expected = sort_parse_result(constructed);
+                let actual = sort_parse_result($actual);
+                assert_eq!(actual, expected);
+            }
+        }
+    }
+
     #[test]
     fn failure_invalid_encoding() {
         use super::Error::*;
 
         let r = full_parse("<?xml version='1.0' encoding='8BIT' ?><hi/>");
 
-        assert_eq!(r, Err((30, vec![ExpectedEncoding])));
+        assert_parse_failure!(r, 30, ExpectedEncoding);
     }
 
     #[test]
@@ -1462,7 +1488,7 @@ mod test {
 
         let r = full_parse("<?xml version='1.0' standalone='invalid'?><hello/>");
 
-        assert_eq!(r, Err((32, vec![ExpectedYesNo])));
+        assert_parse_failure!(r, 32, ExpectedYesNo);
     }
 
     #[test]
@@ -1471,7 +1497,7 @@ mod test {
 
         let r = full_parse("hi />");
 
-        assert_eq!(r, Err((0, vec![ExpectedComment, ExpectedProcessingInstruction, ExpectedWhitespace, ExpectedElement])));
+        assert_parse_failure!(r, 0, ExpectedComment, ExpectedProcessingInstruction, ExpectedWhitespace, ExpectedElement);
     }
 
     #[test]
@@ -1480,7 +1506,7 @@ mod test {
 
         let r = full_parse("<hi");
 
-        assert_eq!(r, Err((3, vec![ExpectedWhitespace, ExpectedElementSelfClosed, ExpectedElementEnd])));
+        assert_parse_failure!(r, 3, ExpectedWhitespace, ExpectedElementSelfClosed, ExpectedElementEnd);
     }
 
     #[test]
@@ -1489,7 +1515,7 @@ mod test {
 
         let r = full_parse("<hi / >");
 
-        assert_eq!(r, Err((4, vec![ExpectedAttribute, ExpectedElementSelfClosed, ExpectedElementEnd])));
+        assert_parse_failure!(r, 4, ExpectedAttribute, ExpectedElementSelfClosed, ExpectedElementEnd);
     }
 
     #[test]
@@ -1498,7 +1524,7 @@ mod test {
 
         let r = full_parse("<hi oops=value' />");
 
-        assert_eq!(r, Err((9, vec![ExpectedOpeningQuote("\'"), ExpectedOpeningQuote("\"")])));
+        assert_parse_failure!(r, 9, ExpectedOpeningQuote("\'"), ExpectedOpeningQuote("\""));
     }
 
     #[test]
@@ -1507,7 +1533,7 @@ mod test {
 
         let r = full_parse("<hi oops='value />");
 
-        assert_eq!(r, Err((18, vec![ExpectedNamedReference, ExpectedDecimalReference, ExpectedAttributeValue, ExpectedHexReference, ExpectedClosingQuote("\'")])));
+        assert_parse_failure!(r, 18, ExpectedNamedReference, ExpectedDecimalReference, ExpectedAttributeValue, ExpectedHexReference, ExpectedClosingQuote("\'"));
     }
 
     #[test]
@@ -1516,7 +1542,7 @@ mod test {
 
         let r = full_parse("<hi oops='value");
 
-        assert_eq!(r, Err((15, vec![ExpectedNamedReference, ExpectedDecimalReference, ExpectedAttributeValue, ExpectedHexReference, ExpectedClosingQuote("\'")])));
+        assert_parse_failure!(r, 15, ExpectedNamedReference, ExpectedDecimalReference, ExpectedAttributeValue, ExpectedHexReference, ExpectedClosingQuote("\'"));
     }
 
     #[test]
@@ -1525,7 +1551,7 @@ mod test {
 
         let r = full_parse("<hi><oops</hi>");
 
-        assert_eq!(r, Err((9, vec![ExpectedWhitespace, ExpectedElementSelfClosed, ExpectedElementEnd])));
+        assert_parse_failure!(r, 9, ExpectedWhitespace, ExpectedElementSelfClosed, ExpectedElementEnd);
     }
 
     #[test]
@@ -1534,7 +1560,7 @@ mod test {
 
         let r = full_parse("<hi><oops / ></hi>");
 
-        assert_eq!(r, Err((10, vec![ExpectedAttribute, ExpectedElementSelfClosed, ExpectedElementEnd])));
+        assert_parse_failure!(r, 10, ExpectedAttribute, ExpectedElementSelfClosed, ExpectedElementEnd);
     }
 
     #[test]
@@ -1543,7 +1569,7 @@ mod test {
 
         let r = full_parse("<hi>Entity: &;</hi>");
 
-        assert_eq!(r, Err((13, vec![ExpectedNamedReferenceValue])));
+        assert_parse_failure!(r, 13, ExpectedNamedReferenceValue);
     }
 
     #[test]
@@ -1552,7 +1578,7 @@ mod test {
 
         let r = full_parse("<hi><bye>Entity: &;</bye></hi>");
 
-        assert_eq!(r, Err((18, vec![ExpectedNamedReferenceValue])));
+        assert_parse_failure!(r, 18, ExpectedNamedReferenceValue);
     }
 
     #[test]
@@ -1561,7 +1587,7 @@ mod test {
 
         let r = full_parse("<hi><bye oops=value' /></hi>");
 
-        assert_eq!(r, Err((14, vec![ExpectedOpeningQuote("\'"), ExpectedOpeningQuote("\"")])));
+        assert_parse_failure!(r, 14, ExpectedOpeningQuote("\'"), ExpectedOpeningQuote("\""));
     }
 
     #[test]
@@ -1570,7 +1596,7 @@ mod test {
 
         let r = full_parse("<hi><bye oops='value /></hi>");
 
-        assert_eq!(r, Err((23, vec![ExpectedNamedReference, ExpectedDecimalReference, ExpectedAttributeValue, ExpectedHexReference, ExpectedClosingQuote("\'")])));
+        assert_parse_failure!(r, 23, ExpectedNamedReference, ExpectedDecimalReference, ExpectedAttributeValue, ExpectedHexReference, ExpectedClosingQuote("\'"));
     }
 
     #[test]
@@ -1579,7 +1605,7 @@ mod test {
 
         let r = full_parse("<hi><bye oops='value</hi>");
 
-        assert_eq!(r, Err((20, vec![ExpectedNamedReference, ExpectedDecimalReference, ExpectedAttributeValue, ExpectedHexReference, ExpectedClosingQuote("\'")])));
+        assert_parse_failure!(r, 20, ExpectedNamedReference, ExpectedDecimalReference, ExpectedAttributeValue, ExpectedHexReference, ExpectedClosingQuote("\'"));
     }
 
     #[test]
@@ -1588,7 +1614,7 @@ mod test {
 
         let r = full_parse("<a><?xml?></a>");
 
-        assert_eq!(r, Err((5, vec![InvalidProcessingInstructionTarget])));
+        assert_parse_failure!(r, 5, InvalidProcessingInstructionTarget);
     }
 
     #[test]
@@ -1597,7 +1623,7 @@ mod test {
 
         let r = full_parse("<a></b>");
 
-        assert_eq!(r, Err((5, vec![MismatchedElementEndName])));
+        assert_parse_failure!(r, 5, MismatchedElementEndName);
     }
 
     #[test]
@@ -1606,7 +1632,7 @@ mod test {
 
         let r = full_parse("<a>&#99999999;</a>");
 
-        assert_eq!(r, Err((5, vec![InvalidDecimalReference])));
+        assert_parse_failure!(r, 5, InvalidDecimalReference);
     }
 
     #[test]
@@ -1615,7 +1641,7 @@ mod test {
 
         let r = full_parse("<a>&#x99999999;</a>");
 
-        assert_eq!(r, Err((6, vec![InvalidHexReference])));
+        assert_parse_failure!(r, 6, InvalidHexReference);
     }
 
     #[test]
@@ -1624,9 +1650,8 @@ mod test {
 
         let r = full_parse("<a>&fake;</a>");
 
-        assert_eq!(r, Err((4, vec![UnknownNamedReference])));
+        assert_parse_failure!(r, 4, UnknownNamedReference);
     }
-
 
     #[test]
     fn failure_duplicate_attribute() {
@@ -1634,7 +1659,7 @@ mod test {
 
         let r = full_parse("<a b='c' b='d'/>");
 
-        assert_eq!(r, Err((9, vec![DuplicateAttribute])));
+        assert_parse_failure!(r, 9, DuplicateAttribute);
     }
 
     #[test]
@@ -1643,7 +1668,7 @@ mod test {
 
         let r = full_parse("<a xmlns:b='c' xmlns:b='d'/>");
 
-        assert_eq!(r, Err((15, vec![RedefinedNamespace])));
+        assert_parse_failure!(r, 15, RedefinedNamespace);
     }
 
     #[test]
@@ -1652,7 +1677,7 @@ mod test {
 
         let r = full_parse("<a xmlns='a' xmlns='b'/>");
 
-        assert_eq!(r, Err((13, vec![RedefinedDefaultNamespace])));
+        assert_parse_failure!(r, 13, RedefinedDefaultNamespace);
     }
 
     #[test]
@@ -1661,7 +1686,7 @@ mod test {
 
         let r = full_parse("<a xmlns:b=''/>");
 
-        assert_eq!(r, Err((3, vec![EmptyNamespace])));
+        assert_parse_failure!(r, 3, EmptyNamespace);
     }
 
     #[test]
@@ -1670,7 +1695,7 @@ mod test {
 
         let r = full_parse("<a b:foo='a'/>");
 
-        assert_eq!(r, Err((3, vec![UnknownNamespacePrefix])));
+        assert_parse_failure!(r, 3, UnknownNamespacePrefix);
     }
 
     #[test]
@@ -1679,6 +1704,6 @@ mod test {
 
         let r = full_parse("<b:a/>");
 
-        assert_eq!(r, Err((1, vec![UnknownNamespacePrefix])));
+        assert_parse_failure!(r, 1, UnknownNamespacePrefix);
     }
 }
