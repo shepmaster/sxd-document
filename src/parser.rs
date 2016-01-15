@@ -777,7 +777,7 @@ impl<'d> DomBuilder<'d> {
             self.doc.create_element(name)
         };
 
-        for (prefix, ns_uri) in new_prefix_mappings.iter() {
+        for (prefix, ns_uri) in &new_prefix_mappings {
             element.register_prefix(*prefix, ns_uri);
         }
 

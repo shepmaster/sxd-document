@@ -318,7 +318,7 @@ fn format_element<'d, W: ?Sized>(element: dom::Element<'d>,
     try!(writer.write_str("<"));
     try!(format_qname(element.name(), mapping, element.preferred_prefix(), writer));
 
-    for attr in attrs.iter() {
+    for attr in &attrs {
         try!(writer.write_str(" "));
         try!(format_qname(attr.name(), mapping, attr.preferred_prefix(), writer));
         try!(write!(writer, "='"));
