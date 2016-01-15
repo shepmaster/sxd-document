@@ -232,7 +232,7 @@ impl<'d> PrefixMapping<'d> {
         }
     }
 
-    fn namespace_type<'a : 'c, 'b : 'c, 'c>(&'a self, preferred_prefix: Option<&'b str>, namespace_uri: &str) -> NamespaceType<'c> {
+    fn namespace_type<'a>(&'a self, preferred_prefix: Option<&'a str>, namespace_uri: &str) -> NamespaceType<'a> {
         if Some(namespace_uri) == self.active_default_namespace_uri() {
             return NamespaceType::Default;
         }
