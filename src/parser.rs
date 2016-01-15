@@ -921,7 +921,7 @@ fn decode_reference<F>(ref_data: Reference, cb: F) -> DomBuilderResult<()>
     match ref_data {
         DecimalCharReference(span) => {
             u32::from_str_radix(span.value, 10).ok()
-                .and_then(|code| char::from_u32(code))
+                .and_then(char::from_u32)
                 .ok_or(span.map(|_| Error::InvalidDecimalReference))
                 .and_then(|c| {
                     let s: String = iter::repeat(c).take(1).collect();
@@ -931,7 +931,7 @@ fn decode_reference<F>(ref_data: Reference, cb: F) -> DomBuilderResult<()>
         },
         HexCharReference(span) => {
             u32::from_str_radix(span.value, 16).ok()
-                .and_then(|code| char::from_u32(code))
+                .and_then(char::from_u32)
                 .ok_or(span.map(|_| Error::InvalidHexReference))
                 .and_then(|c| {
                     let s: String = iter::repeat(c).take(1).collect();

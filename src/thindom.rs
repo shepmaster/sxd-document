@@ -166,7 +166,7 @@ impl<'d> Connections<'d> {
     }
 
     pub fn attribute_parent(&self, attribute: Attribute<'d>) -> Option<Element<'d>> {
-        self.connections.attribute_parent(attribute.node).map(|a| Element::wrap(a))
+        self.connections.attribute_parent(attribute.node).map(Element::wrap)
     }
 
     pub fn attributes(&self, parent: Element<'d>) -> Attributes<'d> {
@@ -231,7 +231,7 @@ impl<'d> Iterator for Siblings<'d> {
     type Item = ChildOfElement<'d>;
 
     fn next(&mut self) -> Option<ChildOfElement<'d>> {
-        self.iter.next().map(|n| ChildOfElement::wrap(n))
+        self.iter.next().map(ChildOfElement::wrap)
     }
 }
 
