@@ -166,7 +166,7 @@ impl<'d> Connections<'d> {
     }
 
     pub fn attribute_parent(&self, attribute: Attribute<'d>) -> Option<Element<'d>> {
-        self.connections.attribute_parent(attribute.node).map(|a| Element::wrap(a))
+        self.connections.attribute_parent(attribute.node).map(Element::wrap)
     }
 
     pub fn attributes(&self, parent: Element<'d>) -> Attributes<'d> {
@@ -231,7 +231,7 @@ impl<'d> Iterator for Siblings<'d> {
     type Item = ChildOfElement<'d>;
 
     fn next(&mut self) -> Option<ChildOfElement<'d>> {
-        self.iter.next().map(|n| ChildOfElement::wrap(n))
+        self.iter.next().map(ChildOfElement::wrap)
     }
 }
 
@@ -376,10 +376,10 @@ impl<'d> ChildOfRoot<'d> {
     }
 
     pub fn as_raw(&self) -> raw::ChildOfRoot {
-        match self {
-            &ChildOfRoot::Element(n)               => raw::ChildOfRoot::Element(n.node),
-            &ChildOfRoot::Comment(n)               => raw::ChildOfRoot::Comment(n.node),
-            &ChildOfRoot::ProcessingInstruction(n) => raw::ChildOfRoot::ProcessingInstruction(n.node),
+        match *self {
+            ChildOfRoot::Element(n)               => raw::ChildOfRoot::Element(n.node),
+            ChildOfRoot::Comment(n)               => raw::ChildOfRoot::Comment(n.node),
+            ChildOfRoot::ProcessingInstruction(n) => raw::ChildOfRoot::ProcessingInstruction(n.node),
         }
     }
 }
@@ -408,11 +408,11 @@ impl<'d> ChildOfElement<'d> {
     }
 
     pub fn as_raw(&self) -> raw::ChildOfElement {
-        match self {
-            &ChildOfElement::Element(n)               => raw::ChildOfElement::Element(n.node),
-            &ChildOfElement::Text(n)                  => raw::ChildOfElement::Text(n.node),
-            &ChildOfElement::Comment(n)               => raw::ChildOfElement::Comment(n.node),
-            &ChildOfElement::ProcessingInstruction(n) => raw::ChildOfElement::ProcessingInstruction(n.node),
+        match *self {
+            ChildOfElement::Element(n)               => raw::ChildOfElement::Element(n.node),
+            ChildOfElement::Text(n)                  => raw::ChildOfElement::Text(n.node),
+            ChildOfElement::Comment(n)               => raw::ChildOfElement::Comment(n.node),
+            ChildOfElement::ProcessingInstruction(n) => raw::ChildOfElement::ProcessingInstruction(n.node),
         }
     }
 }

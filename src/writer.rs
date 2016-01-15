@@ -232,7 +232,7 @@ impl<'d> PrefixMapping<'d> {
         }
     }
 
-    fn namespace_type<'a : 'c, 'b : 'c, 'c>(&'a self, preferred_prefix: Option<&'b str>, namespace_uri: &str) -> NamespaceType<'c> {
+    fn namespace_type<'a>(&'a self, preferred_prefix: Option<&'a str>, namespace_uri: &str) -> NamespaceType<'a> {
         if Some(namespace_uri) == self.active_default_namespace_uri() {
             return NamespaceType::Default;
         }
@@ -318,7 +318,7 @@ fn format_element<'d, W: ?Sized>(element: dom::Element<'d>,
     try!(writer.write_str("<"));
     try!(format_qname(element.name(), mapping, element.preferred_prefix(), writer));
 
-    for attr in attrs.iter() {
+    for attr in &attrs {
         try!(writer.write_str(" "));
         try!(format_qname(attr.name(), mapping, attr.preferred_prefix(), writer));
         try!(write!(writer, "='"));
@@ -463,8 +463,8 @@ mod test {
 
     fn format_xml<'d>(doc: &'d dom::Document<'d>) -> String {
         let mut w = Vec::new();
-        format_document(doc, &mut w).ok().expect("Not formatted");
-        String::from_utf8(w).ok().expect("Not a string")
+        format_document(doc, &mut w).expect("Not formatted");
+        String::from_utf8(w).expect("Not a string")
     }
 
     #[test]

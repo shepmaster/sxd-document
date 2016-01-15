@@ -117,7 +117,7 @@ impl<'a, F> Iterator for SplitKeepingDelimiter<'a, F>
 
 #[cfg(not(feature = "unstable"))]
 pub trait SplitKeepingDelimiterExt: ::std::ops::Index<::std::ops::RangeFull, Output = str> {
-    fn split_keeping_delimiter<'p, F>(&'p self, chars: F) -> SplitKeepingDelimiter<'p, F>
+    fn split_keeping_delimiter<F>(&self, chars: F) -> SplitKeepingDelimiter<F>
         where F: Fn(char) -> bool
     {
         SplitKeepingDelimiter { haystack: &self[..], chars: chars, start: 0, saved: None }
