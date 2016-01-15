@@ -769,7 +769,7 @@ impl<'d> Iterator for SiblingIter<'d> {
                 children.next().map(|&sib| sib.into())
             },
             SiblingData::FromElement(ref mut children) => {
-                children.next().map(|&sib| sib)
+                children.next().cloned()
             },
             SiblingData::Dead => None
         }
