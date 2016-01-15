@@ -65,15 +65,17 @@ pub trait SplitKeepingDelimiterExt: ::std::ops::Index<::std::ops::RangeFull, Out
 }
 
 #[cfg(not(feature = "unstable"))]
-pub struct SplitKeepingDelimiter<'a> {
+pub struct SplitKeepingDelimiter<'a, F> {
     haystack: &'a str,
-    chars: &'a [char],
+    chars: F,
     start: usize,
     saved: Option<usize>,
 }
 
 #[cfg(not(feature = "unstable"))]
-impl<'a> Iterator for SplitKeepingDelimiter<'a> {
+impl<'a, F> Iterator for SplitKeepingDelimiter<'a, F>
+    where F: Fn(char) -> bool
+{
     type Item = SplitType<'a>;
 
     fn next(&mut self) -> Option<SplitType<'a>> {
@@ -89,7 +91,7 @@ impl<'a> Iterator for SplitKeepingDelimiter<'a> {
 
         let tail = &self.haystack[self.start..];
 
-        match tail.find(self.chars) {
+        match tail.find(&self.chars) {
             Some(start) => {
                 let start = self.start + start;
                 let end = start + 1; // Super dangerous! Assume we are only one byte long
@@ -115,8 +117,9 @@ impl<'a> Iterator for SplitKeepingDelimiter<'a> {
 
 #[cfg(not(feature = "unstable"))]
 pub trait SplitKeepingDelimiterExt: ::std::ops::Index<::std::ops::RangeFull, Output = str> {
-    fn split_keeping_delimiter<'p>(&'p self, chars: &'p[char]) -> SplitKeepingDelimiter<'p> {
-        for c in chars { assert!(c.len_utf8() == 1) }
+    fn split_keeping_delimiter<'p, F>(&'p self, chars: F) -> SplitKeepingDelimiter<'p, F>
+        where F: Fn(char) -> bool
+    {
         SplitKeepingDelimiter { haystack: &self[..], chars: chars, start: 0, saved: None }
     }
 }
@@ -130,7 +133,7 @@ mod test {
     #[test]
     fn split_with_delimiter() {
         use super::SplitType::*;
-        let delims = &[',', ';'][..];
+        let delims = |b| b == ',' || b == ';';
         let items: Vec<_> = "alpha,beta;gamma".split_keeping_delimiter(delims).collect();
         assert_eq!(&items, &[Match("alpha"), Delimiter(","), Match("beta"), Delimiter(";"), Match("gamma")]);
     }
@@ -138,7 +141,7 @@ mod test {
     #[test]
     fn split_with_delimiter_allows_consecutive_delimiters() {
         use super::SplitType::*;
-        let delims = &[',', ';'][..];
+        let delims = |b| b == ',' || b == ';';
         let items: Vec<_> = ",;".split_keeping_delimiter(delims).collect();
         assert_eq!(&items, &[Delimiter(","), Delimiter(";")]);
     }

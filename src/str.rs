@@ -67,33 +67,21 @@ impl<'a> XmlStr for &'a str {
     }
 
     fn end_of_char_data(&self) -> Option<usize> {
-        if self.starts_with("<") ||
-           self.starts_with("&") ||
-           self.starts_with("]]>")
-        {
-            return None
+        fn find_end_of_char_data(bytes: &[u8]) -> Option<usize> {
+            for (i, &b) in bytes.iter().enumerate() {
+                if b == b'<' || b == b'&' { return Some(i) }
+
+                if b == b']' && bytes[i..].starts_with(b"]]>") {
+                    return Some(i)
+                }
+            }
+            None
         }
 
-        let mut indices = self.char_indices();
-
-        loop {
-            let mut positions = indices.by_ref().skip_while(|&(_, c)| {
-                c != '<' && c != '&' && c != ']'
-            });
-
-            match positions.next() {
-                None => return Some(self.len()),
-                Some((offset, c)) if c == '<' || c == '&' => return Some(offset),
-                Some((offset, _)) => {
-                    let tail = &self[offset..];
-                    if tail.starts_with("]]>") {
-                        return Some(offset)
-                    } else {
-                        // False alarm, resume scanning
-                        continue;
-                    }
-                },
-            }
+        match find_end_of_char_data(self.as_bytes()) {
+            Some(0) => None,
+            Some(v) => Some(v),
+            None => Some(self.len()),
         }
     }
 

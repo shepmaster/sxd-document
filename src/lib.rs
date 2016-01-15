@@ -59,6 +59,7 @@ extern crate peresil;
 use std::fmt;
 
 mod str_ext;
+mod lazy_hash_map;
 mod string_pool;
 mod raw;
 mod str;
