@@ -101,25 +101,25 @@ pub enum ChildOfRoot {
 
 impl ChildOfRoot {
     fn is_element(&self) -> bool {
-        match self {
-            &ChildOfRoot::Element(_) => true,
+        match *self {
+            ChildOfRoot::Element(_) => true,
             _ => false,
         }
     }
 
     fn replace_parent(&self, parent: *mut Root) {
-        match self {
-            &ChildOfRoot::Element(n) => {
+        match *self {
+            ChildOfRoot::Element(n) => {
                 let parent_r = unsafe { &mut *parent };
                 let n = unsafe { &mut *n };
                 parent_r.children.retain(|c| !c.is_element());
                 replace_parent(*self, ParentOfChild::Root(parent), &mut n.parent);
             },
-            &ChildOfRoot::Comment(n) => {
+            ChildOfRoot::Comment(n) => {
                 let n = unsafe { &mut *n };
                 replace_parent(*self, ParentOfChild::Root(parent), &mut n.parent);
             },
-            &ChildOfRoot::ProcessingInstruction(n) => {
+            ChildOfRoot::ProcessingInstruction(n) => {
                 let n = unsafe { &mut *n };
                 replace_parent(*self, ParentOfChild::Root(parent), &mut n.parent);
             },
@@ -137,7 +137,7 @@ pub enum ChildOfElement {
 }
 
 fn replace_parent(child: ChildOfRoot, parent: ParentOfChild, parent_field: &mut Option<ParentOfChild>) {
-    if let &mut Some(prev_parent) = parent_field {
+    if let Some(prev_parent) = *parent_field {
         match prev_parent {
             ParentOfChild::Root(r) => {
                 let r_r = unsafe { &mut *r };
@@ -157,20 +157,20 @@ fn replace_parent(child: ChildOfRoot, parent: ParentOfChild, parent_field: &mut 
 
 impl ChildOfElement {
     fn replace_parent(&self, parent: *mut Element) {
-        match self {
-            &ChildOfElement::Element(n) => {
+        match *self {
+            ChildOfElement::Element(n) => {
                 let n = unsafe { &mut *n };
                 replace_parent(ChildOfRoot::Element(n), ParentOfChild::Element(parent), &mut n.parent);
             },
-            &ChildOfElement::Comment(n) => {
+            ChildOfElement::Comment(n) => {
                 let n = unsafe { &mut *n };
                 replace_parent(ChildOfRoot::Comment(n), ParentOfChild::Element(parent), &mut n.parent);
             }
-            &ChildOfElement::ProcessingInstruction(n) => {
+            ChildOfElement::ProcessingInstruction(n) => {
                 let n = unsafe { &mut *n };
                 replace_parent(ChildOfRoot::ProcessingInstruction(n), ParentOfChild::Element(parent), &mut n.parent);
             },
-            &ChildOfElement::Text(n) => {
+            ChildOfElement::Text(n) => {
                 let n = unsafe { &mut *n };
 
                 if let Some(prev_parent) = n.parent {

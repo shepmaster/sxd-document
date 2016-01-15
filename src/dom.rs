@@ -484,10 +484,10 @@ impl<'d> ChildOfRoot<'d> {
     unpack!(ChildOfRoot, processing_instruction, ProcessingInstruction, ProcessingInstruction);
 
     fn as_raw(&self) -> raw::ChildOfRoot {
-        match self {
-            &ChildOfRoot::Element(n) => raw::ChildOfRoot::Element(n.node),
-            &ChildOfRoot::Comment(n) => raw::ChildOfRoot::Comment(n.node),
-            &ChildOfRoot::ProcessingInstruction(n) => raw::ChildOfRoot::ProcessingInstruction(n.node),
+        match *self {
+            ChildOfRoot::Element(n) => raw::ChildOfRoot::Element(n.node),
+            ChildOfRoot::Comment(n) => raw::ChildOfRoot::Comment(n.node),
+            ChildOfRoot::ProcessingInstruction(n) => raw::ChildOfRoot::ProcessingInstruction(n.node),
         }
     }
 }
@@ -508,11 +508,11 @@ impl<'d> ChildOfElement<'d> {
     unpack!(ChildOfElement, processing_instruction, ProcessingInstruction, ProcessingInstruction);
 
     fn as_raw(&self) -> raw::ChildOfElement {
-        match self {
-            &ChildOfElement::Element(n) => raw::ChildOfElement::Element(n.node),
-            &ChildOfElement::Text(n) => raw::ChildOfElement::Text(n.node),
-            &ChildOfElement::Comment(n) => raw::ChildOfElement::Comment(n.node),
-            &ChildOfElement::ProcessingInstruction(n) => raw::ChildOfElement::ProcessingInstruction(n.node),
+        match *self {
+            ChildOfElement::Element(n) => raw::ChildOfElement::Element(n.node),
+            ChildOfElement::Text(n) => raw::ChildOfElement::Text(n.node),
+            ChildOfElement::Comment(n) => raw::ChildOfElement::Comment(n.node),
+            ChildOfElement::ProcessingInstruction(n) => raw::ChildOfElement::ProcessingInstruction(n.node),
         }
     }
 }

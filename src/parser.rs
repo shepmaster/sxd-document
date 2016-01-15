@@ -981,9 +981,9 @@ impl AttributeValueBuilder {
         use self::AttributeValue::*;
 
         for value in values.iter() {
-            match value {
-                &LiteralAttributeValue(v) => self.value.push_str(v),
-                &ReferenceAttributeValue(r) => try!(decode_reference(r, |s| self.value.push_str(s))),
+            match *value {
+                LiteralAttributeValue(v) => self.value.push_str(v),
+                ReferenceAttributeValue(r) => try!(decode_reference(r, |s| self.value.push_str(s))),
             }
         }
 
