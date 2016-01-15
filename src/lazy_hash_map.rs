@@ -18,7 +18,7 @@ impl<K, V> LazyHashMap<K, V>
         where K: Borrow<Q>,
               Q: Hash + Eq
     {
-        self.map.as_ref().map(|m| m.contains_key(key)).unwrap_or(false)
+        self.map.as_ref().map_or(false, |m| m.contains_key(key))
     }
 
     pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
@@ -54,6 +54,6 @@ impl<'a, K: 'a, V: 'a> Iterator for Iter<'a, K, V> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.as_ref().map(|i| i.size_hint()).unwrap_or((0, Some(0)))
+        self.0.as_ref().map_or((0, Some(0)), |i| i.size_hint())
     }
 }
