@@ -108,7 +108,7 @@ impl Recoverable for Error {
 type XmlMaster<'a> = peresil::ParseMaster<StringPoint<'a>, Error>;
 type XmlProgress<'a, T> = peresil::Progress<StringPoint<'a>, T, Error>;
 
-fn success<'a, T>(data: T, point: StringPoint<'a>) -> XmlProgress<'a, T> {
+fn success<T>(data: T, point: StringPoint) -> XmlProgress<T> {
     peresil::Progress { point: point, status: peresil::Status::Success(data) }
 }
 
@@ -169,7 +169,7 @@ impl<'a> XmlParseExt<'a> for StringPoint<'a> {
     }
 
     fn consume_prefixed_name(&self) -> peresil::Progress<StringPoint<'a>, PrefixedName<'a>, ()> {
-        fn parse_local<'a>(xml: StringPoint<'a>) -> peresil::Progress<StringPoint<'a>, &'a str, ()> {
+        fn parse_local(xml: StringPoint) -> peresil::Progress<StringPoint, &str, ()> {
             let (xml, _) = try_parse!(xml.consume_literal(":"));
             xml.consume_ncname()
         }
@@ -327,7 +327,7 @@ fn parse_quoted_value<'a, T, F>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>, f:
         .finish()
 }
 
-fn parse_eq<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, ()> {
+fn parse_eq(xml: StringPoint) -> XmlProgress<()> {
     let (xml, _) = xml.consume_space().optional(xml);
     let (xml, _) = try_parse!(xml.expect_literal("="));
     let (xml, _) = xml.consume_space().optional(xml);
@@ -336,7 +336,7 @@ fn parse_eq<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, ()> {
 }
 
 fn parse_version_info<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> XmlProgress<'a, &'a str> {
-    fn version_num<'a>(xml: StringPoint<'a>) -> peresil::Progress<StringPoint<'a>, &'a str, ()> {
+    fn version_num(xml: StringPoint) -> peresil::Progress<StringPoint, &str, ()> {
         let start_point = xml;
 
         let (xml, _) = try_parse!(xml.consume_literal("1."));
@@ -402,7 +402,7 @@ fn parse_xml_declaration<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> Xm
     success(Token::XmlDeclaration, xml)
 }
 
-fn parse_pi_value<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, &'a str> {
+fn parse_pi_value(xml: StringPoint) -> XmlProgress<&str> {
     let (xml, _) = try_parse!(xml.expect_space());
     xml.consume_pi_value()
 }
@@ -421,14 +421,14 @@ fn parse_pi<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token> {
     success(Token::ProcessingInstruction(target, value), xml)
 }
 
-fn parse_element_start<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
+fn parse_element_start(xml: StringPoint) -> XmlProgress<Token> {
     let (xml, _) = try_parse!(xml.consume_start_tag());
     let (xml, name) = try_parse!(Span::parse(xml, |xml| xml.consume_prefixed_name().map_err(|_| Error::ExpectedElementName)));
 
     success(Token::ElementStart(name), xml)
 }
 
-fn parse_element_start_close<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
+fn parse_element_start_close(xml: StringPoint) -> XmlProgress<Token> {
     let (xml, _) = xml.expect_space().optional(xml);
 
     xml.consume_literal(">")
@@ -436,7 +436,7 @@ fn parse_element_start_close<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<
         .map_err(|_| Error::ExpectedElementEnd)
 }
 
-fn parse_element_self_close<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
+fn parse_element_self_close(xml: StringPoint) -> XmlProgress<Token> {
     let (xml, _) = xml.expect_space().optional(xml);
 
     xml.consume_literal("/>")
@@ -444,8 +444,7 @@ fn parse_element_self_close<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'
         .map_err(|_| Error::ExpectedElementSelfClosed)
 }
 
-fn parse_element_close<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>>
-{
+fn parse_element_close(xml: StringPoint) -> XmlProgress<Token> {
     let (xml, _) = try_parse!(xml.expect_literal("</"));
 
     let (xml, name) = try_parse!(Span::parse(xml, |xml| xml.consume_prefixed_name().map_err(|_| Error::ExpectedElementName)));
@@ -489,7 +488,7 @@ fn parse_attribute_literal<'a>(xml: StringPoint<'a>, quote: &str) -> XmlProgress
     success(Token::LiteralAttributeValue(val), xml)
 }
 
-fn parse_entity_ref<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Reference<'a>> {
+fn parse_entity_ref(xml: StringPoint) -> XmlProgress<Reference> {
     let (xml, _) = try_parse!(xml.consume_literal("&").map_err(|_| Error::ExpectedNamedReference));
     let (xml, name) = try_parse!(Span::parse(xml, |xml| xml.consume_name().map_err(|_| Error::ExpectedNamedReferenceValue)));
     let (xml, _) = try_parse!(xml.expect_literal(";"));
@@ -497,7 +496,7 @@ fn parse_entity_ref<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Reference<'a>> 
     success(EntityReference(name), xml)
 }
 
-fn parse_decimal_char_ref<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Reference<'a>> {
+fn parse_decimal_char_ref(xml: StringPoint) -> XmlProgress<Reference> {
     let (xml, _) = try_parse!(xml.consume_literal("&#").map_err(|_| Error::ExpectedDecimalReference));
     let (xml, dec) = try_parse!(Span::parse(xml, |xml| xml.consume_decimal_chars().map_err(|_| Error::ExpectedDecimalReferenceValue)));
     let (xml, _) = try_parse!(xml.expect_literal(";"));
@@ -505,7 +504,7 @@ fn parse_decimal_char_ref<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Reference
     success(DecimalCharReference(dec), xml)
 }
 
-fn parse_hex_char_ref<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Reference<'a>> {
+fn parse_hex_char_ref(xml: StringPoint) -> XmlProgress<Reference> {
     let (xml, _) = try_parse!(xml.consume_literal("&#x").map_err(|_| Error::ExpectedHexReference));
     let (xml, hex) = try_parse!(Span::parse(xml, |xml| xml.consume_hex_chars()));
     let (xml, _) = try_parse!(xml.expect_literal(";"));
