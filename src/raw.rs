@@ -91,7 +91,6 @@ impl ProcessingInstruction {
     pub fn value(&self) -> Option<&str> { self.value.map(|v| v.as_slice()) }
 }
 
-#[allow(raw_pointer_derive)]
 #[derive(Debug,Copy,Clone,PartialEq)]
 pub enum ChildOfRoot {
     Element(*mut Element),
@@ -127,7 +126,6 @@ impl ChildOfRoot {
     }
 }
 
-#[allow(raw_pointer_derive)]
 #[derive(Debug,Copy,Clone,PartialEq)]
 pub enum ChildOfElement {
     Element(*mut Element),
@@ -184,7 +182,6 @@ impl ChildOfElement {
     }
 }
 
-#[allow(raw_pointer_derive)]
 #[derive(Debug,Copy,Clone,PartialEq)]
 pub enum ParentOfChild {
     Root(*mut Root),

@@ -113,7 +113,6 @@ impl<'d> fmt::Debug for Document<'d> {
 macro_rules! node(
     ($name:ident, $raw:ty, $doc:expr) => (
         #[doc = $doc]
-        #[allow(raw_pointer_derive)]
         #[derive(Copy,Clone)]
         pub struct $name<'d> {
             document: Document<'d>,
