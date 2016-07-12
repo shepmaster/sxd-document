@@ -237,7 +237,6 @@ impl<'d> Iterator for Siblings<'d> {
 
 macro_rules! node(
     ($name:ident, $raw:ty) => (
-        #[allow(raw_pointer_derive)]
         #[derive(Copy,Clone)]
         pub struct $name<'d> {
             node: *mut $raw,
