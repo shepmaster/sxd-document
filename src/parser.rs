@@ -410,26 +410,26 @@ fn parse_xml_declaration<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> Xm
 fn parse_external_id<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>)
                          -> XmlProgress<'a, &'a str>
 {
-	let (xml, _) = try_parse!(xml.expect_space());
-	let (xml, _) = try_parse!(xml.expect_literal("SYSTEM"));
-	let (xml, _) = try_parse!(xml.expect_space());
-	let (xml, external_id) = try_parse!(
+    let (xml, _) = try_parse!(xml.expect_space());
+    let (xml, _) = try_parse!(xml.expect_literal("SYSTEM"));
+    let (xml, _) = try_parse!(xml.expect_space());
+    let (xml, external_id) = try_parse!(
         parse_quoted_value(pm, xml, |_, xml, _| xml.consume_name().map_err(|_| Error::ExpectedSystemLiteral))
         );
 
-	success(external_id, xml)
+    success(external_id, xml)
 }
 
 /* without the optional intSubset */
 fn parse_document_type_declaration<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
-	let (xml, _) = try_parse!(xml.expect_literal("<!DOCTYPE"));
-	let (xml, _) = try_parse!(xml.expect_space());
-	let (xml, _type_name) = try_parse!(xml.consume_name().map_err(|_| Error::ExpectedDocumentTypeName));
-	let (xml, _external_id) = try_parse!(parse_external_id(pm, xml));
-	let (xml, _) = xml.consume_space().optional(xml);
-	let (xml, _) = try_parse!(xml.expect_literal(">"));
+    let (xml, _) = try_parse!(xml.expect_literal("<!DOCTYPE"));
+    let (xml, _) = try_parse!(xml.expect_space());
+    let (xml, _type_name) = try_parse!(xml.consume_name().map_err(|_| Error::ExpectedDocumentTypeName));
+    let (xml, _external_id) = try_parse!(parse_external_id(pm, xml));
+    let (xml, _) = xml.consume_space().optional(xml);
+    let (xml, _) = try_parse!(xml.expect_literal(">"));
 
-	success(Token::DocumentTypeDeclaration, xml)
+    success(Token::DocumentTypeDeclaration, xml)
 }
 
 fn parse_pi_value(xml: StringPoint) -> XmlProgress<&str> {
@@ -594,7 +594,7 @@ impl<'a> Iterator for PullParser<'a> {
 
             State::AfterDeclaration => {
                 pm.alternate()
-					.one(|pm| parse_document_type_declaration(pm, xml))
+                    .one(|pm| parse_document_type_declaration(pm, xml))
                     .one(|_| parse_element_start(xml))
                     .one(|_| xml.expect_space().map(Token::Whitespace))
                     .one(|_| parse_comment(xml))
@@ -1186,12 +1186,12 @@ mod test {
 
     #[test]
     fn a_prolog_with_a_document_type_declaration() {
-		let package = quick_parse("<?xml version='1.0'?><!DOCTYPE doc SYSTEM \"doc.dtd\"><hello/>");
-		let doc = package.as_document();
+        let package = quick_parse("<?xml version='1.0'?><!DOCTYPE doc SYSTEM \"doc.dtd\"><hello/>");
+        let doc = package.as_document();
         let top = top(&doc);
 
-		assert_qname_eq!(top.name(), "hello");
-	}
+        assert_qname_eq!(top.name(), "hello");
+    }
 
     #[test]
     fn a_document_with_a_single_element() {
