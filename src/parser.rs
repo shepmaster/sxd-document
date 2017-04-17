@@ -14,6 +14,7 @@
 //! let doc = parser::parse(xml).expect("Failed to parse");
 //! ```
 
+use std;
 use std::ascii::AsciiExt;
 use std::collections::HashMap;
 use std::mem::replace;
@@ -104,6 +105,69 @@ impl Recoverable for Error {
                 false
             },
             _ => true
+        }
+    }
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        use std::error::Error;
+        use self::Error::*;
+
+        match *self {
+            Expected(s)             |
+            ExpectedClosingQuote(s) |
+            ExpectedOpeningQuote(s) => {
+                write!(f, "Parser error: {} {}", self.description(), s)
+            },
+            _ => write!(f, "Parser error: {}", self.description())
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn description(&self) -> &str {
+        use self::Error::*;
+
+        match *self {
+            Expected(_) => "expected",
+            ExpectedAttribute => "expected attribute",
+            ExpectedAttributeValue => "expected attribute value",
+            ExpectedCData => "expected CDATA",
+            ExpectedCharacterData => "expected character data",
+            ExpectedComment => "expected comment",
+            ExpectedCommentBody => "expected comment body",
+            ExpectedElement => "expected element",
+            ExpectedElementName => "expected element name",
+            ExpectedElementEnd => "expected element end",
+            ExpectedElementSelfClosed => "expected element self closed",
+            ExpectedProcessingInstruction => "expected processing instruction",
+            ExpectedProcessingInstructionTarget => "expected processing instruction target",
+            ExpectedProcessingInstructionValue => "expected processing instruction value",
+            ExpectedVersionNumber => "expected version number",
+            ExpectedEncoding => "expected encoding",
+            ExpectedYesNo => "expected yes or no",
+            ExpectedWhitespace => "expected whitespace",
+            ExpectedDocumentTypeName => "expected document type name",
+            ExpectedSystemLiteral => "expected system literal",
+            ExpectedClosingQuote(_) => "expected closing quote",
+            ExpectedOpeningQuote(_) => "expected opening quote",
+            ExpectedDecimalReferenceValue => "expected decimal reference value",
+            ExpectedHexReferenceValue => "expected hex reference value",
+            ExpectedNamedReferenceValue => "expected named reference value",
+            ExpectedDecimalReference => "expected decimal reference",
+            ExpectedHexReference => "expected hex reference",
+            ExpectedNamedReference => "expected named reference",
+            InvalidProcessingInstructionTarget => "invalid processing instruction target",
+            MismatchedElementEndName => "mismatched element end name",
+            InvalidDecimalReference => "invalid decimal reference",
+            InvalidHexReference => "invalid hex reference",
+            UnknownNamedReference => "unknown named reference",
+            DuplicateAttribute => "duplicate attribute",
+            RedefinedNamespace => "redefined namespace",
+            RedefinedDefaultNamespace => "redefined default namespace",
+            EmptyNamespace => "empty namespace",
+            UnknownNamespacePrefix => "unknown namespace prefix",
         }
     }
 }
