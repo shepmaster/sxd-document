@@ -232,8 +232,13 @@ impl<'d> PrefixMapping<'d> {
         }
     }
 
-    fn namespace_type<'a>(&'a self, preferred_prefix: Option<&'a str>, namespace_uri: &str) -> NamespaceType<'a> {
-        if Some(namespace_uri) == self.active_default_namespace_uri() {
+    fn namespace_type<'a>(&'a self,
+                          preferred_prefix: Option<&'a str>,
+                          namespace_uri: &str,
+                          ignore_default: bool)
+                          -> NamespaceType<'a>
+    {
+        if !ignore_default && Some(namespace_uri) == self.active_default_namespace_uri() {
             return NamespaceType::Default;
         }
 
@@ -264,6 +269,7 @@ enum Content<'d> {
 fn format_qname<'d, W: ?Sized>(q: QName<'d>,
                                mapping: &mut PrefixMapping<'d>,
                                preferred_prefix: Option<&str>,
+                               ignore_default: bool,
                                writer: &mut W)
                                -> io::Result<()>
     where W: Write
@@ -271,7 +277,7 @@ fn format_qname<'d, W: ?Sized>(q: QName<'d>,
     // Can something without a namespace be prefixed? No, because
     // defining a prefix requires a non-empty URI
     if let Some(namespace_uri) = q.namespace_uri {
-        match mapping.namespace_type(preferred_prefix, namespace_uri) {
+        match mapping.namespace_type(preferred_prefix, namespace_uri, ignore_default) {
             NamespaceType::Default => {
                 // No need to do anything
             },
@@ -316,11 +322,11 @@ fn format_element<'d, W: ?Sized>(element: dom::Element<'d>,
     mapping.populate_scope(&element, &attrs);
 
     try!(writer.write_str("<"));
-    try!(format_qname(element.name(), mapping, element.preferred_prefix(), writer));
+    try!(format_qname(element.name(), mapping, element.preferred_prefix(), false, writer));
 
     for attr in &attrs {
         try!(writer.write_str(" "));
-        try!(format_qname(attr.name(), mapping, attr.preferred_prefix(), writer));
+        try!(format_qname(attr.name(), mapping, attr.preferred_prefix(), true, writer));
         try!(write!(writer, "='"));
         try!(format_attribute_value(attr.value(), writer));
         try!(write!(writer, "'"));
@@ -367,7 +373,7 @@ fn format_element_end<'d, W: ?Sized>(element: dom::Element<'d>,
     where W: Write
 {
     try!(writer.write_str("</"));
-    try!(format_qname(element.name(), mapping, element.preferred_prefix(), writer));
+    try!(format_qname(element.name(), mapping, element.preferred_prefix(), false, writer));
     writer.write_str(">")
 }
 
@@ -550,6 +556,20 @@ mod test {
 
         let xml = format_xml(&d);
         assert_eq!(xml, "<?xml version='1.0'?><hello p:a='b' xmlns:p='namespace'/>");
+    }
+
+    #[test]
+    fn attribute_with_default_namespace_prefix() {
+        let p = Package::new();
+        let d = p.as_document();
+        let e = d.create_element(("namespace", "hello"));
+        e.set_preferred_prefix(Some("p"));
+        e.set_default_namespace_uri(Some("namespace"));
+        e.set_attribute_value(("namespace", "a"), "b");
+        d.root().append_child(e);
+
+        let xml = format_xml(&d);
+        assert_eq!(xml, "<?xml version='1.0'?><hello p:a='b' xmlns='namespace' xmlns:p='namespace'/>");
     }
 
     #[test]
