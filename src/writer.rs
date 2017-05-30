@@ -340,7 +340,9 @@ fn format_element<'d, W: ?Sized>(element: dom::Element<'d>,
 
     let mut children = element.children();
     if children.is_empty() {
-        writer.write_str("/>")
+        try!(writer.write_str("/>"));
+        mapping.pop_scope();
+        Ok(())
     } else {
         try!(writer.write_str(">"));
 
@@ -622,6 +624,27 @@ mod test {
 
         let xml = format_xml(&d);
         assert_eq!(xml, "<?xml version='1.0'?><autons0:hello xmlns:autons0='outer'><autons1:world xmlns:autons1='inner'/></autons0:hello>");
+    }
+
+    #[test]
+    fn nested_empty_element_with_namespaces() {
+        let p = Package::new();
+        let d = p.as_document();
+
+        let hello = d.create_element(("outer", "hello"));
+        hello.set_default_namespace_uri(Some("outer"));
+        hello.set_preferred_prefix(Some("o"));
+
+        let world = d.create_element("world");
+        world.set_default_namespace_uri(Some("inner"));
+
+        let empty = d.create_element("empty");
+        world.append_child(empty);
+        hello.append_child(world);
+        d.root().append_child(hello);
+
+        let xml = format_xml(&d);
+        assert_eq!(xml, "<?xml version='1.0'?><hello xmlns='outer' xmlns:o='outer'><world xmlns='inner'><empty/></world></hello>");
     }
 
     #[test]
