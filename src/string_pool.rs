@@ -6,7 +6,7 @@ use std::borrow::Borrow;
 use std::cell::{Cell,RefCell};
 use std::cmp::max;
 use std::collections::LinkedList;
-use std::collections::hash_map::HashMap;
+use std::collections::hash_set::HashSet;
 use std::default::Default;
 use std::ops::Deref;
 use std::slice;
@@ -131,7 +131,7 @@ pub struct StringPool {
     start: Cell<*mut u8>,
     end: Cell<*const u8>,
     chunks: RefCell<LinkedList<Chunk>>,
-    index: RefCell<HashMap<InternedString, InternedString>>,
+    index: RefCell<HashSet<InternedString>>,
 }
 
 static CAPACITY: usize = 10240;
@@ -149,10 +149,13 @@ impl StringPool {
     pub fn intern<'s>(&'s self, s: &str) -> &'s str {
         if s == "" { return ""; }
 
-        let search_string = InternedString::from_str(s);
-
         let mut index = self.index.borrow_mut();
-        let interned_str = *index.entry(search_string).or_insert_with(|| self.do_intern(s));
+        if let Some(interned) = index.get(s) {
+            return unsafe { mem::transmute(interned as &str) };
+        }
+
+        let interned_str = self.do_intern(s);
+        index.insert(interned_str);
 
         // The lifetime is really matched to us
         unsafe { mem::transmute(interned_str) }
