@@ -798,6 +798,7 @@ struct DomBuilder<'d> {
     elements: Vec<dom::Element<'d>>,
     element_names: Vec<Span<PrefixedName<'d>>>,
     attributes: Vec<DeferredAttribute<'d>>,
+    seen_top_element: bool,
 }
 
 impl<'d> DomBuilder<'d> {
@@ -807,6 +808,7 @@ impl<'d> DomBuilder<'d> {
             elements: vec![],
             element_names: Vec::new(),
             attributes: Vec::new(),
+            seen_top_element: false,
         }
     }
 
@@ -877,6 +879,11 @@ impl<'d> DomBuilder<'d> {
 
         for (prefix, ns_uri) in &new_prefix_mappings {
             element.register_prefix(*prefix, ns_uri);
+        }
+
+        if !self.seen_top_element {
+            self.seen_top_element = true;
+            element.register_prefix(::XML_NS_PREFIX, ::XML_NS_URI);
         }
 
         self.append_to_either(element);
@@ -1324,6 +1331,21 @@ mod test {
 
         assert_eq!(attr.preferred_prefix(), Some("ns"));
         assert_eq!(attr.value(), "b");
+    }
+
+    #[test]
+    fn an_attribute_with_xml_space_preserve() {
+        let package = quick_parse("<hello xml:space='preserve'> <a/> </hello>");
+        let doc = package.as_document();
+        let top = top(&doc);
+
+        assert_eq!(top.attribute((::XML_NS_URI, "space")).unwrap().value(), "preserve");
+
+        let children = top.children();
+        assert_eq!(children.len(), 3);
+        assert_eq!(children[0].text().unwrap().text(), " ");
+        assert_qname_eq!(children[1].element().unwrap().name(), "a");
+        assert_eq!(children[2].text().unwrap().text(), " ");
     }
 
     #[test]
