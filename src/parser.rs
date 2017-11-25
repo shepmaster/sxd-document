@@ -82,6 +82,7 @@ pub enum Error {
     RedefinedDefaultNamespace,
     EmptyNamespace,
     UnknownNamespacePrefix,
+    UnclosedElement,
 }
 
 impl Recoverable for Error {
@@ -100,7 +101,8 @@ impl Recoverable for Error {
             RedefinedNamespace                 |
             RedefinedDefaultNamespace          |
             EmptyNamespace                     |
-            UnknownNamespacePrefix             => {
+            UnknownNamespacePrefix             |
+            UnclosedElement                    => {
                 false
             },
             _ => true
@@ -167,6 +169,7 @@ impl std::error::Error for Error {
             RedefinedDefaultNamespace => "redefined default namespace",
             EmptyNamespace => "empty namespace",
             UnknownNamespacePrefix => "unknown namespace prefix",
+            UnclosedElement => "unclosed element",
         }
     }
 }
@@ -713,6 +716,10 @@ impl<'a> Iterator for PullParser<'a> {
             },
         };
 
+        if pt == xml {
+            return None;
+        }
+
         let next_state = match (self.state, r) {
             (State::AtBeginning, Token::XmlDeclaration) |
             (State::AtBeginning, Token::ProcessingInstruction(..)) |
@@ -925,6 +932,10 @@ impl<'d> DomBuilder<'d> {
         e.append_child(t);
     }
 
+    fn has_unclosed_elements(&self) -> bool {
+        !self.elements.is_empty()
+    }
+
     fn consume(&mut self, token: Token<'d>) -> DomBuilderResult<()> {
         use self::Token::*;
 
@@ -1012,6 +1023,10 @@ pub fn parse(xml: &str) -> Result<super::Package, (usize, Vec<Error>)> {
             if let Err(s) = builder.consume(token) {
                 return Err((s.offset, vec![s.value]));
             }
+        }
+
+        if builder.has_unclosed_elements() {
+            return Err((xml.len(), vec![Error::UnclosedElement]));
         }
     }
 
@@ -1724,6 +1739,15 @@ mod test {
         let r = full_parse("<hi><oops</hi>");
 
         assert_parse_failure!(r, 9, ExpectedWhitespace, ExpectedElementSelfClosed, ExpectedElementEnd);
+    }
+
+    #[test]
+    fn failure_missing_close_tag() {
+        use super::Error::*;
+
+        let r = full_parse("<hi>wow");
+
+        assert_parse_failure!(r, 7, UnclosedElement);
     }
 
     #[test]
