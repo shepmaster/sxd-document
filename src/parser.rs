@@ -15,6 +15,7 @@
 //! ```
 
 use std;
+#[allow(unused)] // rust-lang/rust#46510
 use std::ascii::AsciiExt;
 use std::collections::HashMap;
 use std::mem::replace;
