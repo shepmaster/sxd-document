@@ -15,6 +15,7 @@
 //! ```
 
 use std;
+use std::ascii::AsciiExt;
 use std::collections::HashMap;
 use std::mem::replace;
 use std::ops::Deref;
