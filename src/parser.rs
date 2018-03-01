@@ -14,13 +14,12 @@
 //! let doc = parser::parse(xml).expect("Failed to parse");
 //! ```
 
-use std;
 #[allow(unused)] // rust-lang/rust#46510
 use std::ascii::AsciiExt;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::mem::replace;
 use std::ops::Deref;
-use std::{char,iter};
+use std::{char, error, fmt, iter};
 
 use peresil::{self,StringPoint,ParseMaster,Recoverable};
 
@@ -112,9 +111,9 @@ impl Recoverable for Error {
     }
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use std::error::Error;
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::error::Error;
         use self::Error::*;
 
         match *self {
@@ -128,7 +127,7 @@ impl std::fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {
+impl error::Error for Error {
     fn description(&self) -> &str {
         use self::Error::*;
 
@@ -1010,9 +1009,51 @@ impl<'d> DomBuilder<'d> {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct ParseError {
+    location: usize,
+    errors: BTreeSet<Error>,
+}
+
+impl ParseError {
+    fn new(location: usize, error: Error) -> Self {
+        let mut errors = BTreeSet::new();
+        errors.insert(error);
+        ParseError { location, errors }
+    }
+
+    pub fn location(&self) -> usize { self.location }
+}
+
+impl From<(usize, Vec<Error>)> for ParseError {
+    fn from(other: (usize, Vec<Error>)) -> Self {
+        let (location, errors) = other;
+        let errors = errors.into_iter().collect();
+        ParseError { location, errors }
+    }
+}
+
+impl From<Span<Error>> for ParseError {
+    fn from(other: Span<Error>) -> Self {
+        Self::new(other.offset, other.value)
+    }
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "XML parsing error at {}: {:?}", self.location, self.errors)
+    }
+}
+
+impl error::Error for ParseError {
+    fn description(&self) -> &str {
+        "Unable to parse XML"
+    }
+}
+
 /// Parses a string into a DOM. On failure, the location of the
 /// parsing failure and all possible failures will be returned.
-pub fn parse(xml: &str) -> Result<super::Package, (usize, Vec<Error>)> {
+pub fn parse(xml: &str) -> Result<super::Package, ParseError> {
     let parser = PullParser::new(xml);
     let package = super::Package::new();
 
@@ -1022,13 +1063,11 @@ pub fn parse(xml: &str) -> Result<super::Package, (usize, Vec<Error>)> {
 
         for token in parser {
             let token = try!(token);
-            if let Err(s) = builder.consume(token) {
-                return Err((s.offset, vec![s.value]));
-            }
+            try!(builder.consume(token));
         }
 
         if builder.has_unclosed_elements() {
-            return Err((xml.len(), vec![Error::UnclosedElement]));
+            return Err(ParseError::new(xml.len(), Error::UnclosedElement));
         }
     }
 
@@ -1206,15 +1245,14 @@ impl<'a> DeferredAttributes<'a> {
 
 #[cfg(test)]
 mod test {
-    use super::Error;
-    use super::super::{Package,QName};
-    use super::super::dom;
+    use super::*;
+    use ::{dom, Package, QName};
 
     macro_rules! assert_qname_eq(
         ($l:expr, $r:expr) => (assert_eq!(Into::<QName>::into($l), $r.into()));
     );
 
-    fn full_parse(xml: &str) -> Result<Package, (usize, Vec<Error>)> {
+    fn full_parse(xml: &str) -> Result<Package, ParseError> {
         super::parse(xml)
     }
 
@@ -1636,28 +1674,12 @@ mod test {
     // commentbody
     // pinstructionvalue
 
-    type ParseResult<T, E> = Result<T, (usize, Vec<E>)>;
-
-    fn sort_parse_result<T, E>(e: ParseResult<T, E>) -> ParseResult<T, E>
-        where E: ::std::cmp::Ord
-    {
-        match e {
-            Ok(t) => Ok(t),
-            Err((p, mut e)) => {
-                e.sort();
-                Err((p, e))
-            }
-        }
-    }
-
     macro_rules! assert_parse_failure {
         ($actual:expr, $pos:expr, $($err:expr),+) => {
             {
                 let errors = vec![$($err),+];
-                let constructed = Err(($pos, errors));
-                let expected = sort_parse_result(constructed);
-                let actual = sort_parse_result($actual);
-                assert_eq!(actual, expected);
+                let expected = Err(ParseError::from(($pos, errors)));
+                assert_eq!($actual, expected);
             }
         }
     }
@@ -1903,5 +1925,13 @@ mod test {
         let r = full_parse("<b:a/>");
 
         assert_parse_failure!(r, 1, UnknownNamespacePrefix);
+    }
+
+    #[test]
+    fn failure_is_an_error() {
+        fn __assert_well_behaved_error()
+        where
+            ParseError: ::std::error::Error + Send + Sync + 'static,
+        {}
     }
 }
