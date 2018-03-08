@@ -25,10 +25,9 @@ fn process_input<R>(input: R)
         panic!("Can't read: {}", x);
     }
 
-    let package = match parser::parse(&data) {
-        Ok(d) => d,
-        Err((point, _)) => panic!("Unable to parse: {}", pretty_error(&data, point)),
-    };
+    let package = parser::parse(&data).unwrap_or_else(|e| {
+        panic!("Unable to parse: {}", pretty_error(&data, e.location()));
+    });
 
     // let mut out = io::stdout();
     let mut out = io::sink();

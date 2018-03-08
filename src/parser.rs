@@ -14,13 +14,12 @@
 //! let doc = parser::parse(xml).expect("Failed to parse");
 //! ```
 
-use std;
 #[allow(unused)] // rust-lang/rust#46510
 use std::ascii::AsciiExt;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::mem::replace;
 use std::ops::Deref;
-use std::{char,iter};
+use std::{char, error, fmt, iter};
 
 use peresil::{self,StringPoint,ParseMaster,Recoverable};
 
@@ -31,7 +30,7 @@ use super::dom;
 use super::str::XmlStr;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Error {
+enum SpecificError {
     Expected(&'static str),
 
     ExpectedAttribute,
@@ -87,9 +86,9 @@ pub enum Error {
     UnclosedElement,
 }
 
-impl Recoverable for Error {
+impl Recoverable for SpecificError {
     fn recoverable(&self) -> bool {
-        use self::Error::*;
+        use self::SpecificError::*;
 
         match *self {
             ExpectedEncoding                   |
@@ -112,10 +111,10 @@ impl Recoverable for Error {
     }
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use std::error::Error;
-        use self::Error::*;
+impl fmt::Display for SpecificError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::error::Error;
+        use self::SpecificError::*;
 
         match *self {
             Expected(s)             |
@@ -128,9 +127,9 @@ impl std::fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {
+impl error::Error for SpecificError {
     fn description(&self) -> &str {
-        use self::Error::*;
+        use self::SpecificError::*;
 
         match *self {
             Expected(_) => "expected",
@@ -176,8 +175,8 @@ impl std::error::Error for Error {
     }
 }
 
-type XmlMaster<'a> = peresil::ParseMaster<StringPoint<'a>, Error>;
-type XmlProgress<'a, T> = peresil::Progress<StringPoint<'a>, T, Error>;
+type XmlMaster<'a> = peresil::ParseMaster<StringPoint<'a>, SpecificError>;
+type XmlProgress<'a, T> = peresil::Progress<StringPoint<'a>, T, SpecificError>;
 
 fn success<T>(data: T, point: StringPoint) -> XmlProgress<T> {
     peresil::Progress { point: point, status: peresil::Status::Success(data) }
@@ -271,7 +270,7 @@ trait PrivateXmlParseExt<'a> {
 
 impl<'a> PrivateXmlParseExt<'a> for StringPoint<'a> {
     fn consume_attribute_value(&self, quote: &str) -> XmlProgress<'a, &'a str> {
-        self.consume_to(self.s.end_of_attribute(quote)).map_err(|_| Error::ExpectedAttributeValue)
+        self.consume_to(self.s.end_of_attribute(quote)).map_err(|_| SpecificError::ExpectedAttributeValue)
     }
 
     fn consume_name(&self) -> peresil::Progress<StringPoint<'a>, &'a str, ()> {
@@ -279,31 +278,31 @@ impl<'a> PrivateXmlParseExt<'a> for StringPoint<'a> {
     }
 
     fn consume_hex_chars(&self) -> XmlProgress<'a, &'a str> {
-        self.consume_to(self.s.end_of_hex_chars()).map_err(|_| Error::ExpectedHexReferenceValue)
+        self.consume_to(self.s.end_of_hex_chars()).map_err(|_| SpecificError::ExpectedHexReferenceValue)
     }
 
     fn consume_char_data(&self) -> XmlProgress<'a, &'a str> {
-        self.consume_to(self.s.end_of_char_data()).map_err(|_| Error::ExpectedCharacterData)
+        self.consume_to(self.s.end_of_char_data()).map_err(|_| SpecificError::ExpectedCharacterData)
     }
 
     fn consume_cdata(&self) -> XmlProgress<'a, &'a str> {
-        self.consume_to(self.s.end_of_cdata()).map_err(|_| Error::ExpectedCData)
+        self.consume_to(self.s.end_of_cdata()).map_err(|_| SpecificError::ExpectedCData)
     }
 
     fn consume_comment(&self) -> XmlProgress<'a, &'a str> {
-        self.consume_to(self.s.end_of_comment()).map_err(|_| Error::ExpectedCommentBody)
+        self.consume_to(self.s.end_of_comment()).map_err(|_| SpecificError::ExpectedCommentBody)
     }
 
     fn consume_pi_value(&self) -> XmlProgress<'a, &'a str> {
-        self.consume_to(self.s.end_of_pi_value()).map_err(|_| Error::ExpectedProcessingInstructionValue)
+        self.consume_to(self.s.end_of_pi_value()).map_err(|_| SpecificError::ExpectedProcessingInstructionValue)
     }
 
     fn consume_start_tag(&self) -> XmlProgress<'a, &'a str> {
-        self.consume_to(self.s.end_of_start_tag()).map_err(|_| Error::ExpectedElement)
+        self.consume_to(self.s.end_of_start_tag()).map_err(|_| SpecificError::ExpectedElement)
     }
 
     fn consume_encoding(&self) -> XmlProgress<'a, &'a str> {
-        self.consume_to(self.s.end_of_encoding()).map_err(|_| Error::ExpectedEncoding)
+        self.consume_to(self.s.end_of_encoding()).map_err(|_| SpecificError::ExpectedEncoding)
     }
 }
 
@@ -314,11 +313,11 @@ trait X<'a> {
 
 impl<'a> X<'a> for StringPoint<'a> {
     fn expect_space(&self) -> XmlProgress<'a, &'a str> {
-        self.consume_space().map_err(|_| Error::ExpectedWhitespace)
+        self.consume_space().map_err(|_| SpecificError::ExpectedWhitespace)
     }
 
     fn expect_literal(&self, s: &'static str) -> XmlProgress<'a, &'a str> {
-        self.consume_literal(s).map_err(|_| Error::Expected(s))
+        self.consume_literal(s).map_err(|_| SpecificError::Expected(s))
     }
 }
 
@@ -370,7 +369,7 @@ impl<'a> PullParser<'a> {
 }
 
 fn parse_comment<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token> {
-    let (xml, _) = try_parse!(xml.consume_literal("<!--").map_err(|_| Error::ExpectedComment));
+    let (xml, _) = try_parse!(xml.consume_literal("<!--").map_err(|_| SpecificError::ExpectedComment));
     let (xml, text) = try_parse!(xml.consume_comment());
     let (xml, _) = try_parse!(xml.expect_literal("-->"));
 
@@ -382,9 +381,9 @@ fn parse_one_quoted_value<'a, T, F>(xml: StringPoint<'a>, quote: &'static str, f
     where F: FnMut(StringPoint<'a>) -> XmlProgress<'a, T>
 {
     let mut f = f;
-    let (xml, _) = try_parse!(xml.consume_literal(quote).map_err(|_| Error::ExpectedOpeningQuote(quote)));
+    let (xml, _) = try_parse!(xml.consume_literal(quote).map_err(|_| SpecificError::ExpectedOpeningQuote(quote)));
     let (xml, value) = try_parse!(f(xml));
-    let (xml, _) = try_parse!(xml.consume_literal(quote).map_err(|_| Error::ExpectedClosingQuote(quote)));
+    let (xml, _) = try_parse!(xml.consume_literal(quote).map_err(|_| SpecificError::ExpectedClosingQuote(quote)));
 
     success(value, xml)
 }
@@ -421,7 +420,7 @@ fn parse_version_info<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> XmlPr
     let (xml, _) = try_parse!(xml.expect_literal("version"));
     let (xml, _) = try_parse!(parse_eq(xml));
     let (xml, version) = try_parse!(
-        parse_quoted_value(pm, xml, |_, xml, _| version_num(xml).map_err(|_| Error::ExpectedVersionNumber))
+        parse_quoted_value(pm, xml, |_, xml, _| version_num(xml).map_err(|_| SpecificError::ExpectedVersionNumber))
             );
 
     success(version, xml)
@@ -452,7 +451,7 @@ fn parse_standalone_declaration<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>
                 .one(|_| xml.expect_literal("yes"))
                 .one(|_| xml.expect_literal("no"))
                 .finish()
-                .map_err(|_| Error::ExpectedYesNo)
+                .map_err(|_| SpecificError::ExpectedYesNo)
         })
             );
 
@@ -482,7 +481,7 @@ fn parse_external_id<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>)
     let (xml, _) = try_parse!(xml.expect_literal("SYSTEM"));
     let (xml, _) = try_parse!(xml.expect_space());
     let (xml, external_id) = try_parse!(
-        parse_quoted_value(pm, xml, |_, xml, _| xml.consume_name().map_err(|_| Error::ExpectedSystemLiteral))
+        parse_quoted_value(pm, xml, |_, xml, _| xml.consume_name().map_err(|_| SpecificError::ExpectedSystemLiteral))
         );
 
     success(external_id, xml)
@@ -492,7 +491,7 @@ fn parse_external_id<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>)
 fn parse_document_type_declaration<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
     let (xml, _) = try_parse!(xml.expect_literal("<!DOCTYPE"));
     let (xml, _) = try_parse!(xml.expect_space());
-    let (xml, _type_name) = try_parse!(xml.consume_name().map_err(|_| Error::ExpectedDocumentTypeName));
+    let (xml, _type_name) = try_parse!(xml.consume_name().map_err(|_| SpecificError::ExpectedDocumentTypeName));
     let (xml, _external_id) = try_parse!(parse_external_id(pm, xml));
     let (xml, _) = xml.consume_space().optional(xml);
     let (xml, _) = try_parse!(xml.expect_literal(">"));
@@ -506,14 +505,14 @@ fn parse_pi_value(xml: StringPoint) -> XmlProgress<&str> {
 }
 
 fn parse_pi<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token> {
-    let (xml, _) = try_parse!(xml.consume_literal("<?").map_err(|_| Error::ExpectedProcessingInstruction));
+    let (xml, _) = try_parse!(xml.consume_literal("<?").map_err(|_| SpecificError::ExpectedProcessingInstruction));
     let target_xml = xml;
-    let (xml, target) = try_parse!(xml.consume_name().map_err(|_| Error::ExpectedProcessingInstructionTarget));
+    let (xml, target) = try_parse!(xml.consume_name().map_err(|_| SpecificError::ExpectedProcessingInstructionTarget));
     let (xml, value) = parse_pi_value(xml).optional(xml);
     let (xml, _) = try_parse!(xml.expect_literal("?>"));
 
     if target.eq_ignore_ascii_case("xml") {
-        return peresil::Progress::failure(target_xml, Error::InvalidProcessingInstructionTarget);
+        return peresil::Progress::failure(target_xml, SpecificError::InvalidProcessingInstructionTarget);
     }
 
     success(Token::ProcessingInstruction(target, value), xml)
@@ -521,7 +520,7 @@ fn parse_pi<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token> {
 
 fn parse_element_start(xml: StringPoint) -> XmlProgress<Token> {
     let (xml, _) = try_parse!(xml.consume_start_tag());
-    let (xml, name) = try_parse!(Span::parse(xml, |xml| xml.consume_prefixed_name().map_err(|_| Error::ExpectedElementName)));
+    let (xml, name) = try_parse!(Span::parse(xml, |xml| xml.consume_prefixed_name().map_err(|_| SpecificError::ExpectedElementName)));
 
     success(Token::ElementStart(name), xml)
 }
@@ -531,7 +530,7 @@ fn parse_element_start_close(xml: StringPoint) -> XmlProgress<Token> {
 
     xml.consume_literal(">")
         .map(|_| Token::ElementStartClose)
-        .map_err(|_| Error::ExpectedElementEnd)
+        .map_err(|_| SpecificError::ExpectedElementEnd)
 }
 
 fn parse_element_self_close(xml: StringPoint) -> XmlProgress<Token> {
@@ -539,13 +538,13 @@ fn parse_element_self_close(xml: StringPoint) -> XmlProgress<Token> {
 
     xml.consume_literal("/>")
         .map(|_| Token::ElementSelfClose)
-        .map_err(|_| Error::ExpectedElementSelfClosed)
+        .map_err(|_| SpecificError::ExpectedElementSelfClosed)
 }
 
 fn parse_element_close(xml: StringPoint) -> XmlProgress<Token> {
     let (xml, _) = try_parse!(xml.expect_literal("</"));
 
-    let (xml, name) = try_parse!(Span::parse(xml, |xml| xml.consume_prefixed_name().map_err(|_| Error::ExpectedElementName)));
+    let (xml, name) = try_parse!(Span::parse(xml, |xml| xml.consume_prefixed_name().map_err(|_| SpecificError::ExpectedElementName)));
 
     let (xml, _) = xml.consume_space().optional(xml);
     let (xml, _) = try_parse!(xml.expect_literal(">"));
@@ -559,14 +558,14 @@ const APOS: &'static str = r#"'"#;
 fn parse_attribute_start<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
     let (xml, _) = try_parse!(xml.expect_space());
 
-    let (xml, name) = try_parse!(Span::parse(xml, |xml| xml.consume_prefixed_name().map_err(|_| Error::ExpectedAttribute)));
+    let (xml, name) = try_parse!(Span::parse(xml, |xml| xml.consume_prefixed_name().map_err(|_| SpecificError::ExpectedAttribute)));
 
     let (xml, _) = try_parse!(parse_eq(xml));
 
     let (xml, q) = try_parse!(
         pm.alternate()
-            .one(|_| xml.expect_literal(QUOT).map_err(|_| Error::ExpectedOpeningQuote(QUOT)))
-            .one(|_| xml.expect_literal(APOS).map_err(|_| Error::ExpectedOpeningQuote(APOS)))
+            .one(|_| xml.expect_literal(QUOT).map_err(|_| SpecificError::ExpectedOpeningQuote(QUOT)))
+            .one(|_| xml.expect_literal(APOS).map_err(|_| SpecificError::ExpectedOpeningQuote(APOS)))
             .finish());
 
     let q = if q == QUOT { QUOT } else { APOS };
@@ -577,7 +576,7 @@ fn parse_attribute_start<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> Xm
 fn parse_attribute_end<'a>(xml: StringPoint<'a>, quote: &'static str) -> XmlProgress<'a, Token<'a>> {
     xml.consume_literal(quote)
         .map(|_| Token::AttributeEnd)
-        .map_err(|_| Error::ExpectedClosingQuote(quote))
+        .map_err(|_| SpecificError::ExpectedClosingQuote(quote))
 }
 
 fn parse_attribute_literal<'a>(xml: StringPoint<'a>, quote: &str) -> XmlProgress<'a, Token<'a>> {
@@ -587,23 +586,23 @@ fn parse_attribute_literal<'a>(xml: StringPoint<'a>, quote: &str) -> XmlProgress
 }
 
 fn parse_entity_ref(xml: StringPoint) -> XmlProgress<Reference> {
-    let (xml, _) = try_parse!(xml.consume_literal("&").map_err(|_| Error::ExpectedNamedReference));
-    let (xml, name) = try_parse!(Span::parse(xml, |xml| xml.consume_name().map_err(|_| Error::ExpectedNamedReferenceValue)));
+    let (xml, _) = try_parse!(xml.consume_literal("&").map_err(|_| SpecificError::ExpectedNamedReference));
+    let (xml, name) = try_parse!(Span::parse(xml, |xml| xml.consume_name().map_err(|_| SpecificError::ExpectedNamedReferenceValue)));
     let (xml, _) = try_parse!(xml.expect_literal(";"));
 
     success(EntityReference(name), xml)
 }
 
 fn parse_decimal_char_ref(xml: StringPoint) -> XmlProgress<Reference> {
-    let (xml, _) = try_parse!(xml.consume_literal("&#").map_err(|_| Error::ExpectedDecimalReference));
-    let (xml, dec) = try_parse!(Span::parse(xml, |xml| xml.consume_decimal_chars().map_err(|_| Error::ExpectedDecimalReferenceValue)));
+    let (xml, _) = try_parse!(xml.consume_literal("&#").map_err(|_| SpecificError::ExpectedDecimalReference));
+    let (xml, dec) = try_parse!(Span::parse(xml, |xml| xml.consume_decimal_chars().map_err(|_| SpecificError::ExpectedDecimalReferenceValue)));
     let (xml, _) = try_parse!(xml.expect_literal(";"));
 
     success(DecimalCharReference(dec), xml)
 }
 
 fn parse_hex_char_ref(xml: StringPoint) -> XmlProgress<Reference> {
-    let (xml, _) = try_parse!(xml.consume_literal("&#x").map_err(|_| Error::ExpectedHexReference));
+    let (xml, _) = try_parse!(xml.consume_literal("&#x").map_err(|_| SpecificError::ExpectedHexReference));
     let (xml, hex) = try_parse!(Span::parse(xml, |xml| xml.consume_hex_chars()));
     let (xml, _) = try_parse!(xml.expect_literal(";"));
 
@@ -643,7 +642,7 @@ fn parse_content_reference<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> 
 }
 
 impl<'a> Iterator for PullParser<'a> {
-    type Item = Result<Token<'a>, (usize, Vec<Error>)>;
+    type Item = Result<Token<'a>, (usize, Vec<SpecificError>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let pm = &mut self.pm;
@@ -849,7 +848,7 @@ impl<'d> DomBuilder<'d> {
             let value = try!(AttributeValueBuilder::convert(&ns.values));
 
             if value.is_empty() {
-                return Err(ns.name.map(|_| Error::EmptyNamespace));
+                return Err(ns.name.map(|_| SpecificError::EmptyNamespace));
             }
 
             new_prefix_mappings.insert(ns.name.value.local_part, value);
@@ -867,7 +866,7 @@ impl<'d> DomBuilder<'d> {
                 element.set_preferred_prefix(Some(prefix));
                 element
             } else {
-                return Err(deferred_element.map(|_| Error::UnknownNamespacePrefix));
+                return Err(deferred_element.map(|_| SpecificError::UnknownNamespacePrefix));
             }
         } else if let Some(ns_uri) = default_namespace {
             if ns_uri.is_empty() {
@@ -913,7 +912,7 @@ impl<'d> DomBuilder<'d> {
                     let attr = element.set_attribute_value((ns_uri, name.local_part), &builder);
                     attr.set_preferred_prefix(Some(prefix));
                 } else {
-                    return Err(attribute.name.map(|_| Error::UnknownNamespacePrefix))
+                    return Err(attribute.name.map(|_| SpecificError::UnknownNamespacePrefix))
                 }
             } else {
                 element.set_attribute_value(name.local_part, &builder);
@@ -966,7 +965,7 @@ impl<'d> DomBuilder<'d> {
                 self.elements.pop();
 
                 if n.value != open_name.value {
-                    return Err(n.map(|_| Error::MismatchedElementEndName));
+                    return Err(n.map(|_| SpecificError::MismatchedElementEndName));
                 }
             },
 
@@ -1010,9 +1009,51 @@ impl<'d> DomBuilder<'d> {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct Error {
+    location: usize,
+    errors: BTreeSet<SpecificError>,
+}
+
+impl Error {
+    fn new(location: usize, error: SpecificError) -> Self {
+        let mut errors = BTreeSet::new();
+        errors.insert(error);
+        Error { location, errors }
+    }
+
+    pub fn location(&self) -> usize { self.location }
+}
+
+impl From<(usize, Vec<SpecificError>)> for Error {
+    fn from(other: (usize, Vec<SpecificError>)) -> Self {
+        let (location, errors) = other;
+        let errors = errors.into_iter().collect();
+        Error { location, errors }
+    }
+}
+
+impl From<Span<SpecificError>> for Error {
+    fn from(other: Span<SpecificError>) -> Self {
+        Self::new(other.offset, other.value)
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "XML parsing error at {}: {:?}", self.location, self.errors)
+    }
+}
+
+impl error::Error for Error {
+    fn description(&self) -> &str {
+        "Unable to parse XML"
+    }
+}
+
 /// Parses a string into a DOM. On failure, the location of the
 /// parsing failure and all possible failures will be returned.
-pub fn parse(xml: &str) -> Result<super::Package, (usize, Vec<Error>)> {
+pub fn parse(xml: &str) -> Result<super::Package, Error> {
     let parser = PullParser::new(xml);
     let package = super::Package::new();
 
@@ -1022,20 +1063,18 @@ pub fn parse(xml: &str) -> Result<super::Package, (usize, Vec<Error>)> {
 
         for token in parser {
             let token = try!(token);
-            if let Err(s) = builder.consume(token) {
-                return Err((s.offset, vec![s.value]));
-            }
+            try!(builder.consume(token));
         }
 
         if builder.has_unclosed_elements() {
-            return Err((xml.len(), vec![Error::UnclosedElement]));
+            return Err(Error::new(xml.len(), SpecificError::UnclosedElement));
         }
     }
 
     Ok(package)
 }
 
-type DomBuilderResult<T> = Result<T, Span<Error>>;
+type DomBuilderResult<T> = Result<T, Span<SpecificError>>;
 
 fn decode_reference<F>(ref_data: Reference, cb: F) -> DomBuilderResult<()>
     where F: FnOnce(&str)
@@ -1044,7 +1083,7 @@ fn decode_reference<F>(ref_data: Reference, cb: F) -> DomBuilderResult<()>
         DecimalCharReference(span) => {
             u32::from_str_radix(span.value, 10).ok()
                 .and_then(char::from_u32)
-                .ok_or(span.map(|_| Error::InvalidDecimalReference))
+                .ok_or(span.map(|_| SpecificError::InvalidDecimalReference))
                 .and_then(|c| {
                     let s: String = iter::repeat(c).take(1).collect();
                     cb(&s);
@@ -1054,7 +1093,7 @@ fn decode_reference<F>(ref_data: Reference, cb: F) -> DomBuilderResult<()>
         HexCharReference(span) => {
             u32::from_str_radix(span.value, 16).ok()
                 .and_then(char::from_u32)
-                .ok_or(span.map(|_| Error::InvalidHexReference))
+                .ok_or(span.map(|_| SpecificError::InvalidHexReference))
                 .and_then(|c| {
                     let s: String = iter::repeat(c).take(1).collect();
                     cb(&s);
@@ -1068,7 +1107,7 @@ fn decode_reference<F>(ref_data: Reference, cb: F) -> DomBuilderResult<()>
                 "gt"   => ">",
                 "apos" => "'",
                 "quot" => "\"",
-                _      => return Err(span.map(|_| Error::UnknownNamedReference)),
+                _      => return Err(span.map(|_| SpecificError::UnknownNamedReference)),
             };
             cb(s);
             Ok(())
@@ -1167,13 +1206,13 @@ impl<'a> DeferredAttributes<'a> {
     fn check_duplicates(&self) -> DomBuilderResult<()> {
         for w in self.attributes.windows(2) {
             if w[0].name.value == w[1].name.value {
-                return Err(w[1].name.map(|_| Error::DuplicateAttribute));
+                return Err(w[1].name.map(|_| SpecificError::DuplicateAttribute));
             }
         }
 
         for w in self.namespaces.windows(2) {
             if w[0].name.value == w[1].name.value {
-                return Err(w[1].name.map(|_| Error::RedefinedNamespace));
+                return Err(w[1].name.map(|_| SpecificError::RedefinedNamespace));
             }
         }
 
@@ -1198,7 +1237,7 @@ impl<'a> DeferredAttributes<'a> {
             },
             _ => {
                 let last_namespace = self.default_namespaces.last().unwrap();
-                Err(last_namespace.name.map(|_| Error::RedefinedDefaultNamespace))
+                Err(last_namespace.name.map(|_| SpecificError::RedefinedDefaultNamespace))
             },
         }
     }
@@ -1206,15 +1245,14 @@ impl<'a> DeferredAttributes<'a> {
 
 #[cfg(test)]
 mod test {
-    use super::Error;
-    use super::super::{Package,QName};
-    use super::super::dom;
+    use super::*;
+    use ::{dom, Package, QName};
 
     macro_rules! assert_qname_eq(
         ($l:expr, $r:expr) => (assert_eq!(Into::<QName>::into($l), $r.into()));
     );
 
-    fn full_parse(xml: &str) -> Result<Package, (usize, Vec<Error>)> {
+    fn full_parse(xml: &str) -> Result<Package, Error> {
         super::parse(xml)
     }
 
@@ -1636,35 +1674,19 @@ mod test {
     // commentbody
     // pinstructionvalue
 
-    type ParseResult<T, E> = Result<T, (usize, Vec<E>)>;
-
-    fn sort_parse_result<T, E>(e: ParseResult<T, E>) -> ParseResult<T, E>
-        where E: ::std::cmp::Ord
-    {
-        match e {
-            Ok(t) => Ok(t),
-            Err((p, mut e)) => {
-                e.sort();
-                Err((p, e))
-            }
-        }
-    }
-
     macro_rules! assert_parse_failure {
         ($actual:expr, $pos:expr, $($err:expr),+) => {
             {
                 let errors = vec![$($err),+];
-                let constructed = Err(($pos, errors));
-                let expected = sort_parse_result(constructed);
-                let actual = sort_parse_result($actual);
-                assert_eq!(actual, expected);
+                let expected = Err(Error::from(($pos, errors)));
+                assert_eq!($actual, expected);
             }
         }
     }
 
     #[test]
     fn failure_invalid_encoding() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<?xml version='1.0' encoding='8BIT' ?><hi/>");
 
@@ -1673,7 +1695,7 @@ mod test {
 
     #[test]
     fn failure_invalid_standalone() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<?xml version='1.0' standalone='invalid'?><hello/>");
 
@@ -1682,7 +1704,7 @@ mod test {
 
     #[test]
     fn failure_no_open_brace() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("hi />");
 
@@ -1691,7 +1713,7 @@ mod test {
 
     #[test]
     fn failure_unclosed_tag() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<hi");
 
@@ -1700,7 +1722,7 @@ mod test {
 
     #[test]
     fn failure_unexpected_space() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<hi / >");
 
@@ -1709,7 +1731,7 @@ mod test {
 
     #[test]
     fn failure_attribute_without_open_quote() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<hi oops=value' />");
 
@@ -1718,7 +1740,7 @@ mod test {
 
     #[test]
     fn failure_attribute_without_close_quote() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<hi oops='value />");
 
@@ -1727,7 +1749,7 @@ mod test {
 
     #[test]
     fn failure_unclosed_attribute_and_tag() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<hi oops='value");
 
@@ -1736,7 +1758,7 @@ mod test {
 
     #[test]
     fn failure_nested_unclosed_tag() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<hi><oops</hi>");
 
@@ -1745,7 +1767,7 @@ mod test {
 
     #[test]
     fn failure_missing_close_tag() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<hi>wow");
 
@@ -1754,7 +1776,7 @@ mod test {
 
     #[test]
     fn failure_nested_unexpected_space() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<hi><oops / ></hi>");
 
@@ -1763,7 +1785,7 @@ mod test {
 
     #[test]
     fn failure_malformed_entity_reference() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<hi>Entity: &;</hi>");
 
@@ -1772,7 +1794,7 @@ mod test {
 
     #[test]
     fn failure_nested_malformed_entity_reference() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<hi><bye>Entity: &;</bye></hi>");
 
@@ -1781,7 +1803,7 @@ mod test {
 
     #[test]
     fn failure_nested_attribute_without_open_quote() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<hi><bye oops=value' /></hi>");
 
@@ -1790,7 +1812,7 @@ mod test {
 
     #[test]
     fn failure_nested_attribute_without_close_quote() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<hi><bye oops='value /></hi>");
 
@@ -1799,7 +1821,7 @@ mod test {
 
     #[test]
     fn failure_nested_unclosed_attribute_and_tag() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<hi><bye oops='value</hi>");
 
@@ -1808,7 +1830,7 @@ mod test {
 
     #[test]
     fn failure_pi_target_as_xml() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<a><?xml?></a>");
 
@@ -1817,7 +1839,7 @@ mod test {
 
     #[test]
     fn failure_end_tag_does_not_match() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<a></b>");
 
@@ -1826,7 +1848,7 @@ mod test {
 
     #[test]
     fn failure_invalid_decimal_reference() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<a>&#99999999;</a>");
 
@@ -1835,7 +1857,7 @@ mod test {
 
     #[test]
     fn failure_invalid_hex_reference() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<a>&#x99999999;</a>");
 
@@ -1844,7 +1866,7 @@ mod test {
 
     #[test]
     fn failure_unknown_named_reference() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<a>&fake;</a>");
 
@@ -1853,7 +1875,7 @@ mod test {
 
     #[test]
     fn failure_duplicate_attribute() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<a b='c' b='d'/>");
 
@@ -1862,7 +1884,7 @@ mod test {
 
     #[test]
     fn failure_redefined_namespace() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<a xmlns:b='c' xmlns:b='d'/>");
 
@@ -1871,7 +1893,7 @@ mod test {
 
     #[test]
     fn failure_redefined_default_namespace() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<a xmlns='a' xmlns='b'/>");
 
@@ -1880,7 +1902,7 @@ mod test {
 
     #[test]
     fn failure_empty_namespace() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<a xmlns:b=''/>");
 
@@ -1889,7 +1911,7 @@ mod test {
 
     #[test]
     fn failure_unknown_attribute_namespace_prefix() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<a b:foo='a'/>");
 
@@ -1898,10 +1920,18 @@ mod test {
 
     #[test]
     fn failure_unknown_element_namespace_prefix() {
-        use super::Error::*;
+        use super::SpecificError::*;
 
         let r = full_parse("<b:a/>");
 
         assert_parse_failure!(r, 1, UnknownNamespacePrefix);
+    }
+
+    #[test]
+    fn failure_is_an_error() {
+        fn __assert_well_behaved_error()
+        where
+            Error: ::std::error::Error + Send + Sync + 'static,
+        {}
     }
 }
