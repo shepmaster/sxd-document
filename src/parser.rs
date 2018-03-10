@@ -481,8 +481,10 @@ fn parse_external_id<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>)
     let (xml, _) = try_parse!(xml.expect_literal("SYSTEM"));
     let (xml, _) = try_parse!(xml.expect_space());
     let (xml, external_id) = try_parse!(
-        parse_quoted_value(pm, xml, |_, xml, _| xml.consume_name().map_err(|_| SpecificError::ExpectedSystemLiteral))
-        );
+        parse_quoted_value(pm, xml, |_, xml, quote|
+            xml.consume_attribute_value(quote).map_err(|_| SpecificError::ExpectedSystemLiteral)
+        )
+    );
 
     success(external_id, xml)
 }
@@ -1311,7 +1313,9 @@ mod test {
 
     #[test]
     fn a_prolog_with_a_document_type_declaration() {
-        let package = quick_parse("<?xml version='1.0'?><!DOCTYPE doc SYSTEM \"doc.dtd\"><hello/>");
+        let package = quick_parse(r#"<?xml version='1.0'?>
+        <!DOCTYPE doc SYSTEM "http://example.com/doc.dtd">
+        <hello/>"#);
         let doc = package.as_document();
         let top = top(&doc);
 
