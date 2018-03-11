@@ -58,6 +58,7 @@ enum SpecificError {
     ExpectedWhitespace,
 
     ExpectedDocumentTypeName,
+    ExpectedIntSubset,
     ExpectedSystemLiteral,
 
     ExpectedClosingQuote(&'static str),
@@ -151,6 +152,7 @@ impl error::Error for SpecificError {
             ExpectedYesNo => "expected yes or no",
             ExpectedWhitespace => "expected whitespace",
             ExpectedDocumentTypeName => "expected document type name",
+            ExpectedIntSubset => "expected int subset",
             ExpectedSystemLiteral => "expected system literal",
             ExpectedClosingQuote(_) => "expected closing quote",
             ExpectedOpeningQuote(_) => "expected opening quote",
@@ -262,6 +264,7 @@ trait PrivateXmlParseExt<'a> {
     fn consume_hex_chars(&self) -> XmlProgress<'a, &'a str>;
     fn consume_char_data(&self) -> XmlProgress<'a, &'a str>;
     fn consume_cdata(&self) -> XmlProgress<'a, &'a str>;
+    fn consume_int_subset(&self) -> XmlProgress<'a, &'a str>;
     fn consume_comment(&self) -> XmlProgress<'a, &'a str>;
     fn consume_pi_value(&self) -> XmlProgress<'a, &'a str>;
     fn consume_start_tag(&self) -> XmlProgress<'a, &'a str>;
@@ -287,6 +290,10 @@ impl<'a> PrivateXmlParseExt<'a> for StringPoint<'a> {
 
     fn consume_cdata(&self) -> XmlProgress<'a, &'a str> {
         self.consume_to(self.s.end_of_cdata()).map_err(|_| SpecificError::ExpectedCData)
+    }
+
+    fn consume_int_subset(&self) -> XmlProgress<'a, &'a str> {
+        self.consume_to(self.s.end_of_int_subset()).map_err(|_| SpecificError::ExpectedIntSubset)
     }
 
     fn consume_comment(&self) -> XmlProgress<'a, &'a str> {
@@ -489,13 +496,30 @@ fn parse_external_id<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>)
     success(external_id, xml)
 }
 
-/* without the optional intSubset */
+fn parse_int_subset<'a>(_pm: &mut XmlMaster<'a>, xml: StringPoint<'a>)
+                          -> XmlProgress<'a, &'a str>
+{
+    let (xml, _) = try_parse!(xml.expect_literal("["));
+    let (xml, _) = xml.consume_space().optional(xml);
+    let (xml, elements) = try_parse!(
+        xml.consume_int_subset().map_err(|_| SpecificError::ExpectedIntSubset)
+    );
+    let (xml, _) = xml.consume_space().optional(xml);
+    let (xml, _) = try_parse!(xml.expect_literal("]"));
+    let (xml, _) = xml.consume_space().optional(xml);
+
+    success(elements, xml)
+}
+
 fn parse_document_type_declaration<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
     let (xml, _) = try_parse!(xml.expect_literal("<!DOCTYPE"));
     let (xml, _) = try_parse!(xml.expect_space());
-    let (xml, _type_name) = try_parse!(xml.consume_name().map_err(|_| SpecificError::ExpectedDocumentTypeName));
-    let (xml, _external_id) = try_parse!(parse_external_id(pm, xml));
+    let (xml, _type_name) = try_parse!(
+        xml.consume_name().map_err(|_| SpecificError::ExpectedDocumentTypeName)
+    );
+    let (xml, _id) = try_parse!(pm.optional(xml, |p, x| parse_external_id(p, x)));
     let (xml, _) = xml.consume_space().optional(xml);
+    let (xml, _int_subset) = try_parse!(pm.optional(xml, |p, x| parse_int_subset(p, x)));
     let (xml, _) = try_parse!(xml.expect_literal(">"));
 
     success(Token::DocumentTypeDeclaration, xml)
@@ -1312,9 +1336,106 @@ mod test {
     }
 
     #[test]
-    fn a_prolog_with_a_document_type_declaration() {
+    fn a_prolog_with_a_doc_type_declaration_external_id() {
         let package = quick_parse(r#"<?xml version='1.0'?>
         <!DOCTYPE doc SYSTEM "http://example.com/doc.dtd">
+        <hello/>"#);
+        let doc = package.as_document();
+        let top = top(&doc);
+
+        assert_qname_eq!(top.name(), "hello");
+    }
+
+    #[test]
+    fn a_prolog_with_a_doc_type_declaration_int_subset() {
+        let package = quick_parse(r#"<?xml version="1.0"?>
+            <!DOCTYPE note [
+            <!ELEMENT note (to,from,heading,body)>
+            <!ELEMENT to (#PCDATA)>
+            <!ELEMENT from (#PCDATA)>
+            <!ELEMENT heading (#PCDATA)>
+            <!ELEMENT body (#PCDATA)>
+            ]>
+            <note>
+            <to>Tove</to>
+            <from>Jani</from>
+            <heading>Reminder</heading>
+            <body>Don't forget me this weekend</body>
+            </note>
+        "#);
+        let doc = package.as_document();
+        let top = top(&doc);
+
+        assert_qname_eq!(top.name(), "note");
+    }
+
+    #[test]
+    fn a_prolog_with_a_doc_type_declaration_int_subset_trailing_ws() {
+        let package = quick_parse(r#"<?xml version="1.0"?>
+            <!DOCTYPE note
+                [
+                    <!ELEMENT note (to,from,heading,body)>
+                    <!ELEMENT to (#PCDATA)>
+                    <!ELEMENT from (#PCDATA)>
+                    <!ELEMENT heading (#PCDATA)>
+                    <!ELEMENT body (#PCDATA)>
+                ]
+
+            >
+            <note>
+            <to>Tove</to>
+            <from>Jani</from>
+            <heading>Reminder</heading>
+            <body>Don't forget me this weekend</body>
+            </note>
+        "#);
+        let doc = package.as_document();
+        let top = top(&doc);
+
+        assert_qname_eq!(top.name(), "note");
+    }
+
+    #[test]
+    fn a_prolog_with_a_doc_type_declaration_zero_def() {
+        let package = quick_parse("<?xml version='1.0'?>
+        <!DOCTYPE doc>
+        <hello/>");
+        let doc = package.as_document();
+        let top = top(&doc);
+
+        assert_qname_eq!(top.name(), "hello");
+    }
+
+    #[test]
+    fn a_prolog_with_a_doc_type_declaration_zero_def_trailing_ws() {
+        let package = quick_parse("<?xml version='1.0'?>
+        <!DOCTYPE doc  >
+        <hello/>");
+        let doc = package.as_document();
+        let top = top(&doc);
+
+        assert_qname_eq!(top.name(), "hello");
+    }
+
+    #[test]
+    fn a_prolog_with_a_doc_type_declaration_both_int_subset_and_external_id() {
+        let package = quick_parse(r#"<?xml version='1.0'?>
+        <!DOCTYPE doc SYSTEM "http://example.com/doc.dtd" [
+        <!ELEMENT hello (#PCDATA)>
+        ]>
+        <hello/>"#);
+        let doc = package.as_document();
+        let top = top(&doc);
+
+        assert_qname_eq!(top.name(), "hello");
+    }
+
+    #[test]
+    fn a_prolog_with_a_doc_type_declaration_both_int_subset_and_external_id_trailing_ws() {
+        let package = quick_parse(r#"<?xml version='1.0'?>
+        <!DOCTYPE doc SYSTEM "http://example.com/doc.dtd" [
+        <!ELEMENT hello (#PCDATA)>
+         ]  >
         <hello/>"#);
         let doc = package.as_document();
         let top = top(&doc);
