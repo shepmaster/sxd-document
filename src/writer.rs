@@ -13,7 +13,7 @@
 //! doc.root().append_child(hello);
 //!
 //! let mut output = Vec::new();
-//! format_document(&doc, &mut output).ok().expect("unable to output XML");
+//! format_document(&doc, &mut output).expect("unable to output XML");
 //! ```
 //!
 //! ### Potential options to support
