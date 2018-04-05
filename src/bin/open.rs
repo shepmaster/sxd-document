@@ -33,7 +33,7 @@ fn process_input<R>(input: R)
     let mut out = io::sink();
     let d = package.as_document();
 
-    sxd_document::writer::format_document(&d, &mut out).ok().expect("I can't output");
+    sxd_document::writer::format_document(&d, &mut out).expect("I can't output");
     // Remove when we move back to stdout_raw + buffer or when stdout flushed at program exit
     out.flush().unwrap();
 }
