@@ -463,15 +463,92 @@ pub fn format_document<'d, W: ?Sized>(doc: &'d dom::Document<'d>, writer: &mut W
     Ok(())
 }
 
+fn pretty_print_one<'d, W: ?Sized>(content: Content<'d>,
+                             todo: &mut Vec<Content<'d>>,
+                             mapping: &mut PrefixMapping<'d>,
+                             depth: &mut usize,
+                             writer: &mut W,
+                             indent: &str)
+                             -> io::Result<()>
+    where W: Write
+{
+    match content {
+        Element(e)               => {
+            mapping.push_scope();
+            if e.children().iter().any(|c| match c { &ChildOfElement::Element(_) => true, _ => false }) { *depth += 1; };
+            let r = format_element(e, todo, mapping, writer);
+            if e.children().is_empty() && e.following_siblings().is_empty() && *depth > 0 { *depth -= 1; }
+            match e.children().first() {
+                Some(&ChildOfElement::Element(_)) | None => {
+                    try!(writeln!(writer, ""));
+                    for _ in 0..*depth { try!(writer.write_str(indent)) };
+                },
+                _ => {}
+            }
+            r
+        },
+        ElementEnd(e)            => {
+            if e.following_siblings().is_empty() && *depth > 0 { *depth -= 1; };
+            let r = format_element_end(e, mapping, writer);
+            try!(writeln!(writer, ""));
+            for _ in 0..*depth { try!(writer.write_str(indent)) };
+            mapping.pop_scope();
+            r
+        },
+        Text(t)                  => format_text(t, writer),
+        Comment(c)               => format_comment(c, writer),
+        ProcessingInstruction(p) => format_processing_instruction(p, writer),
+    }
+}
+
+fn pretty_print_body<W: ?Sized>(element: dom::Element, writer: &mut W, indent: &str) -> io::Result<()>
+    where W: Write
+{
+    let mut todo = vec![Element(element)];
+    let mut mapping = PrefixMapping::new();
+    let mut depth = 0;
+
+    while ! todo.is_empty() {
+        try!(pretty_print_one(todo.pop().unwrap(), &mut todo, &mut mapping, &mut depth, writer, &indent));
+    }
+
+    Ok(())
+}
+
+/// Pretty-prints a document into a Write
+pub fn pretty_print_document<'d, W: ?Sized>(doc: &'d dom::Document<'d>, writer: &mut W, indent: &str) -> io::Result<()>
+    where W: Write
+{
+    try!(writer.write_str("<?xml version='1.0'?>"));
+    try!(writeln!(writer, ""));
+
+    for child in doc.root().children().into_iter() {
+        try!(match child {
+            ChildOfRoot::Element(e) => pretty_print_body(e, writer, indent),
+            ChildOfRoot::Comment(c) => format_comment(c, writer),
+            ChildOfRoot::ProcessingInstruction(p) => format_processing_instruction(p, writer),
+        })
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use super::super::Package;
     use super::super::dom;
-    use super::format_document;
+    use super::super::parser::parse;
+    use super::{format_document, pretty_print_document};
 
     fn format_xml<'d>(doc: &'d dom::Document<'d>) -> String {
         let mut w = Vec::new();
         format_document(doc, &mut w).expect("Not formatted");
+        String::from_utf8(w).expect("Not a string")
+    }
+
+    fn pretty_print_xml<'d>(doc: &'d dom::Document<'d>) -> String {
+        let mut w = Vec::new();
+        pretty_print_document(doc, &mut w, "\t").expect("Not formatted");
         String::from_utf8(w).expect("Not a string")
     }
 
@@ -781,4 +858,92 @@ mod test {
         let xml = format_xml(&d);
         assert_eq!(xml, "<?xml version='1.0'?><?display?>");
     }
+
+    #[test]
+    fn pretty_printing_uncollapsed_empty_xml() {
+        let unformatted_xml = "<r></r>";
+        let formatted_xml = "<?xml version='1.0'?>\n<r/>\n";
+        let package = parse(&unformatted_xml).unwrap();
+        let document = package.as_document();
+        let pretty_printed_xml = pretty_print_xml(&document);
+
+        assert_eq!(&pretty_printed_xml, &formatted_xml);
+    }
+
+    #[test]
+    fn pretty_printing_empty_xml() {
+        let unformatted_xml = "<r/>";
+        let formatted_xml = "<?xml version='1.0'?>\n<r/>\n";
+        let package = parse(&unformatted_xml).unwrap();
+        let document = package.as_document();
+        let pretty_printed_xml = pretty_print_xml(&document);
+
+        assert_eq!(&pretty_printed_xml, &formatted_xml);
+    }
+
+    #[test]
+    fn pretty_printing_xml_with_prolog() {
+        let unformatted_xml = "<?xml version='1.0'?><r/>";
+        let formatted_xml = "<?xml version='1.0'?>\n<r/>\n";
+        let package = parse(&unformatted_xml).unwrap();
+        let document = package.as_document();
+        let pretty_printed_xml = pretty_print_xml(&document);
+
+        assert_eq!(&pretty_printed_xml, &formatted_xml);
+    }
+/*
+    #[test]
+    fn pretty_printing_xml_with_prolog_and_dtd() {
+        let unformatted_xml = "<?xml version='1.0'?><!DOCTYPE DOC SYSTEM \"DOC.DTD\"><r/>";
+        let formatted_xml = "<?xml version='1.0'?>\n<!DOCTYPE DOC SYSTEM 'DOC.DTD'>\n<r/>\n";
+        let package = parse(&unformatted_xml).unwrap();
+        let document = package.as_document();
+        let pretty_printed_xml = pretty_print_xml(&document);
+
+        assert_eq!(&pretty_printed_xml, &formatted_xml);
+    }
+*/
+    #[test]
+    fn pretty_printing_simple_xml() {
+        let unformatted_xml = "<r><a><b>c</b></a></r>";
+        let formatted_xml = "<?xml version='1.0'?>\n<r>\n\t<a>\n\t\t<b>c</b>\n\t</a>\n</r>\n";
+        let package = parse(&unformatted_xml).unwrap();
+        let document = package.as_document();
+        let pretty_printed_xml = pretty_print_xml(&document);
+
+        assert_eq!(&pretty_printed_xml, &formatted_xml);
+    }
+
+    #[test]
+    fn pretty_printing_xml_with_siblings() {
+        let unformatted_xml = "<r><a><b>c1</b><b>c2</b></a></r>";
+        let formatted_xml = "<?xml version='1.0'?>\n<r>\n\t<a>\n\t\t<b>c1</b>\n\t\t<b>c2</b>\n\t</a>\n</r>\n";
+        let package = parse(&unformatted_xml).unwrap();
+        let document = package.as_document();
+        let pretty_printed_xml = pretty_print_xml(&document);
+
+        assert_eq!(&pretty_printed_xml, &formatted_xml);
+    }
+
+    #[test]
+    fn pretty_printing_xml_with_empty_siblings() {
+        let unformatted_xml = "<r><a></a><b/><c></c><d></d><e/><f/><g></g><h></h><i></i></r>";
+        let formatted_xml = "<?xml version='1.0'?>\n<r>\n\t<a/>\n\t<b/>\n\t<c/>\n\t<d/>\n\t<e/>\n\t<f/>\n\t<g/>\n\t<h/>\n\t<i/>\n</r>\n";
+        let package = parse(&unformatted_xml).unwrap();
+        let document = package.as_document();
+        let pretty_printed_xml = pretty_print_xml(&document);
+
+        assert_eq!(&pretty_printed_xml, &formatted_xml);
+    }
+/*
+    #[test]
+    fn pretty_printing_pretty_xml() {
+        let pretty_xml = "<?xml version='1.0'?>\n<r>\n\t<a>\n\t\t<b/>\n\t</a>\n</r>\n";
+        let package = parse(&pretty_xml).unwrap();
+        let document = package.as_document();
+        let pretty_printed_xml = pretty_print_xml(&document);
+
+        assert_eq!(&pretty_printed_xml, &pretty_xml);
+    }
+*/
 }
