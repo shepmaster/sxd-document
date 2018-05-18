@@ -166,6 +166,14 @@ impl<'d> Root<'d> {
         }
     }
 
+    pub fn replace_children<I>(&self, children: I)
+        where I: IntoIterator,
+              I::Item: Into<ChildOfRoot<'d>>,
+    {
+        self.clear_children();
+        self.append_children(children);
+    }
+
     pub fn clear_children(&self) {
         self.document.connections.clear_root_children();
     }
@@ -283,6 +291,14 @@ impl<'d> Element<'d> {
         for c in children {
             self.append_child(c.into());
         }
+    }
+
+    pub fn replace_children<I>(&self, children: I)
+        where I: IntoIterator,
+              I::Item: Into<ChildOfElement<'d>>,
+    {
+        self.clear_children();
+        self.append_children(children);
     }
 
     pub fn clear_children(&self) {
@@ -698,6 +714,25 @@ mod test {
     }
 
     #[test]
+    fn root_can_replace_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let root = doc.root();
+        let alpha = doc.create_comment("alpha");
+        let beta = doc.create_comment("beta");
+        let gamma = doc.create_comment("gamma");
+        root.append_child(alpha);
+
+        root.replace_children(&[beta, gamma]);
+
+        let children = root.children();
+        assert_eq!(2, children.len());
+        assert_eq!(children[0], ChildOfRoot::Comment(beta));
+        assert_eq!(children[1], ChildOfRoot::Comment(gamma));
+    }
+
+    #[test]
     fn root_can_clear_children() {
         let package = Package::new();
         let doc = package.as_document();
@@ -759,6 +794,25 @@ mod test {
         let gamma = doc.create_element("gamma");
 
         alpha.append_children(&[beta, gamma]);
+
+        let children = alpha.children();
+        assert_eq!(2, children.len());
+        assert_eq!(children[0], ChildOfElement::Element(beta));
+        assert_eq!(children[1], ChildOfElement::Element(gamma));
+    }
+
+    #[test]
+    fn elements_can_replace_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let alpha = doc.create_element("alpha");
+        let beta = doc.create_element("beta");
+        let gamma = doc.create_element("gamma");
+        let zeta = doc.create_element("zeta");
+        alpha.append_child(zeta);
+
+        alpha.replace_children(&[beta, gamma]);
 
         let children = alpha.children();
         assert_eq!(2, children.len());
