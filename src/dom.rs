@@ -357,6 +357,13 @@ impl<'d> Element<'d> {
             a_r.value()
         })
     }
+
+    pub fn set_text(&self, text: &str) -> Text {
+        let text = self.document.create_text(text);
+        self.clear_children();
+        self.append_child(text);
+        text
+    }
 }
 
 impl<'d> fmt::Debug for Element<'d> {
@@ -1057,6 +1064,21 @@ mod test {
         let children = sentence.children();
         assert_eq!(1, children.len());
         assert_eq!(children[0], ChildOfElement::Text(text));
+    }
+
+    #[test]
+    fn elements_can_set_text() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let sentence = doc.create_element("sentence");
+        let quote = "Now is the winter of our discontent.";
+        let text = sentence.set_text(quote);
+
+        let children = sentence.children();
+        assert_eq!(1, children.len());
+        assert_eq!(children[0], ChildOfElement::Text(text));
+        assert_eq!(children[0].text().unwrap().text(), quote);
     }
 
     #[test]
