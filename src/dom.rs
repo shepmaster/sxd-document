@@ -537,6 +537,12 @@ macro_rules! conversion_trait(
                 $variant(v)
             }
         })*
+
+        $(impl<'a, 'd> From<&'a $leaf_type<'d>> for $res_type<'d> {
+            fn from(v: &'a $leaf_type<'d>) -> $res_type<'d> {
+                $variant(*v)
+            }
+        })*
     )
 );
 
