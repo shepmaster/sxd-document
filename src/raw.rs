@@ -441,6 +441,16 @@ impl Connections {
         parent_r.children.push(child);
     }
 
+   pub fn clear_root_children(&self) {
+        let parent_r = unsafe { &mut *self.root };
+        parent_r.children.clear();
+    }
+
+   pub fn clear_element_children(&self, parent: *mut Element) {
+        let parent_r = unsafe { &mut *parent };
+        parent_r.children.clear();
+    }
+
     pub unsafe fn root_children(&self) -> &[ChildOfRoot] {
         let parent_r = &*self.root;
         &parent_r.children

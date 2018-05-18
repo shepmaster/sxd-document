@@ -157,6 +157,10 @@ impl<'d> Root<'d> {
         self.document.connections.append_root_child(child.as_raw());
     }
 
+    pub fn clear_children(&self) {
+        self.document.connections.clear_root_children();
+    }
+
     pub fn children(&self) -> Vec<ChildOfRoot<'d>> {
         // This is safe because we copy of the children, and the
         // children are never deallocated.
@@ -261,6 +265,10 @@ impl<'d> Element<'d> {
     {
         let child = child.into();
         self.document.connections.append_element_child(self.node, child.as_raw());
+    }
+
+    pub fn clear_children(&self) {
+        self.document.connections.clear_element_children(self.node);
     }
 
     pub fn children(&self) -> Vec<ChildOfElement<'d>> {
@@ -655,6 +663,20 @@ mod test {
     }
 
     #[test]
+    fn root_can_clear_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let root = doc.root();
+        let element = doc.create_element("alpha");
+        root.append_child(element);
+
+        root.clear_children();
+
+        assert!(root.children().is_empty());
+    }
+
+    #[test]
     fn root_child_knows_its_parent() {
         let package = Package::new();
         let doc = package.as_document();
@@ -690,6 +712,20 @@ mod test {
         let children = alpha.children();
 
         assert_eq!(children[0], ChildOfElement::Element(beta));
+    }
+
+    #[test]
+    fn elements_can_clear_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let alpha = doc.create_element("alpha");
+        let beta  = doc.create_element("beta");
+        alpha.append_child(beta);
+
+        alpha.clear_children();
+
+        assert!(alpha.children().is_empty());
     }
 
     #[test]
