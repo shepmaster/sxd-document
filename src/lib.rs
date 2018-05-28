@@ -156,7 +156,7 @@ pub struct Package {
 }
 
 impl Package {
-    /// Constructs a new, empty `Package`.
+    /// Constructs a new, empty Package.
     pub fn new() -> Package {
         let s = raw::Storage::new();
         let root = s.create_root();

@@ -66,29 +66,29 @@ impl<'d> Document<'d> {
         }
     }
 
-    /// Converts a `Document` into a `Root`.
+    /// Converts the document into a Root.
     pub fn root(self) -> Root<'d> {
         self.wrap_root(self.connections.root())
     }
 
-    /// Converts a `Document` into an `Element`.
+    /// Converts the document into an Element.
     pub fn create_element<'n, N>(self, name: N) -> Element<'d>
         where N: Into<QName<'n>>
     {
         self.wrap_element(self.storage.create_element(name))
     }
 
-    /// Converts a `Document` into a `Text`.
+    /// Converts the document into a Text.
     pub fn create_text(self, text: &str) -> Text<'d> {
         self.wrap_text(self.storage.create_text(text))
     }
 
-    /// Converts a `Document` into a `Comment`.
+    /// Converts the document into a Comment.
     pub fn create_comment(self, text: &str) -> Comment<'d> {
         self.wrap_comment(self.storage.create_comment(text))
     }
 
-    /// Converts a `Document` into a `ProcessingInstruction`.
+    /// Converts the document into a ProcessingInstruction.
     pub fn create_processing_instruction(self, target: &str, value: Option<&str>) -> ProcessingInstruction<'d> {
         self.wrap_pi(self.storage.create_processing_instruction(target, value))
     }
