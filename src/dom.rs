@@ -8,7 +8,7 @@ use super::raw;
 
 type SiblingFn<T> = unsafe fn(&raw::Connections, T) -> raw::SiblingIter;
 
-/// An XML document
+/// An [XML document](https://www.w3.org/TR/xml/#NT-document).
 #[derive(Copy,Clone)]
 pub struct Document<'d> {
     storage: &'d raw::Storage,
@@ -66,24 +66,29 @@ impl<'d> Document<'d> {
         }
     }
 
+    /// Converts a `Document` into a `Root`.
     pub fn root(self) -> Root<'d> {
         self.wrap_root(self.connections.root())
     }
 
+    /// Converts a `Document` into an `Element`.
     pub fn create_element<'n, N>(self, name: N) -> Element<'d>
         where N: Into<QName<'n>>
     {
         self.wrap_element(self.storage.create_element(name))
     }
 
+    /// Converts a `Document` into a `Text`.
     pub fn create_text(self, text: &str) -> Text<'d> {
         self.wrap_text(self.storage.create_text(text))
     }
 
+    /// Converts a `Document` into a `Comment`.
     pub fn create_comment(self, text: &str) -> Comment<'d> {
         self.wrap_comment(self.storage.create_comment(text))
     }
 
+    /// Converts a `Document` into a `ProcessingInstruction`.
     pub fn create_processing_instruction(self, target: &str, value: Option<&str>) -> ProcessingInstruction<'d> {
         self.wrap_pi(self.storage.create_processing_instruction(target, value))
     }
@@ -123,6 +128,7 @@ macro_rules! node(
             #[allow(dead_code)]
             fn node(&self) -> &'d $raw { unsafe { &*self.node } }
 
+            /// Returns the underlying Document.
             pub fn document(&self) -> Document<'d> { self.document }
         }
 
@@ -146,10 +152,11 @@ macro_rules! node(
 
 node!(
     Root, raw::Root,
-    "The logical ancestor of every other node type"
+    "The [root](https://www.w3.org/TR/xml/#dt-root) - a logical ancestor of every other node type."
 );
 
 impl<'d> Root<'d> {
+    /// Appends a child element to the root.
     pub fn append_child<C>(&self, child: C)
         where C: Into<ChildOfRoot<'d>>
     {
@@ -157,8 +164,9 @@ impl<'d> Root<'d> {
         self.document.connections.append_root_child(child.as_raw());
     }
 
+    /// Returns a vector containing the children of the root.
     pub fn children(&self) -> Vec<ChildOfRoot<'d>> {
-        // This is safe because we copy of the children, and the
+        // This is safe because we copy the children, and the
         // children are never deallocated.
         unsafe {
             self.document.connections.root_children().iter().map(|n| {
@@ -174,56 +182,65 @@ impl<'d> fmt::Debug for Root<'d> {
     }
 }
 
-/// A mapping from a prefix to a URI
+/// An [XML namespace](https://www.w3.org/TR/xml-names/#sec-namespaces)
+/// - a mapping from a prefix to a URI.
 pub struct Namespace<'d> {
     prefix: &'d str,
     uri: &'d str,
 }
 
 impl<'d> Namespace<'d> {
+    /// Returns the prefix of the namespace.
     pub fn prefix(&self) -> &'d str { self.prefix }
+
+    /// Returns the URI of the namespace.
     pub fn uri(&self) -> &'d str { self.uri }
 }
 
 node!(
     Element, raw::Element,
-    "Elements are the workhorse of a document and may contain any type of
-    node, except for the Root node"
+    "[Elements](https://www.w3.org/TR/xml/#NT-element) are the workhorse of a document and may
+    contain any type of node, except for the Root node."
 );
 
 impl<'d> Element<'d> {
+    /// Returns the QName of the element.
     pub fn name(&self) -> QName<'d> { self.node().name() }
 
+    /// Sets the QName of the element based on the given `name`.
     pub fn set_name<'n, N>(&self, name: N)
         where N: Into<QName<'n>>
     {
         self.document.storage.element_set_name(self.node, name)
     }
 
+    /// Sets the default namespace URI of the element.
     pub fn set_default_namespace_uri(&self, namespace_uri: Option<&str>) {
         self.document.storage.element_set_default_namespace_uri(self.node, namespace_uri);
     }
 
+    /// Returns the default namespace URI of the element.
     pub fn default_namespace_uri(&self) -> Option<&'d str> {
         self.node().default_namespace_uri()
     }
 
+    /// Recursively resolves the default namespace URI of the element.
     pub fn recursive_default_namespace_uri(&self) -> Option<&'d str> {
         self.document.connections.element_default_namespace_uri(self.node)
     }
 
-    /// Map a prefix to a namespace URI. Any existing prefix on this
+    /// Maps a prefix to a namespace URI. Any existing prefix on this
     /// element will be replaced.
     pub fn register_prefix(&self, prefix: &str, namespace_uri: &str) {
         self.document.storage.element_register_prefix(self.node, prefix, namespace_uri);
     }
 
-    /// Recursively resolve the prefix to a namespace URI.
+    /// Recursively resolves the prefix to a namespace URI.
     pub fn namespace_uri_for_prefix(&self, prefix: &str) -> Option<&'d str> {
         self.document.connections.element_namespace_uri_for_prefix(self.node, prefix)
     }
 
-    /// Recursively find a prefix for the namespace URI. Since
+    /// Recursively finds a prefix for the namespace URI. Since
     /// multiple prefixes may map to the same URI, `preferred` can be
     /// provided to select a specific prefix, if it is valid.
     pub fn prefix_for_namespace_uri(&self, namespace_uri: &str, preferred: Option<&str>)
@@ -234,7 +251,7 @@ impl<'d> Element<'d> {
         )
     }
 
-    /// Retrieve all namespaces that are in scope, recursively walking
+    /// Retrieves all namespaces that are in scope, recursively walking
     /// up the document tree.
     pub fn namespaces_in_scope(&self) -> Vec<Namespace<'d>> {
         self.document.connections.element_namespaces_in_scope(self.node).map(|(prefix, uri)| {
@@ -242,20 +259,24 @@ impl<'d> Element<'d> {
         }).collect()
     }
 
+    /// Returns the preferred prefix of the element.
     pub fn preferred_prefix(&self) -> Option<&'d str> {
         self.node().preferred_prefix()
     }
 
+    /// Sets the preferred prefix of the element.
     pub fn set_preferred_prefix(&self, prefix: Option<&str>) {
         self.document.storage.element_set_preferred_prefix(self.node, prefix);
     }
 
+    /// Returns the parent of the element.
     pub fn parent(&self) -> Option<ParentOfChild<'d>> {
         self.document.connections.element_parent(self.node).map(|n| {
             self.document.wrap_parent_of_child(n)
         })
     }
 
+    /// Appends a child to the element.
     pub fn append_child<C>(&self, child: C)
         where C: Into<ChildOfElement<'d>>
     {
@@ -263,6 +284,7 @@ impl<'d> Element<'d> {
         self.document.connections.append_element_child(self.node, child.as_raw());
     }
 
+    /// Returns a vector containing the children of the element.
     pub fn children(&self) -> Vec<ChildOfElement<'d>> {
         // This is safe because we make a copy of the children, and
         // the children are never deallocated.
@@ -273,14 +295,17 @@ impl<'d> Element<'d> {
         }
     }
 
+    /// Returns a vector containing the preceding siblings of the element.
     pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
         self.document.siblings(raw::Connections::element_preceding_siblings, self.node)
     }
 
+    /// Returns a vector containing the following siblings of the element.
     pub fn following_siblings(&self) -> Vec<ChildOfElement<'d>> {
         self.document.siblings(raw::Connections::element_following_siblings, self.node)
     }
 
+    /// Returns an attribute of the element based on its given `name`.
     pub fn attribute<'n, N>(&self, name: N) -> Option<Attribute<'d>>
         where N: Into<QName<'n>>
     {
@@ -289,6 +314,7 @@ impl<'d> Element<'d> {
         })
     }
 
+    /// Returns a vector containing the attributes of an element.
     pub fn attributes(&self) -> Vec<Attribute<'d>> {
         // This is safe because we make a copy of the children, and
         // the children are never deallocated.
@@ -299,6 +325,8 @@ impl<'d> Element<'d> {
         }
     }
 
+    /// Sets the element's attribute value to the given `&str`. It creates
+    /// an attribute with the given `name` if it doesn't exist.
     pub fn set_attribute_value<'n, N>(&self, name: N, value: &str) -> Attribute<'d>
         where N: Into<QName<'n>>
     {
@@ -307,6 +335,7 @@ impl<'d> Element<'d> {
         self.document.wrap_attribute(attr)
     }
 
+    /// Returns the value of the element's attribute with the given `name`.
     pub fn attribute_value<'n, N>(&self, name: N) -> Option<&'d str>
         where N: Into<QName<'n>>
     {
@@ -325,21 +354,27 @@ impl<'d> fmt::Debug for Element<'d> {
 
 node!(
     Attribute, raw::Attribute,
-    "Metadata about the current element"
+    "The [attribute specifications](https://www.w3.org/TR/xml/#dt-attr) of an element."
 );
 
 impl<'d> Attribute<'d> {
+    /// Returns the name of the attribute.
     pub fn name(&self)  -> QName<'d> { self.node().name() }
+
+    /// Returns the value of the attribute.
     pub fn value(&self) -> &'d str { self.node().value() }
 
+    /// Returns the preferred prefix of the attribute.
     pub fn preferred_prefix(&self) -> Option<&'d str> {
         self.node().preferred_prefix()
     }
 
+    /// Sets the preferred prefix of the attribute.
     pub fn set_preferred_prefix(&self, prefix: Option<&str>) {
         self.document.storage.attribute_set_preferred_prefix(self.node, prefix);
     }
 
+    /// Returns the element the attribute belongs to.
     pub fn parent(&self) -> Option<Element<'d>> {
         self.document.connections.attribute_parent(self.node).map(|n| {
             self.document.wrap_element(n)
@@ -355,26 +390,33 @@ impl<'d> fmt::Debug for Attribute<'d> {
 
 node!(
     Text, raw::Text,
-    "Textual data"
+    "[Textual data](https://www.w3.org/TR/xml/#dt-character)."
 );
 
 impl<'d> Text<'d> {
+    /// Returns the contents of a text.
     pub fn text(&self) -> &'d str { self.node().text() }
 
+    /// Sets the text's contents to the given `&str`.
     pub fn set_text(&self, text: &str) {
         self.document.storage.text_set_text(self.node, text)
     }
 
+    /// Returns the element the text belongs to.
     pub fn parent(&self) -> Option<Element<'d>> {
         self.document.connections.text_parent(self.node).map(|n| {
             self.document.wrap_element(n)
         })
     }
 
+    /// Returns the preceding siblings of the text. This is possible in case of
+    /// elements with [mixed content](https://www.w3.org/TR/xml/#sec-mixed-content).
     pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
         self.document.siblings(raw::Connections::text_preceding_siblings, self.node)
     }
 
+    /// Returns the following siblings of the text. This is possible in case of
+    /// elements with [mixed content](https://www.w3.org/TR/xml/#sec-mixed-content).
     pub fn following_siblings(&self) -> Vec<ChildOfElement<'d>> {
         self.document.siblings(raw::Connections::text_following_siblings, self.node)
     }
@@ -388,26 +430,31 @@ impl<'d> fmt::Debug for Text<'d> {
 
 node!(
     Comment, raw::Comment,
-    "Information only relevant to humans"
+    "[XML comments](https://www.w3.org/TR/xml/#sec-comments), i.e. information only relevant to humans."
 );
 
 impl<'d> Comment<'d> {
+    /// Returns the comment's contents.
     pub fn text(&self) -> &'d str { self.node().text() }
 
+    /// Sets the comment's contents to the given `new_text`.
     pub fn set_text(&self, new_text: &str) {
         self.document.storage.comment_set_text(self.node, new_text)
     }
 
+    /// Returns the element the comment belongs to.
     pub fn parent(&self) -> Option<ParentOfChild<'d>> {
         self.document.connections.comment_parent(self.node).map(|n| {
             self.document.wrap_parent_of_child(n)
         })
     }
 
+    /// Returns the preceding siblings of the comment.
     pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
         self.document.siblings(raw::Connections::comment_preceding_siblings, self.node)
     }
 
+    /// Returns the following siblings of the comment.
     pub fn following_siblings(&self) -> Vec<ChildOfElement<'d>> {
         self.document.siblings(raw::Connections::comment_following_siblings, self.node)
     }
@@ -421,31 +468,40 @@ impl<'d> fmt::Debug for Comment<'d> {
 
 node!(
     ProcessingInstruction, raw::ProcessingInstruction,
-    "Metadata relevant to the application, but not the XML processor or humans"
+    "[Processing instructions](https://www.w3.org/TR/xml/#sec-pi) are metadata relevant to \
+    applications, but not the XML processor or humans."
 );
 
 impl<'d> ProcessingInstruction<'d> {
+    /// Returns the target application of the processing instruction.
     pub fn target(&self) -> &'d str { self.node().target() }
+
+    /// Returns the contents of the processing instruction.
     pub fn value(&self) -> Option<&'d str> { self.node().value() }
 
+    /// Sets the target application of the processing instruction.
     pub fn set_target(&self, new_target: &str) {
         self.document.storage.processing_instruction_set_target(self.node, new_target);
     }
 
+    /// Sets the contents of the processing instruction.
     pub fn set_value(&self, new_value: Option<&str>) {
         self.document.storage.processing_instruction_set_value(self.node, new_value);
     }
 
+    /// Returns the element the processing instruction belongs to.
     pub fn parent(&self) -> Option<ParentOfChild<'d>> {
         self.document.connections.processing_instruction_parent(self.node).map(|n| {
             self.document.wrap_parent_of_child(n)
         })
     }
 
+    /// Returns the preceding siblings of the processing instruction.
     pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
         self.document.siblings(raw::Connections::processing_instruction_preceding_siblings, self.node)
     }
 
+    /// Returns the following siblings of the processing instruction.
     pub fn following_siblings(&self) -> Vec<ChildOfElement<'d>> {
         self.document.siblings(raw::Connections::processing_instruction_following_siblings, self.node)
     }
@@ -468,7 +524,7 @@ macro_rules! unpack(
     )
 );
 
-/// Nodes that may occur as a child of the root node
+/// Nodes that may occur as a [child](https://www.w3.org/TR/xml/#dt-parentchild) of the root node.
 #[derive(Debug,Copy,Clone,PartialEq)]
 pub enum ChildOfRoot<'d> {
     Element(Element<'d>),
@@ -491,7 +547,7 @@ impl<'d> ChildOfRoot<'d> {
     }
 }
 
-/// Nodes that may occur as a child of an element node
+/// Nodes that may occur as a [child](https://www.w3.org/TR/xml/#dt-parentchild) of an element node.
 #[derive(Debug,Copy,Clone,PartialEq)]
 pub enum ChildOfElement<'d> {
     Element(Element<'d>),
@@ -516,7 +572,7 @@ impl<'d> ChildOfElement<'d> {
     }
 }
 
-/// Nodes that may occur as the parent of a child node
+/// Nodes that may occur as the [parent](https://www.w3.org/TR/xml/#dt-parentchild) of a child node.
 #[derive(Debug,Copy,Clone,PartialEq)]
 pub enum ParentOfChild<'d> {
     Root(Root<'d>),
