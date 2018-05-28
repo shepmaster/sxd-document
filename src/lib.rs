@@ -84,12 +84,12 @@ pub struct PrefixedName<'a> {
 }
 
 impl<'a> PrefixedName<'a> {
-    /// Create a `PrefixedName` without a prefix
+    /// Creates a `PrefixedName` without a prefix.
     pub fn new(local_part: &str) -> PrefixedName {
         PrefixedName::with_prefix(None, local_part)
     }
 
-    /// Create a `PrefixedName` without an optional prefix
+    /// Creates a `PrefixedName` without an optional prefix.
     pub fn with_prefix(prefix: Option<&'a str>, local_part: &'a str) -> PrefixedName<'a> {
         PrefixedName {
             prefix: prefix,
@@ -97,7 +97,10 @@ impl<'a> PrefixedName<'a> {
         }
     }
 
+    /// Returns the prefix of the prefixed name.
     pub fn prefix(&self) -> Option<&str> { self.prefix }
+
+    /// Returns the local part of the prefixed name.
     pub fn local_part(&self) -> &str { self.local_part }
 }
 
@@ -111,12 +114,12 @@ pub struct QName<'s> {
 }
 
 impl<'s> QName<'s> {
-    /// Create a `QName` without a namespace
+    /// Creates a `QName` without a namespace.
     pub fn new(local_part: &'s str) -> QName<'s> {
         QName::with_namespace_uri(None, local_part)
     }
 
-    /// Create a `QName` with an optional namespace
+    /// Creates a `QName` with an optional namespace.
     pub fn with_namespace_uri(namespace_uri: Option<&'s str>, local_part: &'s str) -> QName<'s> {
         QName {
             namespace_uri: namespace_uri,
@@ -124,7 +127,10 @@ impl<'s> QName<'s> {
         }
     }
 
+    /// Returns the qualified name's namespace URI.
     pub fn namespace_uri(&self) -> Option<&'s str> { self.namespace_uri }
+
+    /// Returns the qualified name's local part.
     pub fn local_part(&self) -> &'s str { self.local_part }
 }
 
@@ -150,6 +156,7 @@ pub struct Package {
 }
 
 impl Package {
+    /// Constructs a new, empty Package.
     pub fn new() -> Package {
         let s = raw::Storage::new();
         let root = s.create_root();
@@ -159,6 +166,7 @@ impl Package {
         }
     }
 
+    /// Creates an [XML document](https://www.w3.org/TR/xml/#NT-document).
     pub fn as_document(&self) -> dom::Document {
         dom::Document::new(&self.storage, &self.connections)
     }
