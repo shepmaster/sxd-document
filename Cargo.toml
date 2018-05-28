@@ -1,6 +1,6 @@
 [package]
 name = "sxd-document"
-version = "0.2.0"
+version = "0.2.6"
 authors = ["Jake Goulding <jake.goulding@gmail.com>"]
 
 description = "A Rust XML DOM library"

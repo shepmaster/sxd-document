@@ -25,16 +25,15 @@ fn process_input<R>(input: R)
         panic!("Can't read: {}", x);
     }
 
-    let package = match parser::parse(&data) {
-        Ok(d) => d,
-        Err((point, _)) => panic!("Unable to parse: {}", pretty_error(&data, point)),
-    };
+    let package = parser::parse(&data).unwrap_or_else(|e| {
+        panic!("Unable to parse: {}", pretty_error(&data, e.location()));
+    });
 
     // let mut out = io::stdout();
     let mut out = io::sink();
     let d = package.as_document();
 
-    sxd_document::writer::format_document(&d, &mut out).ok().expect("I can't output");
+    sxd_document::writer::format_document(&d, &mut out).expect("I can't output");
     // Remove when we move back to stdout_raw + buffer or when stdout flushed at program exit
     out.flush().unwrap();
 }

@@ -72,6 +72,9 @@ pub mod writer;
 
 pub use str::XmlChar;
 
+static XML_NS_PREFIX: &'static str = "xml";
+static XML_NS_URI:    &'static str = "http://www.w3.org/XML/1998/namespace";
+
 /// A prefixed name. This represents what is found in the string form
 /// of an XML document, and does not apply any namespace mapping.
 #[derive(Debug,Copy,Clone,PartialEq,Eq,PartialOrd,Ord)]

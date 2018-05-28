@@ -6,9 +6,6 @@ use string_pool::{StringPool,InternedString};
 use std::marker::PhantomData;
 use std::slice;
 
-static XML_NS_PREFIX: &'static str = "xml";
-static XML_NS_URI:    &'static str = "http://www.w3.org/XML/1998/namespace";
-
 struct InternedQName {
     namespace_uri: Option<InternedString>,
     local_part: InternedString,
@@ -644,7 +641,7 @@ impl Connections {
     {
         let mut namespaces = Vec::new();
 
-        namespaces.push((XML_NS_PREFIX, XML_NS_URI));
+        namespaces.push((::XML_NS_PREFIX, ::XML_NS_URI));
 
         let all_namespaces =
             self.element_parents(element)

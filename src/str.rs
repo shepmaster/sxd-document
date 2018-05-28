@@ -49,6 +49,8 @@ pub trait XmlStr {
     /// Find the end of the starting tag
     fn end_of_start_tag(&self) -> Option<usize>;
     fn end_of_encoding(&self) -> Option<usize>;
+    /// Find the end of the internal doc type declaration, not including the ]
+    fn end_of_int_subset(&self) -> Option<usize>;
 }
 
 impl<'a> XmlStr for &'a str {
@@ -143,6 +145,8 @@ impl<'a> XmlStr for &'a str {
     fn end_of_encoding(&self) -> Option<usize> {
         self.end_of_start_rest(|c| c.is_encoding_start_char(), |c| c.is_encoding_rest_char())
     }
+
+    fn end_of_int_subset(&self) -> Option<usize> { self.find("]") }
 }
 
 /// Predicates used when parsing an characters in an XML document.
@@ -296,5 +300,10 @@ mod test {
     #[test]
     fn end_of_char_data_includes_multiple_right_squares() {
         assert_eq!("hello]]world".end_of_char_data(), Some("hello]]world".len()));
+    }
+
+    #[test]
+    fn end_of_int_subset_excludes_right_square() {
+        assert_eq!("hello]>world".end_of_int_subset(), Some("hello".len()))
     }
 }
