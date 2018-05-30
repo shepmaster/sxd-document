@@ -157,6 +157,27 @@ impl<'d> Root<'d> {
         self.document.connections.append_root_child(child.as_raw());
     }
 
+    pub fn append_children<I>(&self, children: I)
+        where I: IntoIterator,
+              I::Item: Into<ChildOfRoot<'d>>,
+    {
+        for c in children {
+            self.append_child(c.into());
+        }
+    }
+
+    pub fn replace_children<I>(&self, children: I)
+        where I: IntoIterator,
+              I::Item: Into<ChildOfRoot<'d>>,
+    {
+        self.clear_children();
+        self.append_children(children);
+    }
+
+    pub fn clear_children(&self) {
+        self.document.connections.clear_root_children();
+    }
+
     pub fn children(&self) -> Vec<ChildOfRoot<'d>> {
         // This is safe because we copy of the children, and the
         // children are never deallocated.
@@ -263,6 +284,27 @@ impl<'d> Element<'d> {
         self.document.connections.append_element_child(self.node, child.as_raw());
     }
 
+    pub fn append_children<I>(&self, children: I)
+        where I: IntoIterator,
+              I::Item: Into<ChildOfElement<'d>>,
+    {
+        for c in children {
+            self.append_child(c.into());
+        }
+    }
+
+    pub fn replace_children<I>(&self, children: I)
+        where I: IntoIterator,
+              I::Item: Into<ChildOfElement<'d>>,
+    {
+        self.clear_children();
+        self.append_children(children);
+    }
+
+    pub fn clear_children(&self) {
+        self.document.connections.clear_element_children(self.node);
+    }
+
     pub fn children(&self) -> Vec<ChildOfElement<'d>> {
         // This is safe because we make a copy of the children, and
         // the children are never deallocated.
@@ -314,6 +356,13 @@ impl<'d> Element<'d> {
             let a_r = unsafe { &*a };
             a_r.value()
         })
+    }
+
+    pub fn set_text(&self, text: &str) -> Text {
+        let text = self.document.create_text(text);
+        self.clear_children();
+        self.append_child(text);
+        text
     }
 }
 
@@ -537,6 +586,12 @@ macro_rules! conversion_trait(
                 $variant(v)
             }
         })*
+
+        $(impl<'a, 'd> From<&'a $leaf_type<'d>> for $res_type<'d> {
+            fn from(v: &'a $leaf_type<'d>) -> $res_type<'d> {
+                $variant(*v)
+            }
+        })*
     )
 );
 
@@ -649,6 +704,56 @@ mod test {
     }
 
     #[test]
+    fn root_can_append_multiple_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let root = doc.root();
+        let alpha = doc.create_comment("alpha");
+        let beta = doc.create_comment("beta");
+
+        root.append_children(&[alpha, beta]);
+
+        let children = root.children();
+        assert_eq!(2, children.len());
+        assert_eq!(children[0], ChildOfRoot::Comment(alpha));
+        assert_eq!(children[1], ChildOfRoot::Comment(beta));
+    }
+
+    #[test]
+    fn root_can_replace_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let root = doc.root();
+        let alpha = doc.create_comment("alpha");
+        let beta = doc.create_comment("beta");
+        let gamma = doc.create_comment("gamma");
+        root.append_child(alpha);
+
+        root.replace_children(&[beta, gamma]);
+
+        let children = root.children();
+        assert_eq!(2, children.len());
+        assert_eq!(children[0], ChildOfRoot::Comment(beta));
+        assert_eq!(children[1], ChildOfRoot::Comment(gamma));
+    }
+
+    #[test]
+    fn root_can_clear_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let root = doc.root();
+        let element = doc.create_element("alpha");
+        root.append_child(element);
+
+        root.clear_children();
+
+        assert!(root.children().is_empty());
+    }
+
+    #[test]
     fn root_child_knows_its_parent() {
         let package = Package::new();
         let doc = package.as_document();
@@ -684,6 +789,56 @@ mod test {
         let children = alpha.children();
 
         assert_eq!(children[0], ChildOfElement::Element(beta));
+    }
+
+    #[test]
+    fn elements_can_append_multiple_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let alpha = doc.create_element("alpha");
+        let beta = doc.create_element("beta");
+        let gamma = doc.create_element("gamma");
+
+        alpha.append_children(&[beta, gamma]);
+
+        let children = alpha.children();
+        assert_eq!(2, children.len());
+        assert_eq!(children[0], ChildOfElement::Element(beta));
+        assert_eq!(children[1], ChildOfElement::Element(gamma));
+    }
+
+    #[test]
+    fn elements_can_replace_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let alpha = doc.create_element("alpha");
+        let beta = doc.create_element("beta");
+        let gamma = doc.create_element("gamma");
+        let zeta = doc.create_element("zeta");
+        alpha.append_child(zeta);
+
+        alpha.replace_children(&[beta, gamma]);
+
+        let children = alpha.children();
+        assert_eq!(2, children.len());
+        assert_eq!(children[0], ChildOfElement::Element(beta));
+        assert_eq!(children[1], ChildOfElement::Element(gamma));
+    }
+
+    #[test]
+    fn elements_can_clear_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let alpha = doc.create_element("alpha");
+        let beta  = doc.create_element("beta");
+        alpha.append_child(beta);
+
+        alpha.clear_children();
+
+        assert!(alpha.children().is_empty());
     }
 
     #[test]
@@ -909,6 +1064,21 @@ mod test {
         let children = sentence.children();
         assert_eq!(1, children.len());
         assert_eq!(children[0], ChildOfElement::Text(text));
+    }
+
+    #[test]
+    fn elements_can_set_text() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let sentence = doc.create_element("sentence");
+        let quote = "Now is the winter of our discontent.";
+        let text = sentence.set_text(quote);
+
+        let children = sentence.children();
+        assert_eq!(1, children.len());
+        assert_eq!(children[0], ChildOfElement::Text(text));
+        assert_eq!(children[0].text().unwrap().text(), quote);
     }
 
     #[test]

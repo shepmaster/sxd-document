@@ -14,7 +14,7 @@
 //! let doc = parser::parse(xml).expect("Failed to parse");
 //! ```
 
-#[allow(unused)] // rust-lang/rust#46510
+#[allow(unused, deprecated)] // rust-lang/rust#46510
 use std::ascii::AsciiExt;
 use std::collections::{BTreeSet, HashMap};
 use std::mem::replace;
