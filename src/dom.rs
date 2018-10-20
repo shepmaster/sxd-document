@@ -174,6 +174,13 @@ impl<'d> Root<'d> {
         self.append_children(children);
     }
 
+    pub fn remove_child<C>(&self, child: C)
+        where C: Into<ChildOfRoot<'d>>,
+    {
+        let child = child.into();
+        self.document.connections.remove_root_child(child.as_raw())
+    }
+
     pub fn clear_children(&self) {
         self.document.connections.clear_root_children();
     }
@@ -299,6 +306,13 @@ impl<'d> Element<'d> {
     {
         self.clear_children();
         self.append_children(children);
+    }
+
+    pub fn remove_child<C>(&self, child: C)
+        where C: Into<ChildOfElement<'d>>,
+    {
+        let child = child.into();
+        self.document.connections.remove_element_child(self.node, child.as_raw());
     }
 
     pub fn clear_children(&self) {
@@ -740,6 +754,21 @@ mod test {
     }
 
     #[test]
+    fn root_can_remove_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let root = doc.root();
+        let element = doc.create_element("alpha");
+        root.append_child(element);
+
+        root.remove_child(element);
+
+        assert!(root.children().is_empty());
+        assert!(element.parent().is_none());
+    }
+
+    #[test]
     fn root_can_clear_children() {
         let package = Package::new();
         let doc = package.as_document();
@@ -826,6 +855,21 @@ mod test {
         assert_eq!(2, children.len());
         assert_eq!(children[0], ChildOfElement::Element(beta));
         assert_eq!(children[1], ChildOfElement::Element(gamma));
+    }
+
+    #[test]
+    fn elements_can_remove_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let alpha = doc.create_element("alpha");
+        let beta  = doc.create_element("beta");
+        alpha.append_child(beta);
+
+        alpha.remove_child(beta);
+
+        assert!(alpha.children().is_empty());
+        assert!(beta.parent().is_none());
     }
 
     #[test]

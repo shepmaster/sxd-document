@@ -479,6 +479,24 @@ impl Connections {
         parent_r.children.push(child);
     }
 
+    pub fn remove_root_child<C>(&self, child: C)
+        where C: Into<ChildOfRoot>
+    {
+        let parent_r = unsafe { &mut *self.root };
+        let child = child.into();
+        child.remove_parent();
+        parent_r.children.retain(|&x| x != child);
+    }
+
+    pub fn remove_element_child<C>(&self, parent: *mut Element, child: C)
+        where C: Into<ChildOfElement>
+    {
+        let parent_r = unsafe { &mut *parent };
+        let child = child.into();
+        child.remove_parent();
+        parent_r.children.retain(|&x| x != child);
+    }
+
     pub fn clear_root_children(&self) {
         let parent_r = unsafe { &mut *self.root };
         for c in &mut parent_r.children {
