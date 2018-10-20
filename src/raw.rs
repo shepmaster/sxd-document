@@ -121,6 +121,23 @@ impl ChildOfRoot {
             },
         };
     }
+
+    fn remove_parent(&self) {
+        match *self {
+            ChildOfRoot::Element(n) => {
+                let n = unsafe { &mut *n };
+                n.parent = None;
+            },
+            ChildOfRoot::Comment(n) => {
+                let n = unsafe { &mut *n };
+                n.parent = None;
+            },
+            ChildOfRoot::ProcessingInstruction(n) => {
+                let n = unsafe { &mut *n };
+                n.parent = None;
+            },
+        };
+    }
 }
 
 #[derive(Debug,Copy,Clone,PartialEq)]
@@ -174,6 +191,27 @@ impl ChildOfElement {
                 }
 
                 n.parent = Some(parent);
+            },
+        };
+    }
+
+    fn remove_parent(&self) {
+        match *self {
+            ChildOfElement::Element(n) => {
+                let n = unsafe { &mut *n };
+                n.parent = None;
+            },
+            ChildOfElement::Comment(n) => {
+                let n = unsafe { &mut *n };
+                n.parent = None;
+            },
+            ChildOfElement::ProcessingInstruction(n) => {
+                let n = unsafe { &mut *n };
+                n.parent = None;
+            },
+            ChildOfElement::Text(n) => {
+                let n = unsafe { &mut *n };
+                n.parent = None;
             },
         };
     }
@@ -441,13 +479,19 @@ impl Connections {
         parent_r.children.push(child);
     }
 
-   pub fn clear_root_children(&self) {
+    pub fn clear_root_children(&self) {
         let parent_r = unsafe { &mut *self.root };
+        for c in &mut parent_r.children {
+            c.remove_parent();
+        }
         parent_r.children.clear();
     }
 
-   pub fn clear_element_children(&self, parent: *mut Element) {
+    pub fn clear_element_children(&self, parent: *mut Element) {
         let parent_r = unsafe { &mut *parent };
+        for c in &mut parent_r.children {
+            c.remove_parent();
+        }
         parent_r.children.clear();
     }
 

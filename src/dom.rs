@@ -751,6 +751,7 @@ mod test {
         root.clear_children();
 
         assert!(root.children().is_empty());
+        assert!(element.parent().is_none());
     }
 
     #[test]
@@ -839,6 +840,7 @@ mod test {
         alpha.clear_children();
 
         assert!(alpha.children().is_empty());
+        assert!(beta.parent().is_none());
     }
 
     #[test]
