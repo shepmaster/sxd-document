@@ -513,6 +513,47 @@ impl Connections {
         parent_r.children.clear();
     }
 
+    pub fn remove_element_from_parent(&self, child: *mut Element) {
+        let child_r = unsafe { &mut *child };
+        match child_r.parent {
+            Some(ParentOfChild::Root(_)) => self.remove_root_child(child),
+            Some(ParentOfChild::Element(parent)) => self.remove_element_child(parent, child),
+            None => { /* no-op */ },
+        }
+    }
+
+    pub fn remove_attribute_from_parent(&self, child: *mut Attribute) {
+        let child_r = unsafe { &mut *child };
+        if let Some(parent) = child_r.parent {
+            self.remove_attribute_x(parent, |attr| attr as *mut Attribute == child);
+        }
+    }
+
+    pub fn remove_text_from_parent(&self, child: *mut Text) {
+        let child_r = unsafe { &mut *child };
+        if let Some(parent) = child_r.parent {
+            self.remove_element_child(parent, child);
+        }
+    }
+
+    pub fn remove_comment_from_parent(&self, child: *mut Comment) {
+        let child_r = unsafe { &mut *child };
+        match child_r.parent {
+            Some(ParentOfChild::Root(_)) => self.remove_root_child(child),
+            Some(ParentOfChild::Element(parent)) => self.remove_element_child(parent, child),
+            None => { /* no-op */ },
+        }
+    }
+
+    pub fn remove_processing_instruction_from_parent(&self, child: *mut ProcessingInstruction) {
+        let child_r = unsafe { &mut *child };
+        match child_r.parent {
+            Some(ParentOfChild::Root(_)) => self.remove_root_child(child),
+            Some(ParentOfChild::Element(parent)) => self.remove_element_child(parent, child),
+            None => { /* no-op */ },
+        }
+    }
+
     pub unsafe fn root_children(&self) -> &[ChildOfRoot] {
         let parent_r = &*self.root;
         &parent_r.children
@@ -656,11 +697,17 @@ impl Connections {
         where N: Into<QName<'n>>
     {
         let name = name.into();
+        self.remove_attribute_x(element, |a| a.name.as_qname() == name)
+    }
+
+    pub fn remove_attribute_x<'n, F>(&self, element: *mut Element, mut pred: F)
+        where F: FnMut(&mut Attribute) -> bool,
+    {
         let element_r = unsafe { &mut *element };
 
         element_r.attributes.retain(|&a| {
             let a_r = unsafe { &mut *a };
-            let is_this_attr = a_r.name.as_qname() == name;
+            let is_this_attr = pred(a_r);
             if is_this_attr {
                 a_r.parent = None;
             }
