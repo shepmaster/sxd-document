@@ -652,6 +652,22 @@ impl Connections {
         }).map(|a| *a)
     }
 
+    pub fn remove_attribute<'n, N>(&self, element: *mut Element, name: N)
+        where N: Into<QName<'n>>
+    {
+        let name = name.into();
+        let element_r = unsafe { &mut *element };
+
+        element_r.attributes.retain(|&a| {
+            let a_r = unsafe { &mut *a };
+            let is_this_attr = a_r.name.as_qname() == name;
+            if is_this_attr {
+                a_r.parent = None;
+            }
+            !is_this_attr
+        })
+    }
+
     pub fn set_attribute(&self, parent: *mut Element, attribute: *mut Attribute) {
         let parent_r = unsafe { &mut *parent };
         let attr_r = unsafe { &mut *attribute };

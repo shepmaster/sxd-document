@@ -372,6 +372,12 @@ impl<'d> Element<'d> {
         })
     }
 
+    pub fn remove_attribute<'n, N>(&self, name: N)
+        where N: Into<QName<'n>>
+    {
+        self.document.connections.remove_attribute(self.node, name);
+    }
+
     pub fn set_text(&self, text: &str) -> Text {
         let text = self.document.create_text(text);
         self.clear_children();
@@ -1065,6 +1071,20 @@ mod test {
         element.set_attribute_value("hello", "galaxy");
 
         assert_eq!(Some("galaxy"), element.attribute_value("hello"));
+    }
+
+    #[test]
+    fn attributes_can_be_removed() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let element = doc.create_element("element");
+        let attribute = element.set_attribute_value("hello", "world");
+
+        element.remove_attribute("hello");
+
+        assert!(element.attribute("hello").is_none());
+        assert!(attribute.parent().is_none());
     }
 
     #[test]
