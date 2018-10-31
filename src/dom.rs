@@ -174,6 +174,13 @@ impl<'d> Root<'d> {
         self.append_children(children);
     }
 
+    pub fn remove_child<C>(&self, child: C)
+        where C: Into<ChildOfRoot<'d>>,
+    {
+        let child = child.into();
+        self.document.connections.remove_root_child(child.as_raw())
+    }
+
     pub fn clear_children(&self) {
         self.document.connections.clear_root_children();
     }
@@ -277,6 +284,10 @@ impl<'d> Element<'d> {
         })
     }
 
+    pub fn remove_from_parent(&self) {
+        self.document.connections.remove_element_from_parent(self.node);
+    }
+
     pub fn append_child<C>(&self, child: C)
         where C: Into<ChildOfElement<'d>>
     {
@@ -299,6 +310,13 @@ impl<'d> Element<'d> {
     {
         self.clear_children();
         self.append_children(children);
+    }
+
+    pub fn remove_child<C>(&self, child: C)
+        where C: Into<ChildOfElement<'d>>,
+    {
+        let child = child.into();
+        self.document.connections.remove_element_child(self.node, child.as_raw());
     }
 
     pub fn clear_children(&self) {
@@ -358,6 +376,12 @@ impl<'d> Element<'d> {
         })
     }
 
+    pub fn remove_attribute<'n, N>(&self, name: N)
+        where N: Into<QName<'n>>
+    {
+        self.document.connections.remove_attribute(self.node, name);
+    }
+
     pub fn set_text(&self, text: &str) -> Text {
         let text = self.document.create_text(text);
         self.clear_children();
@@ -394,6 +418,10 @@ impl<'d> Attribute<'d> {
             self.document.wrap_element(n)
         })
     }
+
+    pub fn remove_from_parent(&self) {
+        self.document.connections.remove_attribute_from_parent(self.node);
+    }
 }
 
 impl<'d> fmt::Debug for Attribute<'d> {
@@ -418,6 +446,10 @@ impl<'d> Text<'d> {
         self.document.connections.text_parent(self.node).map(|n| {
             self.document.wrap_element(n)
         })
+    }
+
+    pub fn remove_from_parent(&self) {
+        self.document.connections.remove_text_from_parent(self.node);
     }
 
     pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
@@ -451,6 +483,10 @@ impl<'d> Comment<'d> {
         self.document.connections.comment_parent(self.node).map(|n| {
             self.document.wrap_parent_of_child(n)
         })
+    }
+
+    pub fn remove_from_parent(&self) {
+        self.document.connections.remove_comment_from_parent(self.node);
     }
 
     pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
@@ -489,6 +525,10 @@ impl<'d> ProcessingInstruction<'d> {
         self.document.connections.processing_instruction_parent(self.node).map(|n| {
             self.document.wrap_parent_of_child(n)
         })
+    }
+
+    pub fn remove_from_parent(&self) {
+        self.document.connections.remove_processing_instruction_from_parent(self.node);
     }
 
     pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
@@ -740,6 +780,21 @@ mod test {
     }
 
     #[test]
+    fn root_can_remove_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let root = doc.root();
+        let element = doc.create_element("alpha");
+        root.append_child(element);
+
+        root.remove_child(element);
+
+        assert!(root.children().is_empty());
+        assert!(element.parent().is_none());
+    }
+
+    #[test]
     fn root_can_clear_children() {
         let package = Package::new();
         let doc = package.as_document();
@@ -751,6 +806,7 @@ mod test {
         root.clear_children();
 
         assert!(root.children().is_empty());
+        assert!(element.parent().is_none());
     }
 
     #[test]
@@ -828,6 +884,36 @@ mod test {
     }
 
     #[test]
+    fn elements_can_remove_children() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let alpha = doc.create_element("alpha");
+        let beta  = doc.create_element("beta");
+        alpha.append_child(beta);
+
+        alpha.remove_child(beta);
+
+        assert!(alpha.children().is_empty());
+        assert!(beta.parent().is_none());
+    }
+
+    #[test]
+    fn elements_can_be_removed_from_parent() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let alpha = doc.create_element("alpha");
+        let beta  = doc.create_element("beta");
+        alpha.append_child(beta);
+
+        beta.remove_from_parent();
+
+        assert!(alpha.children().is_empty());
+        assert!(beta.parent().is_none());
+    }
+
+    #[test]
     fn elements_can_clear_children() {
         let package = Package::new();
         let doc = package.as_document();
@@ -839,6 +925,7 @@ mod test {
         alpha.clear_children();
 
         assert!(alpha.children().is_empty());
+        assert!(beta.parent().is_none());
     }
 
     #[test]
@@ -1022,6 +1109,34 @@ mod test {
     }
 
     #[test]
+    fn attributes_can_be_removed() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let element = doc.create_element("element");
+        let attribute = element.set_attribute_value("hello", "world");
+
+        element.remove_attribute("hello");
+
+        assert!(element.attribute("hello").is_none());
+        assert!(attribute.parent().is_none());
+    }
+
+    #[test]
+    fn attributes_can_be_removed_from_parent() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let element = doc.create_element("element");
+        let attribute = element.set_attribute_value("hello", "world");
+
+        attribute.remove_from_parent();
+
+        assert!(element.attribute("hello").is_none());
+        assert!(attribute.parent().is_none());
+    }
+
+    #[test]
     fn attributes_can_be_iterated() {
         let package = Package::new();
         let doc = package.as_document();
@@ -1092,6 +1207,21 @@ mod test {
         sentence.append_child(text);
 
         assert_eq!(text.parent(), Some(sentence));
+    }
+
+    #[test]
+    fn text_can_be_removed_from_parent() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let sentence = doc.create_element("sentence");
+        let text = doc.create_text("Now is the winter of our discontent.");
+        sentence.append_child(text);
+
+        text.remove_from_parent();
+
+        assert!(sentence.children().is_empty());
+        assert!(text.parent().is_none());
     }
 
     #[test]
@@ -1175,6 +1305,21 @@ mod test {
     }
 
     #[test]
+    fn comments_can_be_removed_from_parent() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let sentence = doc.create_element("sentence");
+        let comment = doc.create_comment("Now is the winter of our discontent.");
+        sentence.append_child(comment);
+
+        comment.remove_from_parent();
+
+        assert!(sentence.children().is_empty());
+        assert!(comment.parent().is_none());
+    }
+
+    #[test]
     fn comment_knows_preceding_siblings() {
         let package = Package::new();
         let doc = package.as_document();
@@ -1252,6 +1397,22 @@ mod test {
         element.append_child(pi);
 
         assert_eq!(pi.parent(), Some(ParentOfChild::Element(element)));
+    }
+
+
+    #[test]
+    fn processing_instruction_can_be_removed_from_parent() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let element = doc.create_element("element");
+        let pi = doc.create_processing_instruction("device", None);
+        element.append_child(pi);
+
+        pi.remove_from_parent();
+
+        assert!(element.children().is_empty());
+        assert!(pi.parent().is_none());
     }
 
     #[test]
