@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace all children of `Root` and `Element` (#62)
 - Append multiple children to `Root` and `Element` (#62)
 - Remove all children from `Root` and `Element` (#62)
+- Remove individual children from `Root` and `Element` (#65)
 - Extend DTD parsing to handle more internal DTDs (#50, #60)
 
 ### Changed
