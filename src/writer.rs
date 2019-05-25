@@ -268,10 +268,29 @@ enum Content<'d> {
     ProcessingInstruction(dom::ProcessingInstruction<'d>),
 }
 
-/// The formatting options to use when writing a document.
+/// Write a document, specifying some formatting options
 ///
-/// Potential settings are:
-/// - `single_quotes`: Are single quotes used instead of double quotes? (Default: true)
+/// For example, the default is to use single-quotes for attributes. To use
+/// double quotes for attributes, you need to use `set_single_quotes(false)`.
+///
+/// ```
+/// use sxd_document::{Package, writer::Writer};
+///
+/// // Create a new document
+/// let p = Package::new();
+/// let doc = p.as_document();
+/// let el = doc.create_element("hello");
+/// el.set_attribute_value("a", "b");
+/// doc.root().append_child(el);
+///
+/// // Format the document as bytes
+/// let mut output = Vec::new();
+/// Writer::new().set_single_quotes(false).format_document(&doc, &mut output);
+///
+/// // Check that the output is correct
+/// let output_string = String::from_utf8(output).unwrap();
+/// assert_eq!(output_string, r#"<?xml version="1.0"?><hello a="b"/>"#);
+/// ```
 pub struct Writer {
     single_quotes: bool,
 }
