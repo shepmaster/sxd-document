@@ -293,6 +293,30 @@ fn format_qname<'d, W: ?Sized>(q: QName<'d>,
     writer.write_str(q.local_part)
 }
 
+/// The formatting options to use when writing a document.
+///
+/// Potential settings are:
+/// - `single_quotes`: Are single quotes used instead of double quotes? (Default: true)
+pub struct Writer {
+    single_quotes: bool,
+}
+
+impl Default for Writer {
+    fn default() -> Self {
+        Self {
+            single_quotes: true,
+        }
+    }
+}
+
+impl Writer {
+    /// Set whether single quotes should be used for writing a document
+    pub fn set_single_quotes(mut self, single_quotes: bool) -> Self {
+        self.single_quotes = single_quotes;
+        self
+    }
+}
+
 fn format_attribute_value<W: ?Sized>(value: &str, writer: &mut W) -> io::Result<()>
     where W: Write
 {
