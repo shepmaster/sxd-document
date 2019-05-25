@@ -295,6 +295,13 @@ impl Writer {
         self.single_quotes = single_quotes;
         self
     }
+
+    fn quote_char(&self) -> &'static str {
+        match self.single_quotes {
+            true => "'",
+            false => "\"",
+        }
+    }
 }
 
 impl Writer {
@@ -361,9 +368,10 @@ impl Writer {
         for attr in &attrs {
             try!(writer.write_str(" "));
             try!(self.format_qname(attr.name(), mapping, attr.preferred_prefix(), true, writer));
-            try!(write!(writer, "='"));
+            try!(write!(writer, "="));
+            try!(write!(writer, "{}", self.quote_char()));
             try!(self.format_attribute_value(attr.value(), writer));
-            try!(write!(writer, "'"));
+            try!(write!(writer, "{}", self.quote_char()));
         }
 
         if let Some(ns_uri) = mapping.default_namespace_uri_in_current_scope() {
@@ -484,7 +492,7 @@ impl Writer {
     pub fn format_document<'d, W: ?Sized>(&self, doc: &'d dom::Document<'d>, writer: &mut W) -> io::Result<()>
         where W: Write
     {
-        try!(writer.write_str("<?xml version='1.0'?>"));
+        try!(write!(writer, "<?xml version={}1.0{}?>", self.quote_char(), self.quote_char()));
 
         for child in doc.root().children().into_iter() {
             try!(match child {
@@ -509,11 +517,15 @@ pub fn format_document<'d, W: ?Sized>(doc: &'d dom::Document<'d>, writer: &mut W
 mod test {
     use super::super::Package;
     use super::super::dom;
-    use super::format_document;
+    use super::Writer;
 
     fn format_xml<'d>(doc: &'d dom::Document<'d>) -> String {
+        format_xml_writer(Writer::default(), doc)
+    }
+
+    fn format_xml_writer<'d>(writer: Writer, doc: &'d dom::Document) -> String {
         let mut w = Vec::new();
-        format_document(doc, &mut w).expect("Not formatted");
+        writer.format_document(doc, &mut w).expect("Not formatted");
         String::from_utf8(w).expect("Not a string")
     }
 
@@ -574,6 +586,19 @@ mod test {
         let xml = format_xml(&d);
         assert_eq!(xml, "<?xml version='1.0'?><hello a='b'/>");
     }
+
+    #[test]
+    fn element_with_attributes_double_quotes() {
+        let p = Package::new();
+        let d = p.as_document();
+        let e = d.create_element("hello");
+        e.set_attribute_value("a", "b");
+        d.root().append_child(e);
+
+        let xml = format_xml_writer(Writer::new().set_single_quotes(false), &d);
+        assert_eq!(xml, r#"<?xml version="1.0"?><hello a="b"/>"#);
+    }
+
 
     #[test]
     fn attribute_with_namespace() {
