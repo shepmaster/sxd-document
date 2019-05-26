@@ -293,12 +293,14 @@ enum Content<'d> {
 /// ```
 pub struct Writer {
     single_quotes: bool,
+    write_encoding: bool,
 }
 
 impl Default for Writer {
     fn default() -> Self {
         Self {
             single_quotes: true,
+            write_encoding: false,
         }
     }
 }
@@ -312,6 +314,12 @@ impl Writer {
     /// Set whether single quotes should be used for writing a document.
     pub fn set_single_quotes(mut self, single_quotes: bool) -> Self {
         self.single_quotes = single_quotes;
+        self
+    }
+
+    /// Set whether the encoding should be specified in the output document header.
+    pub fn set_write_encoding(mut self, write_encoding: bool) -> Self {
+        self.write_encoding = write_encoding;
         self
     }
 
@@ -507,11 +515,25 @@ impl Writer {
         Ok(())
     }
 
+    fn format_declaration<'d, W: ?Sized>(&self, writer: &mut W) -> io::Result<()>
+        where W: Write
+    {
+        try!(write!(writer, "<?xml version={}1.0{}", self.quote_char(), self.quote_char()));
+
+        if self.write_encoding {
+            try!(write!(writer, " encoding={}UTF-8{}", self.quote_char(), self.quote_char()));
+        }
+
+        try!(write!(writer, "?>"));
+
+        Ok(())
+    }
+
     /// Formats a document into a Write
     pub fn format_document<'d, W: ?Sized>(&self, doc: &'d dom::Document<'d>, writer: &mut W) -> io::Result<()>
         where W: Write
     {
-        try!(write!(writer, "<?xml version={}1.0{}?>", self.quote_char(), self.quote_char()));
+        try!(self.format_declaration(writer));
 
         for child in doc.root().children().into_iter() {
             try!(match child {
@@ -866,5 +888,29 @@ mod test {
 
         let xml = format_xml(&d);
         assert_eq!(xml, "<?xml version='1.0'?><?display?>");
+    }
+
+    #[test]
+    fn declaration_with_encoding() {
+        let p = Package::new();
+        let d = p.as_document();
+        let e = d.create_element("hello");
+        d.root().append_child(e);
+
+        let xml = format_xml_writer(Writer::new().set_write_encoding(true), &d);
+        assert_eq!(xml, "<?xml version='1.0' encoding='UTF-8'?><hello/>");
+    }
+
+    #[test]
+    fn declaration_with_encoding_and_double_quotes() {
+        let p = Package::new();
+        let d = p.as_document();
+        let e = d.create_element("hello");
+        d.root().append_child(e);
+
+        let xml = format_xml_writer(Writer::new()
+                                    .set_write_encoding(true)
+                                    .set_single_quotes(false), &d);
+        assert_eq!(xml, r#"<?xml version="1.0" encoding="UTF-8"?><hello/>"#);
     }
 }
