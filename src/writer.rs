@@ -29,6 +29,8 @@ use std::slice;
 use self::Content::*;
 
 use super::QName;
+use super::str_ext::{SplitKeepingDelimiterExt,SplitType};
+
 
 use super::dom;
 use super::dom::{ChildOfElement,ChildOfRoot};
@@ -266,212 +268,283 @@ enum Content<'d> {
     ProcessingInstruction(dom::ProcessingInstruction<'d>),
 }
 
-fn format_qname<'d, W: ?Sized>(q: QName<'d>,
-                               mapping: &mut PrefixMapping<'d>,
-                               preferred_prefix: Option<&str>,
-                               ignore_default: bool,
-                               writer: &mut W)
-                               -> io::Result<()>
-    where W: Write
-{
-    // Can something without a namespace be prefixed? No, because
-    // defining a prefix requires a non-empty URI
-    if let Some(namespace_uri) = q.namespace_uri {
-        match mapping.namespace_type(preferred_prefix, namespace_uri, ignore_default) {
-            NamespaceType::Default => {
-                // No need to do anything
-            },
-            NamespaceType::Prefix(prefix) => {
-                try!(writer.write_str(prefix));
-                try!(writer.write_str(":"));
-            },
-            NamespaceType::Unknown => {
-                panic!("No namespace prefix available for {}", namespace_uri);
-            },
-        }
-    }
-    writer.write_str(q.local_part)
+/// Write a document, specifying some formatting options
+///
+/// For example, the default is to use single-quotes for attributes. To use
+/// double quotes for attributes, you need to use `set_single_quotes(false)`.
+///
+/// ```
+/// use sxd_document::{Package, writer::Writer};
+///
+/// // Create a new document
+/// let p = Package::new();
+/// let doc = p.as_document();
+/// let el = doc.create_element("hello");
+/// el.set_attribute_value("a", "b");
+/// doc.root().append_child(el);
+///
+/// // Format the document as bytes
+/// let mut output = Vec::new();
+/// Writer::new().set_single_quotes(false).format_document(&doc, &mut output);
+///
+/// // Check that the output is correct
+/// let output_string = String::from_utf8(output).unwrap();
+/// assert_eq!(output_string, r#"<?xml version="1.0"?><hello a="b"/>"#);
+/// ```
+pub struct Writer {
+    single_quotes: bool,
 }
 
-fn format_attribute_value<W: ?Sized>(value: &str, writer: &mut W) -> io::Result<()>
-    where W: Write
-{
-    for item in value.split_keeping_delimiter(|c| c == '<' || c == '>' || c == '&' || c == '\'' || c == '"') {
-        match item {
-            SplitType::Match(t)        => try!(writer.write_str(t)),
-            SplitType::Delimiter("<")  => try!(writer.write_str("&lt;")),
-            SplitType::Delimiter(">")  => try!(writer.write_str("&gt;")),
-            SplitType::Delimiter("&")  => try!(writer.write_str("&amp;")),
-            SplitType::Delimiter("'")  => try!(writer.write_str("&apos;")),
-            SplitType::Delimiter("\"") => try!(writer.write_str("&quot;")),
-            SplitType::Delimiter(..)   => unreachable!(),
+impl Default for Writer {
+    fn default() -> Self {
+        Self {
+            single_quotes: true,
         }
     }
-    Ok(())
 }
 
-fn format_element<'d, W: ?Sized>(element: dom::Element<'d>,
+impl Writer {
+    /// Create a new `Writer` with default settings.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set whether single quotes should be used for writing a document.
+    pub fn set_single_quotes(mut self, single_quotes: bool) -> Self {
+        self.single_quotes = single_quotes;
+        self
+    }
+
+    fn quote_char(&self) -> &'static str {
+        match self.single_quotes {
+            true => "'",
+            false => "\"",
+        }
+    }
+}
+
+impl Writer {
+    fn format_qname<'d, W: ?Sized>(&self,
+                                   q: QName<'d>,
+                                   mapping: &mut PrefixMapping<'d>,
+                                   preferred_prefix: Option<&str>,
+                                   ignore_default: bool,
+                                   writer: &mut W)
+                                   -> io::Result<()>
+        where W: Write
+    {
+        // Can something without a namespace be prefixed? No, because
+        // defining a prefix requires a non-empty URI
+        if let Some(namespace_uri) = q.namespace_uri {
+            match mapping.namespace_type(preferred_prefix, namespace_uri, ignore_default) {
+                NamespaceType::Default => {
+                    // No need to do anything
+                },
+                NamespaceType::Prefix(prefix) => {
+                    try!(writer.write_str(prefix));
+                    try!(writer.write_str(":"));
+                },
+                NamespaceType::Unknown => {
+                    panic!("No namespace prefix available for {}", namespace_uri);
+                },
+            }
+        }
+        writer.write_str(q.local_part)
+    }
+
+    fn format_attribute_value<W: ?Sized>(&self, value: &str, writer: &mut W) -> io::Result<()>
+        where W: Write
+    {
+        for item in value.split_keeping_delimiter(|c| c == '<' || c == '>' || c == '&' || c == '\'' || c == '"') {
+            match item {
+                SplitType::Match(t)        => try!(writer.write_str(t)),
+                SplitType::Delimiter("<")  => try!(writer.write_str("&lt;")),
+                SplitType::Delimiter(">")  => try!(writer.write_str("&gt;")),
+                SplitType::Delimiter("&")  => try!(writer.write_str("&amp;")),
+                SplitType::Delimiter("'")  => try!(writer.write_str("&apos;")),
+                SplitType::Delimiter("\"") => try!(writer.write_str("&quot;")),
+                SplitType::Delimiter(..)   => unreachable!(),
+            }
+        }
+        Ok(())
+    }
+
+    fn format_element<'d, W: ?Sized>(&self,
+                                     element: dom::Element<'d>,
+                                     todo: &mut Vec<Content<'d>>,
+                                     mapping: &mut PrefixMapping<'d>,
+                                     writer: &mut W)
+                                     -> io::Result<()>
+        where W: Write
+    {
+        let attrs = element.attributes();
+
+        mapping.populate_scope(&element, &attrs);
+
+        try!(writer.write_str("<"));
+        try!(self.format_qname(element.name(), mapping, element.preferred_prefix(), false, writer));
+
+        for attr in &attrs {
+            try!(writer.write_str(" "));
+            try!(self.format_qname(attr.name(), mapping, attr.preferred_prefix(), true, writer));
+            try!(write!(writer, "="));
+            try!(write!(writer, "{}", self.quote_char()));
+            try!(self.format_attribute_value(attr.value(), writer));
+            try!(write!(writer, "{}", self.quote_char()));
+        }
+
+        if let Some(ns_uri) = mapping.default_namespace_uri_in_current_scope() {
+            try!(writer.write_str(" xmlns='"));
+            try!(writer.write_str(ns_uri));
+            try!(writer.write_str("'"));
+        }
+
+        for &(ref prefix, ref ns_uri) in mapping.prefixes_in_current_scope() {
+            try!(writer.write_str(" xmlns:"));
+            try!(writer.write_str(prefix));
+            try!(write!(writer, "='{}'", ns_uri));
+        }
+
+        let mut children = element.children();
+        if children.is_empty() {
+            try!(writer.write_str("/>"));
+            mapping.pop_scope();
+            Ok(())
+        } else {
+            try!(writer.write_str(">"));
+
+            todo.push(ElementEnd(element));
+            children.reverse();
+            let x = children.into_iter().map(|c| match c {
+                ChildOfElement::Element(element)         => Element(element),
+                ChildOfElement::Text(t)                  => Text(t),
+                ChildOfElement::Comment(c)               => Comment(c),
+                ChildOfElement::ProcessingInstruction(p) => ProcessingInstruction(p),
+            });
+            todo.extend(x);
+
+            Ok(())
+        }
+    }
+
+    fn format_element_end<'d, W: ?Sized>(&self,
+                                         element: dom::Element<'d>,
+                                         mapping: &mut PrefixMapping<'d>,
+                                         writer: &mut W)
+                                         -> io::Result<()>
+        where W: Write
+    {
+        try!(writer.write_str("</"));
+        try!(self.format_qname(element.name(), mapping, element.preferred_prefix(), false, writer));
+        writer.write_str(">")
+    }
+
+    fn format_text<W: ?Sized>(&self, text: dom::Text, writer: &mut W) -> io::Result<()>
+        where W: Write
+    {
+        for item in text.text().split_keeping_delimiter(|c| c == '<' || c == '>' || c == '&') {
+            match item {
+                SplitType::Match(t)       => try!(writer.write_str(t)),
+                SplitType::Delimiter("<") => try!(writer.write_str("&lt;")),
+                SplitType::Delimiter(">") => try!(writer.write_str("&gt;")),
+                SplitType::Delimiter("&") => try!(writer.write_str("&amp;")),
+                SplitType::Delimiter(..)  => unreachable!(),
+            }
+        }
+        Ok(())
+    }
+
+    fn format_comment<W: ?Sized>(&self, comment: dom::Comment, writer: &mut W) -> io::Result<()>
+        where W: Write
+    {
+        write!(writer, "<!--{}-->", comment.text())
+    }
+
+    fn format_processing_instruction<W: ?Sized>(&self, pi: dom::ProcessingInstruction, writer: &mut W)
+                                                -> io::Result<()>
+        where W: Write
+    {
+        match pi.value() {
+            None    => write!(writer, "<?{}?>", pi.target()),
+            Some(v) => write!(writer, "<?{} {}?>", pi.target(), v),
+        }
+    }
+
+    fn format_one<'d, W: ?Sized>(&self,
+                                 content: Content<'d>,
                                  todo: &mut Vec<Content<'d>>,
                                  mapping: &mut PrefixMapping<'d>,
                                  writer: &mut W)
                                  -> io::Result<()>
-    where W: Write
-{
-    let attrs = element.attributes();
-
-    mapping.populate_scope(&element, &attrs);
-
-    try!(writer.write_str("<"));
-    try!(format_qname(element.name(), mapping, element.preferred_prefix(), false, writer));
-
-    for attr in &attrs {
-        try!(writer.write_str(" "));
-        try!(format_qname(attr.name(), mapping, attr.preferred_prefix(), true, writer));
-        try!(write!(writer, "='"));
-        try!(format_attribute_value(attr.value(), writer));
-        try!(write!(writer, "'"));
-    }
-
-    if let Some(ns_uri) = mapping.default_namespace_uri_in_current_scope() {
-        try!(writer.write_str(" xmlns='"));
-        try!(writer.write_str(ns_uri));
-        try!(writer.write_str("'"));
-    }
-
-    for &(ref prefix, ref ns_uri) in mapping.prefixes_in_current_scope() {
-        try!(writer.write_str(" xmlns:"));
-        try!(writer.write_str(prefix));
-        try!(write!(writer, "='{}'", ns_uri));
-    }
-
-    let mut children = element.children();
-    if children.is_empty() {
-        try!(writer.write_str("/>"));
-        mapping.pop_scope();
-        Ok(())
-    } else {
-        try!(writer.write_str(">"));
-
-        todo.push(ElementEnd(element));
-        children.reverse();
-        let x = children.into_iter().map(|c| match c {
-            ChildOfElement::Element(element)         => Element(element),
-            ChildOfElement::Text(t)                  => Text(t),
-            ChildOfElement::Comment(c)               => Comment(c),
-            ChildOfElement::ProcessingInstruction(p) => ProcessingInstruction(p),
-        });
-        todo.extend(x);
-
-        Ok(())
-    }
-}
-
-fn format_element_end<'d, W: ?Sized>(element: dom::Element<'d>,
-                                     mapping: &mut PrefixMapping<'d>,
-                                     writer: &mut W)
-                                     -> io::Result<()>
-    where W: Write
-{
-    try!(writer.write_str("</"));
-    try!(format_qname(element.name(), mapping, element.preferred_prefix(), false, writer));
-    writer.write_str(">")
-}
-
-use super::str_ext::{SplitKeepingDelimiterExt,SplitType};
-
-fn format_text<W: ?Sized>(text: dom::Text, writer: &mut W) -> io::Result<()>
-    where W: Write
-{
-    for item in text.text().split_keeping_delimiter(|c| c == '<' || c == '>' || c == '&') {
-        match item {
-            SplitType::Match(t)       => try!(writer.write_str(t)),
-            SplitType::Delimiter("<") => try!(writer.write_str("&lt;")),
-            SplitType::Delimiter(">") => try!(writer.write_str("&gt;")),
-            SplitType::Delimiter("&") => try!(writer.write_str("&amp;")),
-            SplitType::Delimiter(..)  => unreachable!(),
+        where W: Write
+    {
+        match content {
+            Element(e) => {
+                mapping.push_scope();
+                self.format_element(e, todo, mapping, writer)
+            },
+            ElementEnd(e) => {
+                let r = self.format_element_end(e, mapping, writer);
+                mapping.pop_scope();
+                r
+            },
+            Text(t) => self.format_text(t, writer),
+            Comment(c) => self.format_comment(c, writer),
+            ProcessingInstruction(p) => self.format_processing_instruction(p, writer),
         }
     }
-    Ok(())
-}
 
-fn format_comment<W: ?Sized>(comment: dom::Comment, writer: &mut W) -> io::Result<()>
-    where W: Write
-{
-    write!(writer, "<!--{}-->", comment.text())
-}
+    fn format_body<W: ?Sized>(&self, element: dom::Element, writer: &mut W) -> io::Result<()>
+        where W: Write
+    {
+        let mut todo = vec![Element(element)];
+        let mut mapping = PrefixMapping::new();
 
-fn format_processing_instruction<W: ?Sized>(pi: dom::ProcessingInstruction, writer: &mut W)
-                                            -> io::Result<()>
-    where W: Write
-{
-    match pi.value() {
-        None    => write!(writer, "<?{}?>", pi.target()),
-        Some(v) => write!(writer, "<?{} {}?>", pi.target(), v),
+        while ! todo.is_empty() {
+            try!(self.format_one(todo.pop().unwrap(), &mut todo, &mut mapping, writer));
+        }
+
+        Ok(())
+    }
+
+    /// Formats a document into a Write
+    pub fn format_document<'d, W: ?Sized>(&self, doc: &'d dom::Document<'d>, writer: &mut W) -> io::Result<()>
+        where W: Write
+    {
+        try!(write!(writer, "<?xml version={}1.0{}?>", self.quote_char(), self.quote_char()));
+
+        for child in doc.root().children().into_iter() {
+            try!(match child {
+                ChildOfRoot::Element(e) => self.format_body(e, writer),
+                ChildOfRoot::Comment(c) => self.format_comment(c, writer),
+                ChildOfRoot::ProcessingInstruction(p) => self.format_processing_instruction(p, writer),
+            })
+        }
+
+        Ok(())
     }
 }
 
-fn format_one<'d, W: ?Sized>(content: Content<'d>,
-                             todo: &mut Vec<Content<'d>>,
-                             mapping: &mut PrefixMapping<'d>,
-                             writer: &mut W)
-                             -> io::Result<()>
-    where W: Write
-{
-    match content {
-        Element(e)               => {
-            mapping.push_scope();
-            format_element(e, todo, mapping, writer)
-        },
-        ElementEnd(e)            => {
-            let r = format_element_end(e, mapping, writer);
-            mapping.pop_scope();
-            r
-        },
-        Text(t)                  => format_text(t, writer),
-        Comment(c)               => format_comment(c, writer),
-        ProcessingInstruction(p) => format_processing_instruction(p, writer),
-    }
-}
-
-fn format_body<W: ?Sized>(element: dom::Element, writer: &mut W) -> io::Result<()>
-    where W: Write
-{
-    let mut todo = vec![Element(element)];
-    let mut mapping = PrefixMapping::new();
-
-    while ! todo.is_empty() {
-        try!(format_one(todo.pop().unwrap(), &mut todo, &mut mapping, writer));
-    }
-
-    Ok(())
-}
-
-/// Formats a document into a Write
+/// Formats a document into a `Write` using the default `Writer`
 pub fn format_document<'d, W: ?Sized>(doc: &'d dom::Document<'d>, writer: &mut W) -> io::Result<()>
     where W: Write
 {
-    try!(writer.write_str("<?xml version='1.0'?>"));
-
-    for child in doc.root().children().into_iter() {
-        try!(match child {
-            ChildOfRoot::Element(e) => format_body(e, writer),
-            ChildOfRoot::Comment(c) => format_comment(c, writer),
-            ChildOfRoot::ProcessingInstruction(p)      => format_processing_instruction(p, writer),
-        })
-    }
-
-    Ok(())
+    Writer::default().format_document(doc, writer)
 }
 
 #[cfg(test)]
 mod test {
     use super::super::Package;
     use super::super::dom;
-    use super::format_document;
+    use super::Writer;
 
     fn format_xml<'d>(doc: &'d dom::Document<'d>) -> String {
+        format_xml_writer(Writer::default(), doc)
+    }
+
+    fn format_xml_writer<'d>(writer: Writer, doc: &'d dom::Document) -> String {
         let mut w = Vec::new();
-        format_document(doc, &mut w).expect("Not formatted");
+        writer.format_document(doc, &mut w).expect("Not formatted");
         String::from_utf8(w).expect("Not a string")
     }
 
@@ -532,6 +605,19 @@ mod test {
         let xml = format_xml(&d);
         assert_eq!(xml, "<?xml version='1.0'?><hello a='b'/>");
     }
+
+    #[test]
+    fn element_with_attributes_double_quotes() {
+        let p = Package::new();
+        let d = p.as_document();
+        let e = d.create_element("hello");
+        e.set_attribute_value("a", "b");
+        d.root().append_child(e);
+
+        let xml = format_xml_writer(Writer::new().set_single_quotes(false), &d);
+        assert_eq!(xml, r#"<?xml version="1.0"?><hello a="b"/>"#);
+    }
+
 
     #[test]
     fn attribute_with_namespace() {
