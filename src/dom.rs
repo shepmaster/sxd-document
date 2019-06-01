@@ -246,6 +246,15 @@ impl<'d> Element<'d> {
         self.document.storage.element_register_prefix(self.node, prefix, namespace_uri);
     }
 
+    /// Unregister a prefix on this element. This does not check for prefix
+    /// registrations on any ancestor elements.
+    ///
+    /// If the prefix does not exist, returns `None`. Otherwise, returns the
+    /// `Namespace` that was removed.
+    pub fn unregister_prefix(&self, prefix: &str) -> Option<Namespace<'d>> {
+        unimplemented!()
+    }
+
     /// Recursively resolve the prefix to a namespace URI.
     pub fn namespace_uri_for_prefix(&self, prefix: &str) -> Option<&'d str> {
         self.document.connections.element_namespace_uri_for_prefix(self.node, prefix)
@@ -1109,6 +1118,39 @@ mod test {
 
         let ns = nses.iter().find(|ns| ns.prefix() == "ownprefix").unwrap();
         assert_eq!("uri2", ns.uri());
+    }
+
+    #[test]
+    fn elements_unregister_prefixes() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let el = doc.create_element("alpha");
+        el.register_prefix("a", "uri_a");
+        el.register_prefix("b", "uri_b");
+        el.register_prefix("c", "uri_c");
+
+        assert!(el.registered_namespaces().find(|ns| ns.prefix == "a").is_some());
+        assert!(el.registered_namespaces().find(|ns| ns.prefix == "b").is_some());
+        assert!(el.registered_namespaces().find(|ns| ns.prefix == "c").is_some());
+
+        el.unregister_prefix("a");
+
+        assert!(el.registered_namespaces().find(|ns| ns.prefix == "a").is_none());
+        assert!(el.registered_namespaces().find(|ns| ns.prefix == "b").is_some());
+        assert!(el.registered_namespaces().find(|ns| ns.prefix == "c").is_some());
+
+        el.unregister_prefix("c");
+
+        assert!(el.registered_namespaces().find(|ns| ns.prefix == "a").is_none());
+        assert!(el.registered_namespaces().find(|ns| ns.prefix == "b").is_some());
+        assert!(el.registered_namespaces().find(|ns| ns.prefix == "c").is_none());
+
+        el.unregister_prefix("b");
+
+        assert!(el.registered_namespaces().find(|ns| ns.prefix == "a").is_none());
+        assert!(el.registered_namespaces().find(|ns| ns.prefix == "b").is_none());
+        assert!(el.registered_namespaces().find(|ns| ns.prefix == "c").is_none());
     }
 
     #[test]
