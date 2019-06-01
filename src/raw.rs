@@ -771,6 +771,14 @@ impl Connections {
         None
     }
 
+    pub fn element_registered_namespaces(&self, element: *mut Element)
+        -> impl Iterator<Item=(&str, &str)>
+    {
+        let element_ref = unsafe { &*element };
+
+        element_ref.prefix_to_namespace.iter().map(|(p, n)| (p.as_slice(), n.as_slice()))
+    }
+
     pub fn element_namespaces_in_scope(&self, element: *mut Element)
                                        -> NamespacesInScope
     {

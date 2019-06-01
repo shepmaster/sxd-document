@@ -264,8 +264,9 @@ impl<'d> Element<'d> {
 
     /// View all the namespaces that are registered on this element, without
     /// walking up the tree.
-    pub fn registered_namespaces(&self) -> Vec<Namespace<'d>> {
-        unimplemented!();
+    pub fn registered_namespaces(&self) -> impl Iterator<Item=Namespace<'d>> {
+        self.document.connections.element_registered_namespaces(self.node)
+            .map(|(prefix, uri)| Namespace { prefix, uri })
     }
 
     /// Retrieve all namespaces that are in scope, recursively walking
@@ -671,7 +672,7 @@ impl<'d> From<ChildOfRoot<'d>> for ChildOfElement<'d> {
 #[cfg(test)]
 mod test {
     use super::super::{Package,QName};
-    use super::{ChildOfRoot,ChildOfElement,ParentOfChild};
+    use super::{ChildOfRoot,ChildOfElement,ParentOfChild,Namespace};
 
     macro_rules! assert_qname_eq(
         ($l:expr, $r:expr) => (assert_eq!(Into::<QName>::into($l), $r.into()));
@@ -1077,7 +1078,7 @@ mod test {
         element.register_prefix("b", "urib");
         element.register_prefix("c", "uric");
 
-        let nses = element.registered_namespaces();
+        let nses: Vec<Namespace> = element.registered_namespaces().collect();
         assert_eq!(3, nses.len());
 
         let a_ns = nses.iter().find(|ns| ns.prefix() == "a").unwrap();
@@ -1103,7 +1104,7 @@ mod test {
 
         parent.append_child(child);
 
-        let nses = child.registered_namespaces();
+        let nses: Vec<Namespace> = child.registered_namespaces().collect();
         assert_eq!(1, nses.len());
 
         let ns = nses.iter().find(|ns| ns.prefix() == "ownprefix").unwrap();
