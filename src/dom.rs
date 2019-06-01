@@ -262,6 +262,12 @@ impl<'d> Element<'d> {
         )
     }
 
+    /// View all the namespaces that are registered on this element, without
+    /// walking up the tree.
+    pub fn registered_namespaces(&self) -> Vec<Namespace<'d>> {
+        unimplemented!();
+    }
+
     /// Retrieve all namespaces that are in scope, recursively walking
     /// up the document tree.
     pub fn namespaces_in_scope(&self) -> Vec<Namespace<'d>> {
@@ -1058,6 +1064,49 @@ mod test {
         assert_eq!(2, nses.len());
 
         let ns = nses.iter().find(|ns| ns.prefix() == "prefix").unwrap();
+        assert_eq!("uri2", ns.uri());
+    }
+
+    #[test]
+    fn elements_get_multiple_registered_namespaces() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let element = doc.create_element("alpha");
+        element.register_prefix("a", "uria");
+        element.register_prefix("b", "urib");
+        element.register_prefix("c", "uric");
+
+        let nses = element.registered_namespaces();
+        assert_eq!(3, nses.len());
+
+        let a_ns = nses.iter().find(|ns| ns.prefix() == "a").unwrap();
+        assert_eq!("uria", a_ns.uri());
+
+        let b_ns = nses.iter().find(|ns| ns.prefix() == "b").unwrap();
+        assert_eq!("urib", b_ns.uri());
+
+        let b_ns = nses.iter().find(|ns| ns.prefix() == "b").unwrap();
+        assert_eq!("urib", b_ns.uri());
+    }
+
+    #[test]
+    fn elements_get_only_own_registered_namespace() {
+        let package = Package::new();
+        let doc = package.as_document();
+
+        let parent = doc.create_element("parent");
+        parent.register_prefix("parentprefix", "uri1");
+
+        let child = doc.create_element("child");
+        child.register_prefix("ownprefix", "uri2");
+
+        parent.append_child(child);
+
+        let nses = child.registered_namespaces();
+        assert_eq!(1, nses.len());
+
+        let ns = nses.iter().find(|ns| ns.prefix() == "ownprefix").unwrap();
         assert_eq!("uri2", ns.uri());
     }
 
