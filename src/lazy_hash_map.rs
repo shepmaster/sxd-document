@@ -39,6 +39,13 @@ impl<K, V> LazyHashMap<K, V>
         })
     }
 
+    pub fn remove_entry<Q: ?Sized>(&mut self, key: &Q) -> Option<(K, V)>
+        where K: Borrow<Q>,
+              Q: Hash + Eq
+    {
+        self.map.as_mut().and_then(|m| m.remove_entry(key))
+    }
+
     pub fn iter(&self) -> Iter<K, V> {
         Iter(self.map.as_ref().map(|m| m.iter()))
     }

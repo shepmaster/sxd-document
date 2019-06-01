@@ -381,6 +381,11 @@ impl Storage {
         element_r.prefix_to_namespace.insert(prefix, namespace_uri);
     }
 
+    pub fn element_unregister_prefix(&self, element: *mut Element, prefix: &str) -> Option<(&str, &str)> {
+        let element_r = unsafe { &mut * element };
+        element_r.prefix_to_namespace.remove_entry(prefix).map(|(p, u)| (p.as_slice(), u.as_slice()))
+    }
+
     pub fn element_set_default_namespace_uri(&self, element: *mut Element, namespace_uri: Option<&str>) {
         let namespace_uri = namespace_uri.map(|p| self.intern(p));
         let element_r = unsafe { &mut * element };
@@ -769,6 +774,14 @@ impl Connections {
             }
         }
         None
+    }
+
+    pub fn element_registered_namespaces(&self, element: *mut Element)
+        -> impl Iterator<Item=(&str, &str)>
+    {
+        let element_ref = unsafe { &*element };
+
+        element_ref.prefix_to_namespace.iter().map(|(p, n)| (p.as_slice(), n.as_slice()))
     }
 
     pub fn element_namespaces_in_scope(&self, element: *mut Element)
