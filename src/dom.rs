@@ -252,7 +252,8 @@ impl<'d> Element<'d> {
     /// If the prefix does not exist, returns `None`. Otherwise, returns the
     /// `Namespace` that was removed.
     pub fn unregister_prefix(&self, prefix: &str) -> Option<Namespace<'d>> {
-        unimplemented!()
+        self.document.storage.element_unregister_prefix(self.node, prefix)
+            .map(|(prefix, uri)| Namespace { prefix, uri })
     }
 
     /// Recursively resolve the prefix to a namespace URI.
