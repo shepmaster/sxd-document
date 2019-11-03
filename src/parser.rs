@@ -866,12 +866,12 @@ impl<'d> DomBuilder<'d> {
         let deferred_element = self.element_names.last().expect("Unknown element name");
         let attributes = DeferredAttributes::new(replace(&mut self.attributes, Vec::new()));
 
-        try!(attributes.check_duplicates());
-        let default_namespace = try!(attributes.default_namespace());
+        attributes.check_duplicates()?;
+        let default_namespace = attributes.default_namespace()?;
 
         let mut new_prefix_mappings = HashMap::new();
         for ns in attributes.namespaces() {
-            let value = try!(AttributeValueBuilder::convert(&ns.values));
+            let value = AttributeValueBuilder::convert(&ns.values)?;
 
             if value.is_empty() {
                 return Err(ns.name.map(|_| SpecificError::EmptyNamespace));
@@ -928,7 +928,7 @@ impl<'d> DomBuilder<'d> {
             let name = &attribute.name.value;
 
             builder.clear();
-            try!(builder.ingest(&attribute.values));
+            builder.ingest(&attribute.values)?;
 
             if let Some(prefix) = name.prefix {
                 let ns_uri = new_prefix_mappings.get(prefix).map(|p| &p[..]);
@@ -976,11 +976,11 @@ impl<'d> DomBuilder<'d> {
             },
 
             ElementStartClose => {
-                try!(self.finish_opening_tag());
+                self.finish_opening_tag()?;
             },
 
             ElementSelfClose => {
-                try!(self.finish_opening_tag());
+                self.finish_opening_tag()?;
 
                 self.element_names.pop();
                 self.elements.pop();
@@ -1017,7 +1017,7 @@ impl<'d> DomBuilder<'d> {
             },
 
             ContentReference(t) => {
-                try!(decode_reference(t, |s| self.add_text_data(s)));
+                decode_reference(t, |s| self.add_text_data(s))?;
             },
 
             Comment(c) => {
@@ -1088,8 +1088,7 @@ pub fn parse(xml: &str) -> Result<super::Package, Error> {
         let mut builder = DomBuilder::new(doc);
 
         for token in parser {
-            let token = try!(token);
-            try!(builder.consume(token));
+            builder.consume(token?)?;
         }
 
         if builder.has_unclosed_elements() {
@@ -1154,7 +1153,7 @@ struct AttributeValueBuilder {
 impl AttributeValueBuilder {
     fn convert(values: &[AttributeValue]) -> DomBuilderResult<String> {
         let mut builder = AttributeValueBuilder::new();
-        try!(builder.ingest(values));
+        builder.ingest(values)?;
         Ok(builder.implode())
     }
 
@@ -1170,7 +1169,7 @@ impl AttributeValueBuilder {
         for value in values.iter() {
             match *value {
                 LiteralAttributeValue(v) => self.value.push_str(v),
-                ReferenceAttributeValue(r) => try!(decode_reference(r, |s| self.value.push_str(s))),
+                ReferenceAttributeValue(r) => decode_reference(r, |s| self.value.push_str(s))?,
             }
         }
 
@@ -1258,7 +1257,7 @@ impl<'a> DeferredAttributes<'a> {
             0 => Ok(None),
             1 => {
                 let ns = &self.default_namespaces[0];
-                let value = try!(AttributeValueBuilder::convert(&ns.values));
+                let value = AttributeValueBuilder::convert(&ns.values)?;
                 Ok(Some(value))
             },
             _ => {

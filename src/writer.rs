@@ -349,8 +349,8 @@ impl Writer {
                     // No need to do anything
                 },
                 NamespaceType::Prefix(prefix) => {
-                    try!(writer.write_str(prefix));
-                    try!(writer.write_str(":"));
+                    writer.write_str(prefix)?;
+                    writer.write_str(":")?;
                 },
                 NamespaceType::Unknown => {
                     panic!("No namespace prefix available for {}", namespace_uri);
@@ -365,12 +365,12 @@ impl Writer {
     {
         for item in value.split_keeping_delimiter(|c| c == '<' || c == '>' || c == '&' || c == '\'' || c == '"') {
             match item {
-                SplitType::Match(t)        => try!(writer.write_str(t)),
-                SplitType::Delimiter("<")  => try!(writer.write_str("&lt;")),
-                SplitType::Delimiter(">")  => try!(writer.write_str("&gt;")),
-                SplitType::Delimiter("&")  => try!(writer.write_str("&amp;")),
-                SplitType::Delimiter("'")  => try!(writer.write_str("&apos;")),
-                SplitType::Delimiter("\"") => try!(writer.write_str("&quot;")),
+                SplitType::Match(t)        => writer.write_str(t)?,
+                SplitType::Delimiter("<")  => writer.write_str("&lt;")?,
+                SplitType::Delimiter(">")  => writer.write_str("&gt;")?,
+                SplitType::Delimiter("&")  => writer.write_str("&amp;")?,
+                SplitType::Delimiter("'")  => writer.write_str("&apos;")?,
+                SplitType::Delimiter("\"") => writer.write_str("&quot;")?,
                 SplitType::Delimiter(..)   => unreachable!(),
             }
         }
@@ -389,37 +389,37 @@ impl Writer {
 
         mapping.populate_scope(&element, &attrs);
 
-        try!(writer.write_str("<"));
-        try!(self.format_qname(element.name(), mapping, element.preferred_prefix(), false, writer));
+        writer.write_str("<")?;
+        self.format_qname(element.name(), mapping, element.preferred_prefix(), false, writer)?;
 
         for attr in &attrs {
-            try!(writer.write_str(" "));
-            try!(self.format_qname(attr.name(), mapping, attr.preferred_prefix(), true, writer));
-            try!(write!(writer, "="));
-            try!(write!(writer, "{}", self.quote_char()));
-            try!(self.format_attribute_value(attr.value(), writer));
-            try!(write!(writer, "{}", self.quote_char()));
+            writer.write_str(" ")?;
+            self.format_qname(attr.name(), mapping, attr.preferred_prefix(), true, writer)?;
+            write!(writer, "=")?;
+            write!(writer, "{}", self.quote_char())?;
+            self.format_attribute_value(attr.value(), writer)?;
+            write!(writer, "{}", self.quote_char())?;
         }
 
         if let Some(ns_uri) = mapping.default_namespace_uri_in_current_scope() {
-            try!(writer.write_str(" xmlns='"));
-            try!(writer.write_str(ns_uri));
-            try!(writer.write_str("'"));
+            writer.write_str(" xmlns='")?;
+            writer.write_str(ns_uri)?;
+            writer.write_str("'")?;
         }
 
         for &(ref prefix, ref ns_uri) in mapping.prefixes_in_current_scope() {
-            try!(writer.write_str(" xmlns:"));
-            try!(writer.write_str(prefix));
-            try!(write!(writer, "='{}'", ns_uri));
+            writer.write_str(" xmlns:")?;
+            writer.write_str(prefix)?;
+            write!(writer, "='{}'", ns_uri)?;
         }
 
         let mut children = element.children();
         if children.is_empty() {
-            try!(writer.write_str("/>"));
+            writer.write_str("/>")?;
             mapping.pop_scope();
             Ok(())
         } else {
-            try!(writer.write_str(">"));
+            writer.write_str(">")?;
 
             todo.push(ElementEnd(element));
             children.reverse();
@@ -442,8 +442,8 @@ impl Writer {
                                          -> io::Result<()>
         where W: Write
     {
-        try!(writer.write_str("</"));
-        try!(self.format_qname(element.name(), mapping, element.preferred_prefix(), false, writer));
+        writer.write_str("</")?;
+        self.format_qname(element.name(), mapping, element.preferred_prefix(), false, writer)?;
         writer.write_str(">")
     }
 
@@ -452,10 +452,10 @@ impl Writer {
     {
         for item in text.text().split_keeping_delimiter(|c| c == '<' || c == '>' || c == '&') {
             match item {
-                SplitType::Match(t)       => try!(writer.write_str(t)),
-                SplitType::Delimiter("<") => try!(writer.write_str("&lt;")),
-                SplitType::Delimiter(">") => try!(writer.write_str("&gt;")),
-                SplitType::Delimiter("&") => try!(writer.write_str("&amp;")),
+                SplitType::Match(t)       => writer.write_str(t)?,
+                SplitType::Delimiter("<") => writer.write_str("&lt;")?,
+                SplitType::Delimiter(">") => writer.write_str("&gt;")?,
+                SplitType::Delimiter("&") => writer.write_str("&amp;")?,
                 SplitType::Delimiter(..)  => unreachable!(),
             }
         }
@@ -509,7 +509,7 @@ impl Writer {
         let mut mapping = PrefixMapping::new();
 
         while ! todo.is_empty() {
-            try!(self.format_one(todo.pop().unwrap(), &mut todo, &mut mapping, writer));
+            self.format_one(todo.pop().unwrap(), &mut todo, &mut mapping, writer)?;
         }
 
         Ok(())
@@ -518,13 +518,13 @@ impl Writer {
     fn format_declaration<'d, W: ?Sized>(&self, writer: &mut W) -> io::Result<()>
         where W: Write
     {
-        try!(write!(writer, "<?xml version={}1.0{}", self.quote_char(), self.quote_char()));
+        write!(writer, "<?xml version={}1.0{}", self.quote_char(), self.quote_char())?;
 
         if self.write_encoding {
-            try!(write!(writer, " encoding={}UTF-8{}", self.quote_char(), self.quote_char()));
+            write!(writer, " encoding={}UTF-8{}", self.quote_char(), self.quote_char())?;
         }
 
-        try!(write!(writer, "?>"));
+        write!(writer, "?>")?;
 
         Ok(())
     }
@@ -533,14 +533,14 @@ impl Writer {
     pub fn format_document<'d, W: ?Sized>(&self, doc: &'d dom::Document<'d>, writer: &mut W) -> io::Result<()>
         where W: Write
     {
-        try!(self.format_declaration(writer));
+        self.format_declaration(writer)?;
 
         for child in doc.root().children().into_iter() {
-            try!(match child {
+            match child {
                 ChildOfRoot::Element(e) => self.format_body(e, writer),
                 ChildOfRoot::Comment(c) => self.format_comment(c, writer),
                 ChildOfRoot::ProcessingInstruction(p) => self.format_processing_instruction(p, writer),
-            })
+            }?
         }
 
         Ok(())
