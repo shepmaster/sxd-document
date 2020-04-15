@@ -272,8 +272,8 @@ pub struct Storage {
     processing_instructions: Arena<ProcessingInstruction>,
 }
 
-impl Storage {
-    pub fn new() -> Storage {
+impl Default for Storage {
+    fn default() -> Storage {
         Storage {
             strings: StringPool::new(),
             roots: Arena::new(),
@@ -283,6 +283,12 @@ impl Storage {
             comments: Arena::new(),
             processing_instructions: Arena::new(),
         }
+    }
+}
+
+impl Storage {
+    pub fn new() -> Storage {
+        Self::default()
     }
 
     fn intern(&self, s: &str) -> InternedString {

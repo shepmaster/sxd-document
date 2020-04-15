@@ -149,14 +149,20 @@ pub struct Package {
     connections: raw::Connections,
 }
 
-impl Package {
-    pub fn new() -> Package {
+impl Default for Package {
+    fn default() -> Package {
         let s = raw::Storage::new();
         let root = s.create_root();
         Package {
             storage: s,
             connections: raw::Connections::new(root),
         }
+    }
+}
+
+impl Package {
+    pub fn new() -> Package {
+        Self::default()
     }
 
     pub fn as_document(&self) -> dom::Document {
