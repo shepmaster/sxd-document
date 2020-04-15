@@ -65,7 +65,7 @@ impl<'a> XmlStr for &'a str {
 
         let quote_char = quote.chars().next().expect("Cant have null quote");
 
-        self.find(&['&', '<', quote_char][..]).or(Some(self.len()))
+        self.find(&['&', '<', quote_char][..]).or_else(|| Some(self.len()))
     }
 
     fn end_of_char_data(&self) -> Option<usize> {
