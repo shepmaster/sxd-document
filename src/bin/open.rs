@@ -2,10 +2,10 @@
 
 extern crate sxd_document;
 
-use std::env;
 use std::cmp::min;
+use std::env;
 use std::fs::File;
-use std::io::{self,Read,Write};
+use std::io::{self, Read, Write};
 
 use sxd_document::parser;
 
@@ -16,7 +16,8 @@ fn pretty_error(xml: &str, position: usize) -> String {
 }
 
 fn process_input<R>(input: R)
-    where R: Read
+where
+    R: Read,
 {
     let mut input = input;
     let mut data = String::new();

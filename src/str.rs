@@ -1,13 +1,15 @@
 trait StrParseExt {
     fn end_of_start_rest<F1, F2>(&self, is_first: F1, is_rest: F2) -> Option<usize>
-        where F1: Fn(char) -> bool,
-              F2: Fn(char) -> bool;
+    where
+        F1: Fn(char) -> bool,
+        F2: Fn(char) -> bool;
 }
 
 impl<'a> StrParseExt for &'a str {
     fn end_of_start_rest<F1, F2>(&self, is_first: F1, is_rest: F2) -> Option<usize>
-        where F1: Fn(char) -> bool,
-              F2: Fn(char) -> bool,
+    where
+        F1: Fn(char) -> bool,
+        F2: Fn(char) -> bool,
     {
         let mut positions = self.char_indices();
 
@@ -55,26 +57,29 @@ pub trait XmlStr {
 
 impl<'a> XmlStr for &'a str {
     fn end_of_attribute(&self, quote: &str) -> Option<usize> {
-        if self.is_empty() ||
-           self.starts_with('&') ||
-           self.starts_with('<') ||
-           self.starts_with(quote)
+        if self.is_empty()
+            || self.starts_with('&')
+            || self.starts_with('<')
+            || self.starts_with(quote)
         {
             return None;
         }
 
         let quote_char = quote.chars().next().expect("Cant have null quote");
 
-        self.find(&['&', '<', quote_char][..]).or_else(|| Some(self.len()))
+        self.find(&['&', '<', quote_char][..])
+            .or_else(|| Some(self.len()))
     }
 
     fn end_of_char_data(&self) -> Option<usize> {
         fn find_end_of_char_data(bytes: &[u8]) -> Option<usize> {
             for (i, &b) in bytes.iter().enumerate() {
-                if b == b'<' || b == b'&' { return Some(i) }
+                if b == b'<' || b == b'&' {
+                    return Some(i);
+                }
 
                 if b == b']' && bytes[i..].starts_with(b"]]>") {
-                    return Some(i)
+                    return Some(i);
                 }
             }
             None
@@ -92,13 +97,11 @@ impl<'a> XmlStr for &'a str {
     }
 
     fn end_of_decimal_chars(&self) -> Option<usize> {
-        self.end_of_start_rest(|c| c.is_decimal_char(),
-                               |c| c.is_decimal_char())
+        self.end_of_start_rest(|c| c.is_decimal_char(), |c| c.is_decimal_char())
     }
 
     fn end_of_hex_chars(&self) -> Option<usize> {
-        self.end_of_start_rest(|c| c.is_hex_char(),
-                               |c| c.is_hex_char())
+        self.end_of_start_rest(|c| c.is_hex_char(), |c| c.is_hex_char())
     }
 
     fn end_of_comment(&self) -> Option<usize> {
@@ -133,20 +136,24 @@ impl<'a> XmlStr for &'a str {
         };
 
         match positions.next() {
-            Some((offset, c)) =>
-                match c {
-                    '?' | '!' | '/' => None,
-                    _ => Some(offset),
-                },
+            Some((offset, c)) => match c {
+                '?' | '!' | '/' => None,
+                _ => Some(offset),
+            },
             None => Some(self.len()),
         }
     }
 
     fn end_of_encoding(&self) -> Option<usize> {
-        self.end_of_start_rest(|c| c.is_encoding_start_char(), |c| c.is_encoding_rest_char())
+        self.end_of_start_rest(
+            |c| c.is_encoding_start_char(),
+            |c| c.is_encoding_rest_char(),
+        )
     }
 
-    fn end_of_int_subset(&self) -> Option<usize> { self.find(']') }
+    fn end_of_int_subset(&self) -> Option<usize> {
+        self.find(']')
+    }
 }
 
 /// Predicates used when parsing an characters in an XML document.
@@ -178,44 +185,43 @@ impl XmlChar for char {
 
     fn is_ncname_start_char(self) -> bool {
         match self {
-            'A'..='Z'                   |
-            '_'                         |
-            'a'..='z'                   |
-            '\u{0000C0}'..='\u{0000D6}' |
-            '\u{0000D8}'..='\u{0000F6}' |
-            '\u{0000F8}'..='\u{0002FF}' |
-            '\u{000370}'..='\u{00037D}' |
-            '\u{00037F}'..='\u{001FFF}' |
-            '\u{00200C}'..='\u{00200D}' |
-            '\u{002070}'..='\u{00218F}' |
-            '\u{002C00}'..='\u{002FEF}' |
-            '\u{003001}'..='\u{00D7FF}' |
-            '\u{00F900}'..='\u{00FDCF}' |
-            '\u{00FDF0}'..='\u{00FFFD}' |
-            '\u{010000}'..='\u{0EFFFF}' => true,
+            'A'..='Z'
+            | '_'
+            | 'a'..='z'
+            | '\u{0000C0}'..='\u{0000D6}'
+            | '\u{0000D8}'..='\u{0000F6}'
+            | '\u{0000F8}'..='\u{0002FF}'
+            | '\u{000370}'..='\u{00037D}'
+            | '\u{00037F}'..='\u{001FFF}'
+            | '\u{00200C}'..='\u{00200D}'
+            | '\u{002070}'..='\u{00218F}'
+            | '\u{002C00}'..='\u{002FEF}'
+            | '\u{003001}'..='\u{00D7FF}'
+            | '\u{00F900}'..='\u{00FDCF}'
+            | '\u{00FDF0}'..='\u{00FFFD}'
+            | '\u{010000}'..='\u{0EFFFF}' => true,
             _ => false,
         }
     }
 
     fn is_ncname_char(self) -> bool {
-        if self.is_ncname_start_char() { return true; }
+        if self.is_ncname_start_char() {
+            return true;
+        }
         match self {
-            '-'                     |
-            '.'                     |
-            '0'..='9'               |
-            '\u{00B7}'              |
-            '\u{0300}'..='\u{036F}' |
-            '\u{203F}'..='\u{2040}' => true,
-            _ => false
+            '-'
+            | '.'
+            | '0'..='9'
+            | '\u{00B7}'
+            | '\u{0300}'..='\u{036F}'
+            | '\u{203F}'..='\u{2040}' => true,
+            _ => false,
         }
     }
 
     fn is_space_char(self) -> bool {
         match self {
-            '\x20' |
-            '\x09' |
-            '\x0D' |
-            '\x0A' => true,
+            '\x20' | '\x09' | '\x0D' | '\x0A' => true,
             _ => false,
         }
     }
@@ -229,33 +235,24 @@ impl XmlChar for char {
 
     fn is_hex_char(self) -> bool {
         match self {
-            '0'..='9' |
-            'a'..='f' |
-            'A'..='F' => true,
+            '0'..='9' | 'a'..='f' | 'A'..='F' => true,
             _ => false,
         }
     }
 
     fn is_encoding_start_char(self) -> bool {
         match self {
-            'A'..='Z' |
-            'a'..='z' => true,
+            'A'..='Z' | 'a'..='z' => true,
             _ => false,
         }
     }
 
     fn is_encoding_rest_char(self) -> bool {
         match self {
-            'A'..='Z' |
-            'a'..='z' |
-            '0'..='9' |
-            '.' |
-            '_' |
-            '-' => true,
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '.' | '_' | '-' => true,
             _ => false,
         }
     }
-
 }
 
 #[cfg(test)]
@@ -299,7 +296,10 @@ mod test {
 
     #[test]
     fn end_of_char_data_includes_multiple_right_squares() {
-        assert_eq!("hello]]world".end_of_char_data(), Some("hello]]world".len()));
+        assert_eq!(
+            "hello]]world".end_of_char_data(),
+            Some("hello]]world".len())
+        );
     }
 
     #[test]

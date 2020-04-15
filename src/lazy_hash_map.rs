@@ -1,29 +1,32 @@
-use std::collections::HashMap;
-use std::collections::hash_map;
-use std::hash::Hash;
 use std::borrow::Borrow;
+use std::collections::hash_map;
+use std::collections::HashMap;
+use std::hash::Hash;
 
 pub struct LazyHashMap<K, V> {
     map: Option<HashMap<K, V>>,
 }
 
 impl<K, V> LazyHashMap<K, V>
-    where K: ::std::hash::Hash + Eq
+where
+    K: ::std::hash::Hash + Eq,
 {
     pub fn new() -> LazyHashMap<K, V> {
         LazyHashMap { map: None }
     }
 
     pub fn contains_key<Q: ?Sized>(&self, key: &Q) -> bool
-        where K: Borrow<Q>,
-              Q: Hash + Eq
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq,
     {
         self.map.as_ref().map_or(false, |m| m.contains_key(key))
     }
 
     pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
-        where K: Borrow<Q>,
-              Q: Hash + Eq
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq,
     {
         self.map.as_ref().and_then(|m| m.get(key))
     }
@@ -34,9 +37,7 @@ impl<K, V> LazyHashMap<K, V>
             None => Some(HashMap::new()),
         };
 
-        self.map.as_mut().and_then(|m| {
-            m.insert(key, val)
-        })
+        self.map.as_mut().and_then(|m| m.insert(key, val))
     }
 
     pub fn iter(&self) -> Iter<K, V> {

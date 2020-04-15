@@ -58,26 +58,26 @@ extern crate peresil;
 
 use std::fmt;
 
-mod str_ext;
 mod lazy_hash_map;
-mod string_pool;
 mod raw;
 mod str;
+mod str_ext;
+mod string_pool;
 
-#[doc(hidden)]
-pub mod thindom;
 pub mod dom;
 pub mod parser;
+#[doc(hidden)]
+pub mod thindom;
 pub mod writer;
 
 pub use str::XmlChar;
 
 static XML_NS_PREFIX: &str = "xml";
-static XML_NS_URI:    &str = "http://www.w3.org/XML/1998/namespace";
+static XML_NS_URI: &str = "http://www.w3.org/XML/1998/namespace";
 
 /// A prefixed name. This represents what is found in the string form
 /// of an XML document, and does not apply any namespace mapping.
-#[derive(Debug,Copy,Clone,PartialEq,Eq,PartialOrd,Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PrefixedName<'a> {
     prefix: Option<&'a str>,
     local_part: &'a str,
@@ -91,20 +91,21 @@ impl<'a> PrefixedName<'a> {
 
     /// Create a `PrefixedName` without an optional prefix
     pub fn with_prefix(prefix: Option<&'a str>, local_part: &'a str) -> PrefixedName<'a> {
-        PrefixedName {
-            prefix,
-            local_part,
-        }
+        PrefixedName { prefix, local_part }
     }
 
-    pub fn prefix(&self) -> Option<&str> { self.prefix }
-    pub fn local_part(&self) -> &str { self.local_part }
+    pub fn prefix(&self) -> Option<&str> {
+        self.prefix
+    }
+    pub fn local_part(&self) -> &str {
+        self.local_part
+    }
 }
 
 /// A namespace-qualified name. This represents the name of an element
 /// or attribute *after* the prefix has been mapped to a specific
 /// namespace.
-#[derive(Debug,Copy,Clone,PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QName<'s> {
     namespace_uri: Option<&'s str>,
     local_part: &'s str,
@@ -124,19 +125,29 @@ impl<'s> QName<'s> {
         }
     }
 
-    pub fn namespace_uri(&self) -> Option<&'s str> { self.namespace_uri }
-    pub fn local_part(&self) -> &'s str { self.local_part }
+    pub fn namespace_uri(&self) -> Option<&'s str> {
+        self.namespace_uri
+    }
+    pub fn local_part(&self) -> &'s str {
+        self.local_part
+    }
 }
 
 impl<'s> From<(&'s str, &'s str)> for QName<'s> {
     fn from(v: (&'s str, &'s str)) -> QName<'s> {
-        QName { namespace_uri: Some(v.0), local_part: v.1 }
+        QName {
+            namespace_uri: Some(v.0),
+            local_part: v.1,
+        }
     }
 }
 
 impl<'s> From<&'s str> for QName<'s> {
     fn from(v: &'s str) -> QName<'s> {
-        QName { namespace_uri: None, local_part: v }
+        QName {
+            namespace_uri: None,
+            local_part: v,
+        }
     }
 }
 
