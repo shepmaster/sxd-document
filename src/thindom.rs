@@ -11,7 +11,7 @@ pub struct Storage<'d> {
 impl<'d> Storage<'d> {
     pub fn new(storage: &raw::Storage) -> Storage {
         Storage {
-            storage: storage,
+            storage,
         }
     }
 
@@ -69,7 +69,7 @@ pub struct Connections<'d> {
 impl<'d> Connections<'d> {
     pub fn new(connections: &raw::Connections) -> Connections {
         Connections {
-            connections: connections,
+            connections,
         }
     }
 

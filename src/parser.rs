@@ -181,7 +181,7 @@ type XmlMaster<'a> = peresil::ParseMaster<StringPoint<'a>, SpecificError>;
 type XmlProgress<'a, T> = peresil::Progress<StringPoint<'a>, T, SpecificError>;
 
 fn success<T>(data: T, point: StringPoint) -> XmlProgress<T> {
-    peresil::Progress { point: point, status: peresil::Status::Success(data) }
+    peresil::Progress { point, status: peresil::Status::Success(data) }
 }
 
 /// A truncated point; the string ends before the end of input
@@ -578,8 +578,8 @@ fn parse_element_close(xml: StringPoint) -> XmlProgress<Token> {
     success(Token::ElementClose(name), xml)
 }
 
-const QUOT: &'static str = r#"""#;
-const APOS: &'static str = r#"'"#;
+const QUOT: &str = r#"""#;
+const APOS: &str = r#"'"#;
 
 fn parse_attribute_start<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
     let (xml, _) = try_parse!(xml.expect_space());
@@ -837,7 +837,7 @@ struct DomBuilder<'d> {
 impl<'d> DomBuilder<'d> {
     fn new(doc: dom::Document<'d>) -> DomBuilder<'d> {
         DomBuilder {
-            doc: doc,
+            doc,
             elements: vec![],
             element_names: Vec::new(),
             attributes: Vec::new(),
@@ -1223,9 +1223,9 @@ impl<'a> DeferredAttributes<'a> {
         default_namespaces.sort_by(sort_by_name);
 
         DeferredAttributes {
-            attributes: attributes,
-            namespaces: namespaces,
-            default_namespaces: default_namespaces,
+            attributes,
+            namespaces,
+            default_namespaces,
         }
     }
 

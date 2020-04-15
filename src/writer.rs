@@ -78,7 +78,7 @@ impl<'d> PrefixScope<'d> {
     }
 
     fn namespace_uri_for(&self, prefix: &str) -> Option<&'d str> {
-        self.prefix_to_ns.get(prefix).map(|&ns| ns)
+        self.prefix_to_ns.get(prefix).copied()
     }
 
     fn prefix_for(&self, namespace_uri: &str) -> Option<&str> {

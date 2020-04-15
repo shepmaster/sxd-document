@@ -26,8 +26,8 @@ impl Chunk {
         mem::forget(slab);
 
         Chunk {
-            start: start,
-            capacity: capacity,
+            start,
+            capacity,
         }
     }
 
@@ -40,7 +40,7 @@ impl Chunk {
     // Returns a pointer to the end of the allocated space.
     #[inline]
     fn end(&self) -> *const u8 {
-        unsafe { self.start().offset(self.capacity as isize) }
+        unsafe { self.start().add(self.capacity) }
     }
 }
 
@@ -64,8 +64,8 @@ pub struct InternedString {
 impl InternedString {
     fn from_parts(data: *const u8, len: usize) -> InternedString {
         InternedString {
-            data: data,
-            len: len,
+            data,
+            len,
         }
     }
 
@@ -191,7 +191,7 @@ impl StringPool {
             let interned_str = InternedString::from_parts(self.start.get() as *const u8, str_len);
 
             // Increase current pointer
-            self.start.set(self.start.get().offset(str_len as isize));
+            self.start.set(self.start.get().add(str_len));
 
             interned_str
         }

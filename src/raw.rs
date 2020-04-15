@@ -310,7 +310,7 @@ impl Storage {
         let name = self.intern_qname(name);
 
         self.elements.alloc(Element {
-            name: name,
+            name,
             default_namespace_uri: None,
             preferred_prefix: None,
             children: Vec::new(),
@@ -328,9 +328,9 @@ impl Storage {
         let value = self.intern(value);
 
         self.attributes.alloc(Attribute {
-            name: name,
+            name,
             preferred_prefix: None,
-            value: value,
+            value,
             parent: None,
         })
     }
@@ -339,7 +339,7 @@ impl Storage {
         let text = self.intern(text);
 
         self.texts.alloc(Text {
-            text: text,
+            text,
             parent: None,
         })
     }
@@ -348,7 +348,7 @@ impl Storage {
         let text = self.intern(text);
 
         self.comments.alloc(Comment {
-            text: text,
+            text,
             parent: None,
         })
     }
@@ -359,8 +359,8 @@ impl Storage {
         let value = value.map(|v| self.intern(v));
 
         self.processing_instructions.alloc(ProcessingInstruction {
-            target: target,
-            value: value,
+            target,
+            value,
             parent: None,
         })
     }
@@ -431,7 +431,7 @@ pub struct Connections {
 impl Connections {
     pub fn new(root: *mut Root) -> Connections {
         Connections {
-            root: root,
+            root,
         }
     }
 
@@ -690,7 +690,7 @@ impl Connections {
         element_r.attributes.iter().find(|a| {
             let a_r: &Attribute = unsafe { &***a };
             a_r.name.as_qname() == name
-        }).map(|a| *a)
+        }).copied()
     }
 
     pub fn remove_attribute<'n, N>(&self, element: *mut Element, name: N)

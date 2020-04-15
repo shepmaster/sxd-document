@@ -120,7 +120,7 @@ pub trait SplitKeepingDelimiterExt: ::std::ops::Index<::std::ops::RangeFull, Out
     fn split_keeping_delimiter<F>(&self, chars: F) -> SplitKeepingDelimiter<F>
         where F: Fn(char) -> bool
     {
-        SplitKeepingDelimiter { haystack: &self[..], chars: chars, start: 0, saved: None }
+        SplitKeepingDelimiter { haystack: &self[..], chars, start: 0, saved: None }
     }
 }
 

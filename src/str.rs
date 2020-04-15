@@ -55,7 +55,7 @@ pub trait XmlStr {
 
 impl<'a> XmlStr for &'a str {
     fn end_of_attribute(&self, quote: &str) -> Option<usize> {
-        if self.len() == 0 ||
+        if self.is_empty() ||
            self.starts_with('&') ||
            self.starts_with('<') ||
            self.starts_with(quote)
@@ -146,7 +146,7 @@ impl<'a> XmlStr for &'a str {
         self.end_of_start_rest(|c| c.is_encoding_start_char(), |c| c.is_encoding_rest_char())
     }
 
-    fn end_of_int_subset(&self) -> Option<usize> { self.find("]") }
+    fn end_of_int_subset(&self) -> Option<usize> { self.find(']') }
 }
 
 /// Predicates used when parsing an characters in an XML document.

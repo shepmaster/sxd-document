@@ -72,8 +72,8 @@ pub mod writer;
 
 pub use str::XmlChar;
 
-static XML_NS_PREFIX: &'static str = "xml";
-static XML_NS_URI:    &'static str = "http://www.w3.org/XML/1998/namespace";
+static XML_NS_PREFIX: &str = "xml";
+static XML_NS_URI:    &str = "http://www.w3.org/XML/1998/namespace";
 
 /// A prefixed name. This represents what is found in the string form
 /// of an XML document, and does not apply any namespace mapping.
@@ -92,8 +92,8 @@ impl<'a> PrefixedName<'a> {
     /// Create a `PrefixedName` without an optional prefix
     pub fn with_prefix(prefix: Option<&'a str>, local_part: &'a str) -> PrefixedName<'a> {
         PrefixedName {
-            prefix: prefix,
-            local_part: local_part,
+            prefix,
+            local_part,
         }
     }
 
@@ -119,8 +119,8 @@ impl<'s> QName<'s> {
     /// Create a `QName` with an optional namespace
     pub fn with_namespace_uri(namespace_uri: Option<&'s str>, local_part: &'s str) -> QName<'s> {
         QName {
-            namespace_uri: namespace_uri,
-            local_part: local_part,
+            namespace_uri,
+            local_part,
         }
     }
 

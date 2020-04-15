@@ -37,8 +37,8 @@ impl<'d> Document<'d> {
     #[doc(hidden)]
     pub fn new(storage: &'d raw::Storage, connections: &'d raw::Connections) -> Document<'d> {
         Document {
-            storage: storage,
-            connections: connections,
+            storage,
+            connections,
         }
     }
 
@@ -266,7 +266,7 @@ impl<'d> Element<'d> {
     /// up the document tree.
     pub fn namespaces_in_scope(&self) -> Vec<Namespace<'d>> {
         self.document.connections.element_namespaces_in_scope(self.node).map(|(prefix, uri)| {
-            Namespace { prefix: prefix, uri: uri }
+            Namespace { prefix, uri }
         }).collect()
     }
 
