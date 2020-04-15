@@ -149,7 +149,7 @@ impl<'d> PrefixMapping<'d> {
         self.scopes.last().unwrap().default_namespace_uri
     }
 
-    fn prefixes_in_current_scope(&self) -> slice::Iter<(String, &'d str)> {
+    fn prefixes_in_current_scope(&self) -> slice::Iter<'_, (String, &'d str)> {
         self.scopes.last().unwrap().defined_prefixes.iter()
     }
 
@@ -482,7 +482,7 @@ impl Writer {
         writer.write_str(">")
     }
 
-    fn format_text<W: ?Sized>(&self, text: dom::Text, writer: &mut W) -> io::Result<()>
+    fn format_text<W: ?Sized>(&self, text: dom::Text<'_>, writer: &mut W) -> io::Result<()>
     where
         W: Write,
     {
@@ -501,7 +501,7 @@ impl Writer {
         Ok(())
     }
 
-    fn format_comment<W: ?Sized>(&self, comment: dom::Comment, writer: &mut W) -> io::Result<()>
+    fn format_comment<W: ?Sized>(&self, comment: dom::Comment<'_>, writer: &mut W) -> io::Result<()>
     where
         W: Write,
     {
@@ -510,7 +510,7 @@ impl Writer {
 
     fn format_processing_instruction<W: ?Sized>(
         &self,
-        pi: dom::ProcessingInstruction,
+        pi: dom::ProcessingInstruction<'_>,
         writer: &mut W,
     ) -> io::Result<()>
     where
@@ -548,7 +548,7 @@ impl Writer {
         }
     }
 
-    fn format_body<W: ?Sized>(&self, element: dom::Element, writer: &mut W) -> io::Result<()>
+    fn format_body<W: ?Sized>(&self, element: dom::Element<'_>, writer: &mut W) -> io::Result<()>
     where
         W: Write,
     {
@@ -631,7 +631,7 @@ mod test {
         format_xml_writer(Writer::default(), doc)
     }
 
-    fn format_xml_writer(writer: Writer, doc: &dom::Document) -> String {
+    fn format_xml_writer(writer: Writer, doc: &dom::Document<'_>) -> String {
         let mut w = Vec::new();
         writer.format_document(doc, &mut w).expect("Not formatted");
         String::from_utf8(w).expect("Not a string")

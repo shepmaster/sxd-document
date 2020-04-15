@@ -59,7 +59,7 @@ where
 
 #[cfg(feature = "unstable")]
 pub trait SplitKeepingDelimiterExt: ::std::ops::Index<::std::ops::RangeFull, Output = str> {
-    fn split_keeping_delimiter<P>(&self, pattern: P) -> SplitKeepingDelimiter<P>
+    fn split_keeping_delimiter<P>(&self, pattern: P) -> SplitKeepingDelimiter<'_, P>
     where
         P: for<'a> Pattern<'a>,
     {
@@ -125,7 +125,7 @@ where
 
 #[cfg(not(feature = "unstable"))]
 pub trait SplitKeepingDelimiterExt: ::std::ops::Index<::std::ops::RangeFull, Output = str> {
-    fn split_keeping_delimiter<F>(&self, chars: F) -> SplitKeepingDelimiter<F>
+    fn split_keeping_delimiter<F>(&self, chars: F) -> SplitKeepingDelimiter<'_, F>
     where
         F: Fn(char) -> bool,
     {

@@ -41,12 +41,12 @@ where
         self.map.as_mut().and_then(|m| m.insert(key, val))
     }
 
-    pub fn iter(&self) -> Iter<K, V> {
+    pub fn iter(&self) -> Iter<'_, K, V> {
         Iter(self.map.as_ref().map(|m| m.iter()))
     }
 }
 
-pub struct Iter<'a, K: 'a, V: 'a>(Option<hash_map::Iter<'a, K, V>>);
+pub struct Iter<'a, K, V>(Option<hash_map::Iter<'a, K, V>>);
 
 impl<'a, K: 'a, V: 'a> Iterator for Iter<'a, K, V> {
     type Item = (&'a K, &'a V);

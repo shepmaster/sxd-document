@@ -10,7 +10,7 @@ struct InternedQName {
 }
 
 impl InternedQName {
-    fn as_qname(&self) -> QName {
+    fn as_qname(&self) -> QName<'_> {
         QName {
             namespace_uri: self.namespace_uri.map(|n| n.as_slice()),
             local_part: &self.local_part,
@@ -33,7 +33,7 @@ pub struct Element {
 }
 
 impl Element {
-    pub fn name(&self) -> QName {
+    pub fn name(&self) -> QName<'_> {
         self.name.as_qname()
     }
     pub fn default_namespace_uri(&self) -> Option<&str> {
@@ -52,7 +52,7 @@ pub struct Attribute {
 }
 
 impl Attribute {
-    pub fn name(&self) -> QName {
+    pub fn name(&self) -> QName<'_> {
         self.name.as_qname()
     }
     pub fn value(&self) -> &str {
@@ -323,7 +323,7 @@ impl Storage {
         InternedString::from_str(interned)
     }
 
-    fn intern_qname(&self, q: QName) -> InternedQName {
+    fn intern_qname(&self, q: QName<'_>) -> InternedQName {
         InternedQName {
             namespace_uri: q.namespace_uri.map(|p| self.intern(p)),
             local_part: self.intern(q.local_part),
@@ -621,7 +621,7 @@ impl Connections {
 
     /// Returns the sibling nodes that come before this node. The
     /// nodes are in document order.
-    pub unsafe fn element_preceding_siblings(&self, element: *mut Element) -> SiblingIter {
+    pub unsafe fn element_preceding_siblings(&self, element: *mut Element) -> SiblingIter<'_> {
         let element_r = &*element;
         match element_r.parent {
             Some(ParentOfChild::Root(root_parent)) => SiblingIter::of_root(
@@ -640,7 +640,7 @@ impl Connections {
 
     /// Returns the sibling nodes that come after this node. The
     /// nodes are in document order.
-    pub unsafe fn element_following_siblings(&self, element: *mut Element) -> SiblingIter {
+    pub unsafe fn element_following_siblings(&self, element: *mut Element) -> SiblingIter<'_> {
         let element_r = &*element;
         match element_r.parent {
             Some(ParentOfChild::Root(root_parent)) => SiblingIter::of_root(
@@ -659,7 +659,7 @@ impl Connections {
 
     /// Returns the sibling nodes that come before this node. The
     /// nodes are in document order.
-    pub unsafe fn text_preceding_siblings(&self, text: *mut Text) -> SiblingIter {
+    pub unsafe fn text_preceding_siblings(&self, text: *mut Text) -> SiblingIter<'_> {
         let text_r = &*text;
         match text_r.parent {
             Some(element_parent) => SiblingIter::of_element(
@@ -673,7 +673,7 @@ impl Connections {
 
     /// Returns the sibling nodes that come after this node. The
     /// nodes are in document order.
-    pub unsafe fn text_following_siblings(&self, text: *mut Text) -> SiblingIter {
+    pub unsafe fn text_following_siblings(&self, text: *mut Text) -> SiblingIter<'_> {
         let text_r = &*text;
         match text_r.parent {
             Some(element_parent) => SiblingIter::of_element(
@@ -687,7 +687,7 @@ impl Connections {
 
     /// Returns the sibling nodes that come before this node. The
     /// nodes are in document order.
-    pub unsafe fn comment_preceding_siblings(&self, comment: *mut Comment) -> SiblingIter {
+    pub unsafe fn comment_preceding_siblings(&self, comment: *mut Comment) -> SiblingIter<'_> {
         let comment_r = &*comment;
         match comment_r.parent {
             Some(ParentOfChild::Root(root_parent)) => SiblingIter::of_root(
@@ -706,7 +706,7 @@ impl Connections {
 
     /// Returns the sibling nodes that come after this node. The
     /// nodes are in document order.
-    pub unsafe fn comment_following_siblings(&self, comment: *mut Comment) -> SiblingIter {
+    pub unsafe fn comment_following_siblings(&self, comment: *mut Comment) -> SiblingIter<'_> {
         let comment_r = &*comment;
         match comment_r.parent {
             Some(ParentOfChild::Root(root_parent)) => SiblingIter::of_root(
@@ -728,7 +728,7 @@ impl Connections {
     pub unsafe fn processing_instruction_preceding_siblings(
         &self,
         pi: *mut ProcessingInstruction,
-    ) -> SiblingIter {
+    ) -> SiblingIter<'_> {
         let pi_r = &*pi;
         match pi_r.parent {
             Some(ParentOfChild::Root(root_parent)) => SiblingIter::of_root(
@@ -750,7 +750,7 @@ impl Connections {
     pub unsafe fn processing_instruction_following_siblings(
         &self,
         pi: *mut ProcessingInstruction,
-    ) -> SiblingIter {
+    ) -> SiblingIter<'_> {
         let pi_r = &*pi;
         match pi_r.parent {
             Some(ParentOfChild::Root(root_parent)) => SiblingIter::of_root(
@@ -834,7 +834,7 @@ impl Connections {
         attr_r.parent = Some(parent);
     }
 
-    fn element_parents(&self, element: *mut Element) -> ElementParents {
+    fn element_parents(&self, element: *mut Element) -> ElementParents<'_> {
         ElementParents {
             element: Some(element),
             marker: PhantomData,
@@ -884,7 +884,7 @@ impl Connections {
         None
     }
 
-    pub fn element_namespaces_in_scope(&self, element: *mut Element) -> NamespacesInScope {
+    pub fn element_namespaces_in_scope(&self, element: *mut Element) -> NamespacesInScope<'_> {
         let mut namespaces = Vec::new();
 
         namespaces.push((crate::XML_NS_PREFIX, crate::XML_NS_URI));

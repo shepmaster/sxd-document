@@ -48,10 +48,9 @@
 //!
 //! Try to leverage the type system as much as possible.
 
+#![deny(rust_2018_idioms)]
 #![cfg_attr(feature = "unstable", feature(pattern))]
 #![cfg_attr(feature = "unstable", feature(test))]
-
-extern crate typed_arena;
 
 #[macro_use]
 extern crate peresil;
@@ -85,7 +84,7 @@ pub struct PrefixedName<'a> {
 
 impl<'a> PrefixedName<'a> {
     /// Create a `PrefixedName` without a prefix
-    pub fn new(local_part: &str) -> PrefixedName {
+    pub fn new(local_part: &str) -> PrefixedName<'_> {
         PrefixedName::with_prefix(None, local_part)
     }
 
@@ -176,12 +175,12 @@ impl Package {
         Self::default()
     }
 
-    pub fn as_document(&self) -> dom::Document {
+    pub fn as_document(&self) -> dom::Document<'_> {
         dom::Document::new(&self.storage, &self.connections)
     }
 
     #[doc(hidden)]
-    pub fn as_thin_document(&self) -> (thindom::Storage, thindom::Connections) {
+    pub fn as_thin_document(&self) -> (thindom::Storage<'_>, thindom::Connections<'_>) {
         let s = thindom::Storage::new(&self.storage);
         let c = thindom::Connections::new(&self.connections);
         (s, c)
@@ -195,7 +194,7 @@ impl PartialEq for Package {
 }
 
 impl fmt::Debug for Package {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Package")
     }
 }

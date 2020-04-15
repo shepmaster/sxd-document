@@ -113,7 +113,7 @@ impl Recoverable for SpecificError {
 
 impl fmt::Display for SpecificError {
     #[allow(deprecated)]
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use self::{error::Error, SpecificError::*};
 
         match *self {
@@ -177,7 +177,7 @@ impl error::Error for SpecificError {
 type XmlMaster<'a> = peresil::ParseMaster<StringPoint<'a>, SpecificError>;
 type XmlProgress<'a, T> = peresil::Progress<StringPoint<'a>, T, SpecificError>;
 
-fn success<T>(data: T, point: StringPoint) -> XmlProgress<T> {
+fn success<T>(data: T, point: StringPoint<'_>) -> XmlProgress<'_, T> {
     peresil::Progress {
         point,
         status: peresil::Status::Success(data),
@@ -252,7 +252,7 @@ impl<'a> XmlParseExt<'a> for StringPoint<'a> {
     }
 
     fn consume_prefixed_name(&self) -> peresil::Progress<StringPoint<'a>, PrefixedName<'a>, ()> {
-        fn parse_local(xml: StringPoint) -> peresil::Progress<StringPoint, &str, ()> {
+        fn parse_local(xml: StringPoint<'_>) -> peresil::Progress<StringPoint<'_>, &str, ()> {
             let (xml, _) = try_parse!(xml.consume_literal(":"));
             xml.consume_ncname()
         }
@@ -391,7 +391,7 @@ struct PullParser<'a> {
 }
 
 impl<'a> PullParser<'a> {
-    fn new(xml: &str) -> PullParser {
+    fn new(xml: &str) -> PullParser<'_> {
         PullParser {
             pm: ParseMaster::new(),
             xml: StringPoint::new(xml),
@@ -400,7 +400,7 @@ impl<'a> PullParser<'a> {
     }
 }
 
-fn parse_comment<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token> {
+fn parse_comment<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'_>> {
     let (xml, _) = try_parse!(xml
         .consume_literal("<!--")
         .map_err(|_| SpecificError::ExpectedComment));
@@ -445,7 +445,7 @@ where
         .finish()
 }
 
-fn parse_eq(xml: StringPoint) -> XmlProgress<()> {
+fn parse_eq(xml: StringPoint<'_>) -> XmlProgress<'_, ()> {
     let (xml, _) = xml.consume_space().optional(xml);
     let (xml, _) = try_parse!(xml.expect_literal("="));
     let (xml, _) = xml.consume_space().optional(xml);
@@ -457,7 +457,7 @@ fn parse_version_info<'a>(
     pm: &mut XmlMaster<'a>,
     xml: StringPoint<'a>,
 ) -> XmlProgress<'a, &'a str> {
-    fn version_num(xml: StringPoint) -> peresil::Progress<StringPoint, &str, ()> {
+    fn version_num(xml: StringPoint<'_>) -> peresil::Progress<StringPoint<'_>, &str, ()> {
         let start_point = xml;
 
         let (xml, _) = try_parse!(xml.consume_literal("1."));
@@ -564,12 +564,12 @@ fn parse_document_type_declaration<'a>(
     success(Token::DocumentTypeDeclaration, xml)
 }
 
-fn parse_pi_value(xml: StringPoint) -> XmlProgress<&str> {
+fn parse_pi_value(xml: StringPoint<'_>) -> XmlProgress<'_, &str> {
     let (xml, _) = try_parse!(xml.expect_space());
     xml.consume_pi_value()
 }
 
-fn parse_pi<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token> {
+fn parse_pi<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'_>> {
     let (xml, _) = try_parse!(xml
         .consume_literal("<?")
         .map_err(|_| SpecificError::ExpectedProcessingInstruction));
@@ -590,7 +590,7 @@ fn parse_pi<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token> {
     success(Token::ProcessingInstruction(target, value), xml)
 }
 
-fn parse_element_start(xml: StringPoint) -> XmlProgress<Token> {
+fn parse_element_start(xml: StringPoint<'_>) -> XmlProgress<'_, Token<'_>> {
     let (xml, _) = try_parse!(xml.consume_start_tag());
     let (xml, name) = try_parse!(Span::parse(xml, |xml| xml
         .consume_prefixed_name()
@@ -599,7 +599,7 @@ fn parse_element_start(xml: StringPoint) -> XmlProgress<Token> {
     success(Token::ElementStart(name), xml)
 }
 
-fn parse_element_start_close(xml: StringPoint) -> XmlProgress<Token> {
+fn parse_element_start_close(xml: StringPoint<'_>) -> XmlProgress<'_, Token<'_>> {
     let (xml, _) = xml.expect_space().optional(xml);
 
     xml.consume_literal(">")
@@ -607,7 +607,7 @@ fn parse_element_start_close(xml: StringPoint) -> XmlProgress<Token> {
         .map_err(|_| SpecificError::ExpectedElementEnd)
 }
 
-fn parse_element_self_close(xml: StringPoint) -> XmlProgress<Token> {
+fn parse_element_self_close(xml: StringPoint<'_>) -> XmlProgress<'_, Token<'_>> {
     let (xml, _) = xml.expect_space().optional(xml);
 
     xml.consume_literal("/>")
@@ -615,7 +615,7 @@ fn parse_element_self_close(xml: StringPoint) -> XmlProgress<Token> {
         .map_err(|_| SpecificError::ExpectedElementSelfClosed)
 }
 
-fn parse_element_close(xml: StringPoint) -> XmlProgress<Token> {
+fn parse_element_close(xml: StringPoint<'_>) -> XmlProgress<'_, Token<'_>> {
     let (xml, _) = try_parse!(xml.expect_literal("</"));
 
     let (xml, name) = try_parse!(Span::parse(xml, |xml| xml
@@ -673,7 +673,7 @@ fn parse_attribute_literal<'a>(xml: StringPoint<'a>, quote: &str) -> XmlProgress
     success(Token::LiteralAttributeValue(val), xml)
 }
 
-fn parse_entity_ref(xml: StringPoint) -> XmlProgress<Reference> {
+fn parse_entity_ref(xml: StringPoint<'_>) -> XmlProgress<'_, Reference<'_>> {
     let (xml, _) = try_parse!(xml
         .consume_literal("&")
         .map_err(|_| SpecificError::ExpectedNamedReference));
@@ -685,7 +685,7 @@ fn parse_entity_ref(xml: StringPoint) -> XmlProgress<Reference> {
     success(Entity(name), xml)
 }
 
-fn parse_decimal_char_ref(xml: StringPoint) -> XmlProgress<Reference> {
+fn parse_decimal_char_ref(xml: StringPoint<'_>) -> XmlProgress<'_, Reference<'_>> {
     let (xml, _) = try_parse!(xml
         .consume_literal("&#")
         .map_err(|_| SpecificError::ExpectedDecimalReference));
@@ -697,7 +697,7 @@ fn parse_decimal_char_ref(xml: StringPoint) -> XmlProgress<Reference> {
     success(DecimalChar(dec), xml)
 }
 
-fn parse_hex_char_ref(xml: StringPoint) -> XmlProgress<Reference> {
+fn parse_hex_char_ref(xml: StringPoint<'_>) -> XmlProgress<'_, Reference<'_>> {
     let (xml, _) = try_parse!(xml
         .consume_literal("&#x")
         .map_err(|_| SpecificError::ExpectedHexReference));
@@ -727,11 +727,11 @@ fn parse_attribute_reference<'a>(
     success(Token::ReferenceAttributeValue(val), xml)
 }
 
-fn parse_char_data<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token> {
+fn parse_char_data<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'_>> {
     xml.consume_char_data().map(Token::CharData)
 }
 
-fn parse_cdata<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token> {
+fn parse_cdata<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'_>> {
     let (xml, _) = try_parse!(xml.expect_literal("<![CDATA["));
     let (xml, text) = try_parse!(xml.consume_cdata());
     let (xml, _) = try_parse!(xml.expect_literal("]]>"));
@@ -1137,7 +1137,7 @@ impl From<Span<SpecificError>> for Error {
 }
 
 impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "XML parsing error at {}: {:?}",
@@ -1177,7 +1177,7 @@ pub fn parse(xml: &str) -> Result<super::Package, Error> {
 
 type DomBuilderResult<T> = Result<T, Span<SpecificError>>;
 
-fn decode_reference<F>(ref_data: Reference, cb: F) -> DomBuilderResult<()>
+fn decode_reference<F>(ref_data: Reference<'_>, cb: F) -> DomBuilderResult<()>
 where
     F: FnOnce(&str),
 {
@@ -1226,7 +1226,7 @@ struct AttributeValueBuilder {
 }
 
 impl AttributeValueBuilder {
-    fn convert(values: &[AttributeValue]) -> DomBuilderResult<String> {
+    fn convert(values: &[AttributeValue<'_>]) -> DomBuilderResult<String> {
         let mut builder = AttributeValueBuilder::new();
         builder.ingest(values)?;
         Ok(builder.implode())
@@ -1238,7 +1238,7 @@ impl AttributeValueBuilder {
         }
     }
 
-    fn ingest(&mut self, values: &[AttributeValue]) -> DomBuilderResult<()> {
+    fn ingest(&mut self, values: &[AttributeValue<'_>]) -> DomBuilderResult<()> {
         use self::AttributeValue::*;
 
         for value in values.iter() {
@@ -1290,7 +1290,10 @@ impl<'a> DeferredAttributes<'a> {
             .into_iter()
             .partition(|attr| attr.name.value.local_part == "xmlns");
 
-        fn sort_by_name(a: &DeferredAttribute, b: &DeferredAttribute) -> ::std::cmp::Ordering {
+        fn sort_by_name(
+            a: &DeferredAttribute<'_>,
+            b: &DeferredAttribute<'_>,
+        ) -> ::std::cmp::Ordering {
             a.name.value.cmp(&b.name.value)
         }
 
@@ -1353,7 +1356,7 @@ mod test {
     use crate::{dom, Package, QName};
 
     macro_rules! assert_qname_eq(
-        ($l:expr, $r:expr) => (assert_eq!(Into::<QName>::into($l), $r.into()));
+        ($l:expr, $r:expr) => (assert_eq!(Into::<QName<'_>>::into($l), $r.into()));
     );
 
     fn full_parse(xml: &str) -> Result<Package, Error> {

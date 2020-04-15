@@ -5,7 +5,7 @@ use std::{fmt, hash};
 
 use super::{raw, QName};
 
-type SiblingFn<T> = unsafe fn(&raw::Connections, T) -> raw::SiblingIter;
+type SiblingFn<T> = unsafe fn(&raw::Connections, T) -> raw::SiblingIter<'_>;
 
 /// An XML document
 #[derive(Copy, Clone)]
@@ -120,8 +120,8 @@ impl<'d> PartialEq for Document<'d> {
 }
 
 impl<'d> fmt::Debug for Document<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Document {{ {:?} }}", self as *const Document)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Document {{ {:?} }}", self as *const Document<'_>)
     }
 }
 
@@ -220,7 +220,7 @@ impl<'d> Root<'d> {
 }
 
 impl<'d> fmt::Debug for Root<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Root")
     }
 }
@@ -456,7 +456,7 @@ impl<'d> Element<'d> {
         self.document.connections.remove_attribute(self.node, name);
     }
 
-    pub fn set_text(&self, text: &str) -> Text {
+    pub fn set_text(&self, text: &str) -> Text<'_> {
         let text = self.document.create_text(text);
         self.clear_children();
         self.append_child(text);
@@ -465,7 +465,7 @@ impl<'d> Element<'d> {
 }
 
 impl<'d> fmt::Debug for Element<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Element {{ name: {:?} }}", self.name())
     }
 }
@@ -509,7 +509,7 @@ impl<'d> Attribute<'d> {
 }
 
 impl<'d> fmt::Debug for Attribute<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "Attribute {{ name: {:?}, value: {:?} }}",
@@ -553,7 +553,7 @@ impl<'d> Text<'d> {
 }
 
 impl<'d> fmt::Debug for Text<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Text {{ text: {:?} }}", self.text())
     }
 }
@@ -594,7 +594,7 @@ impl<'d> Comment<'d> {
 }
 
 impl<'d> fmt::Debug for Comment<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Comment {{ text: {:?} }}", self.text())
     }
 }
@@ -654,7 +654,7 @@ impl<'d> ProcessingInstruction<'d> {
 }
 
 impl<'d> fmt::Debug for ProcessingInstruction<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "ProcessingInstruction {{ target: {:?}, value: {:?} }}",
@@ -801,7 +801,7 @@ mod test {
     };
 
     macro_rules! assert_qname_eq(
-        ($l:expr, $r:expr) => (assert_eq!(Into::<QName>::into($l), $r.into()));
+        ($l:expr, $r:expr) => (assert_eq!(Into::<QName<'_>>::into($l), $r.into()));
     );
 
     #[test]

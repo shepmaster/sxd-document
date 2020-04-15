@@ -1,7 +1,5 @@
 #![cfg_attr(test, allow(dead_code))]
 
-extern crate sxd_document;
-
 use std::{
     cmp::min,
     env,
