@@ -35,13 +35,11 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
-        continue-on-error: true # Currently not clean
 
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: -- -D warnings
-        continue-on-error: true # Currently not clean
 
   secondary:
     runs-on: ubuntu-latest
