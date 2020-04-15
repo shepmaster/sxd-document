@@ -22,19 +22,24 @@
 //! - Single vs double quotes
 //! - Fixed ordering of attributes
 
-use std::borrow::ToOwned;
-use std::io::{self,Write};
-use std::slice;
+use std::{
+    borrow::ToOwned,
+    io::{self, Write},
+    slice,
+};
 
 use self::Content::*;
 
-use super::QName;
-use super::str_ext::{SplitKeepingDelimiterExt,SplitType};
+use super::{
+    str_ext::{SplitKeepingDelimiterExt, SplitType},
+    QName,
+};
 
-
-use super::dom;
-use super::dom::{ChildOfElement,ChildOfRoot};
-use super::lazy_hash_map::LazyHashMap;
+use super::{
+    dom,
+    dom::{ChildOfElement, ChildOfRoot},
+    lazy_hash_map::LazyHashMap,
+};
 
 trait WriteStr: Write {
     fn write_str(&mut self, s: &str) -> io::Result<()> {
@@ -78,7 +83,7 @@ impl<'d> PrefixScope<'d> {
     }
 
     fn namespace_uri_for(&self, prefix: &str) -> Option<&'d str> {
-        self.prefix_to_ns.get(prefix).map(|&ns| ns)
+        self.prefix_to_ns.get(prefix).cloned()
     }
 
     fn prefix_for(&self, namespace_uri: &str) -> Option<&str> {
@@ -125,18 +130,26 @@ impl<'d> PrefixMapping<'d> {
     }
 
     fn active_default_namespace_uri(&self) -> Option<&'d str> {
-        self.scopes.iter().rev().filter_map(|s| s.default_namespace_uri).next()
+        self.scopes
+            .iter()
+            .rev()
+            .filter_map(|s| s.default_namespace_uri)
+            .next()
     }
 
     fn active_namespace_uri_for_prefix(&self, prefix: &str) -> Option<&'d str> {
-        self.scopes.iter().rev().filter_map(|s| s.namespace_uri_for(prefix)).next()
+        self.scopes
+            .iter()
+            .rev()
+            .filter_map(|s| s.namespace_uri_for(prefix))
+            .next()
     }
 
     fn default_namespace_uri_in_current_scope(&self) -> Option<&'d str> {
         self.scopes.last().unwrap().default_namespace_uri
     }
 
-    fn prefixes_in_current_scope(&self) -> slice::Iter<(String, &'d str)> {
+    fn prefixes_in_current_scope(&self) -> slice::Iter<'_, (String, &'d str)> {
         self.scopes.last().unwrap().defined_prefixes.iter()
     }
 
@@ -226,7 +239,7 @@ impl<'d> PrefixMapping<'d> {
             let prefix = format!("autons{}", self.generated_prefix_count);
             self.generated_prefix_count += 1;
 
-            if ! current_scope.has_prefix(&prefix) {
+            if !current_scope.has_prefix(&prefix) {
                 current_scope.add_mapping(&prefix, namespace_uri);
                 current_scope.define_prefix(prefix, namespace_uri);
                 break;
@@ -234,12 +247,12 @@ impl<'d> PrefixMapping<'d> {
         }
     }
 
-    fn namespace_type<'a>(&'a self,
-                          preferred_prefix: Option<&'a str>,
-                          namespace_uri: &str,
-                          ignore_default: bool)
-                          -> NamespaceType<'a>
-    {
+    fn namespace_type<'a>(
+        &'a self,
+        preferred_prefix: Option<&'a str>,
+        namespace_uri: &str,
+        ignore_default: bool,
+    ) -> NamespaceType<'a> {
         if !ignore_default && Some(namespace_uri) == self.active_default_namespace_uri() {
             return NamespaceType::Default;
         }
@@ -324,22 +337,25 @@ impl Writer {
     }
 
     fn quote_char(&self) -> &'static str {
-        match self.single_quotes {
-            true => "'",
-            false => "\"",
+        if self.single_quotes {
+            "'"
+        } else {
+            "\""
         }
     }
 }
 
 impl Writer {
-    fn format_qname<'d, W: ?Sized>(&self,
-                                   q: QName<'d>,
-                                   mapping: &mut PrefixMapping<'d>,
-                                   preferred_prefix: Option<&str>,
-                                   ignore_default: bool,
-                                   writer: &mut W)
-                                   -> io::Result<()>
-        where W: Write
+    fn format_qname<'d, W: ?Sized>(
+        &self,
+        q: QName<'d>,
+        mapping: &mut PrefixMapping<'d>,
+        preferred_prefix: Option<&str>,
+        ignore_default: bool,
+        writer: &mut W,
+    ) -> io::Result<()>
+    where
+        W: Write,
     {
         // Can something without a namespace be prefixed? No, because
         // defining a prefix requires a non-empty URI
@@ -347,86 +363,97 @@ impl Writer {
             match mapping.namespace_type(preferred_prefix, namespace_uri, ignore_default) {
                 NamespaceType::Default => {
                     // No need to do anything
-                },
+                }
                 NamespaceType::Prefix(prefix) => {
-                    try!(writer.write_str(prefix));
-                    try!(writer.write_str(":"));
-                },
+                    writer.write_str(prefix)?;
+                    writer.write_str(":")?;
+                }
                 NamespaceType::Unknown => {
                     panic!("No namespace prefix available for {}", namespace_uri);
-                },
+                }
             }
         }
         writer.write_str(q.local_part)
     }
 
     fn format_attribute_value<W: ?Sized>(&self, value: &str, writer: &mut W) -> io::Result<()>
-        where W: Write
+    where
+        W: Write,
     {
-        for item in value.split_keeping_delimiter(|c| c == '<' || c == '>' || c == '&' || c == '\'' || c == '"') {
+        for item in value
+            .split_keeping_delimiter(|c| c == '<' || c == '>' || c == '&' || c == '\'' || c == '"')
+        {
             match item {
-                SplitType::Match(t)        => try!(writer.write_str(t)),
-                SplitType::Delimiter("<")  => try!(writer.write_str("&lt;")),
-                SplitType::Delimiter(">")  => try!(writer.write_str("&gt;")),
-                SplitType::Delimiter("&")  => try!(writer.write_str("&amp;")),
-                SplitType::Delimiter("'")  => try!(writer.write_str("&apos;")),
-                SplitType::Delimiter("\"") => try!(writer.write_str("&quot;")),
-                SplitType::Delimiter(..)   => unreachable!(),
+                SplitType::Match(t) => writer.write_str(t)?,
+                SplitType::Delimiter("<") => writer.write_str("&lt;")?,
+                SplitType::Delimiter(">") => writer.write_str("&gt;")?,
+                SplitType::Delimiter("&") => writer.write_str("&amp;")?,
+                SplitType::Delimiter("'") => writer.write_str("&apos;")?,
+                SplitType::Delimiter("\"") => writer.write_str("&quot;")?,
+                SplitType::Delimiter(..) => unreachable!(),
             }
         }
         Ok(())
     }
 
-    fn format_element<'d, W: ?Sized>(&self,
-                                     element: dom::Element<'d>,
-                                     todo: &mut Vec<Content<'d>>,
-                                     mapping: &mut PrefixMapping<'d>,
-                                     writer: &mut W)
-                                     -> io::Result<()>
-        where W: Write
+    fn format_element<'d, W: ?Sized>(
+        &self,
+        element: dom::Element<'d>,
+        todo: &mut Vec<Content<'d>>,
+        mapping: &mut PrefixMapping<'d>,
+        writer: &mut W,
+    ) -> io::Result<()>
+    where
+        W: Write,
     {
         let attrs = element.attributes();
 
         mapping.populate_scope(&element, &attrs);
 
-        try!(writer.write_str("<"));
-        try!(self.format_qname(element.name(), mapping, element.preferred_prefix(), false, writer));
+        writer.write_str("<")?;
+        self.format_qname(
+            element.name(),
+            mapping,
+            element.preferred_prefix(),
+            false,
+            writer,
+        )?;
 
         for attr in &attrs {
-            try!(writer.write_str(" "));
-            try!(self.format_qname(attr.name(), mapping, attr.preferred_prefix(), true, writer));
-            try!(write!(writer, "="));
-            try!(write!(writer, "{}", self.quote_char()));
-            try!(self.format_attribute_value(attr.value(), writer));
-            try!(write!(writer, "{}", self.quote_char()));
+            writer.write_str(" ")?;
+            self.format_qname(attr.name(), mapping, attr.preferred_prefix(), true, writer)?;
+            write!(writer, "=")?;
+            write!(writer, "{}", self.quote_char())?;
+            self.format_attribute_value(attr.value(), writer)?;
+            write!(writer, "{}", self.quote_char())?;
         }
 
         if let Some(ns_uri) = mapping.default_namespace_uri_in_current_scope() {
-            try!(writer.write_str(" xmlns='"));
-            try!(writer.write_str(ns_uri));
-            try!(writer.write_str("'"));
+            writer.write_str(" xmlns='")?;
+            writer.write_str(ns_uri)?;
+            writer.write_str("'")?;
         }
 
         for &(ref prefix, ref ns_uri) in mapping.prefixes_in_current_scope() {
-            try!(writer.write_str(" xmlns:"));
-            try!(writer.write_str(prefix));
-            try!(write!(writer, "='{}'", ns_uri));
+            writer.write_str(" xmlns:")?;
+            writer.write_str(prefix)?;
+            write!(writer, "='{}'", ns_uri)?;
         }
 
         let mut children = element.children();
         if children.is_empty() {
-            try!(writer.write_str("/>"));
+            writer.write_str("/>")?;
             mapping.pop_scope();
             Ok(())
         } else {
-            try!(writer.write_str(">"));
+            writer.write_str(">")?;
 
             todo.push(ElementEnd(element));
             children.reverse();
             let x = children.into_iter().map(|c| match c {
-                ChildOfElement::Element(element)         => Element(element),
-                ChildOfElement::Text(t)                  => Text(t),
-                ChildOfElement::Comment(c)               => Comment(c),
+                ChildOfElement::Element(element) => Element(element),
+                ChildOfElement::Text(t) => Text(t),
+                ChildOfElement::Comment(c) => Comment(c),
                 ChildOfElement::ProcessingInstruction(p) => ProcessingInstruction(p),
             });
             todo.extend(x);
@@ -435,112 +462,150 @@ impl Writer {
         }
     }
 
-    fn format_element_end<'d, W: ?Sized>(&self,
-                                         element: dom::Element<'d>,
-                                         mapping: &mut PrefixMapping<'d>,
-                                         writer: &mut W)
-                                         -> io::Result<()>
-        where W: Write
+    fn format_element_end<'d, W: ?Sized>(
+        &self,
+        element: dom::Element<'d>,
+        mapping: &mut PrefixMapping<'d>,
+        writer: &mut W,
+    ) -> io::Result<()>
+    where
+        W: Write,
     {
-        try!(writer.write_str("</"));
-        try!(self.format_qname(element.name(), mapping, element.preferred_prefix(), false, writer));
+        writer.write_str("</")?;
+        self.format_qname(
+            element.name(),
+            mapping,
+            element.preferred_prefix(),
+            false,
+            writer,
+        )?;
         writer.write_str(">")
     }
 
-    fn format_text<W: ?Sized>(&self, text: dom::Text, writer: &mut W) -> io::Result<()>
-        where W: Write
+    fn format_text<W: ?Sized>(&self, text: dom::Text<'_>, writer: &mut W) -> io::Result<()>
+    where
+        W: Write,
     {
-        for item in text.text().split_keeping_delimiter(|c| c == '<' || c == '>' || c == '&') {
+        for item in text
+            .text()
+            .split_keeping_delimiter(|c| c == '<' || c == '>' || c == '&')
+        {
             match item {
-                SplitType::Match(t)       => try!(writer.write_str(t)),
-                SplitType::Delimiter("<") => try!(writer.write_str("&lt;")),
-                SplitType::Delimiter(">") => try!(writer.write_str("&gt;")),
-                SplitType::Delimiter("&") => try!(writer.write_str("&amp;")),
-                SplitType::Delimiter(..)  => unreachable!(),
+                SplitType::Match(t) => writer.write_str(t)?,
+                SplitType::Delimiter("<") => writer.write_str("&lt;")?,
+                SplitType::Delimiter(">") => writer.write_str("&gt;")?,
+                SplitType::Delimiter("&") => writer.write_str("&amp;")?,
+                SplitType::Delimiter(..) => unreachable!(),
             }
         }
         Ok(())
     }
 
-    fn format_comment<W: ?Sized>(&self, comment: dom::Comment, writer: &mut W) -> io::Result<()>
-        where W: Write
+    fn format_comment<W: ?Sized>(&self, comment: dom::Comment<'_>, writer: &mut W) -> io::Result<()>
+    where
+        W: Write,
     {
         write!(writer, "<!--{}-->", comment.text())
     }
 
-    fn format_processing_instruction<W: ?Sized>(&self, pi: dom::ProcessingInstruction, writer: &mut W)
-                                                -> io::Result<()>
-        where W: Write
+    fn format_processing_instruction<W: ?Sized>(
+        &self,
+        pi: dom::ProcessingInstruction<'_>,
+        writer: &mut W,
+    ) -> io::Result<()>
+    where
+        W: Write,
     {
         match pi.value() {
-            None    => write!(writer, "<?{}?>", pi.target()),
+            None => write!(writer, "<?{}?>", pi.target()),
             Some(v) => write!(writer, "<?{} {}?>", pi.target(), v),
         }
     }
 
-    fn format_one<'d, W: ?Sized>(&self,
-                                 content: Content<'d>,
-                                 todo: &mut Vec<Content<'d>>,
-                                 mapping: &mut PrefixMapping<'d>,
-                                 writer: &mut W)
-                                 -> io::Result<()>
-        where W: Write
+    fn format_one<'d, W: ?Sized>(
+        &self,
+        content: Content<'d>,
+        todo: &mut Vec<Content<'d>>,
+        mapping: &mut PrefixMapping<'d>,
+        writer: &mut W,
+    ) -> io::Result<()>
+    where
+        W: Write,
     {
         match content {
             Element(e) => {
                 mapping.push_scope();
                 self.format_element(e, todo, mapping, writer)
-            },
+            }
             ElementEnd(e) => {
                 let r = self.format_element_end(e, mapping, writer);
                 mapping.pop_scope();
                 r
-            },
+            }
             Text(t) => self.format_text(t, writer),
             Comment(c) => self.format_comment(c, writer),
             ProcessingInstruction(p) => self.format_processing_instruction(p, writer),
         }
     }
 
-    fn format_body<W: ?Sized>(&self, element: dom::Element, writer: &mut W) -> io::Result<()>
-        where W: Write
+    fn format_body<W: ?Sized>(&self, element: dom::Element<'_>, writer: &mut W) -> io::Result<()>
+    where
+        W: Write,
     {
         let mut todo = vec![Element(element)];
         let mut mapping = PrefixMapping::new();
 
-        while ! todo.is_empty() {
-            try!(self.format_one(todo.pop().unwrap(), &mut todo, &mut mapping, writer));
+        while !todo.is_empty() {
+            self.format_one(todo.pop().unwrap(), &mut todo, &mut mapping, writer)?;
         }
 
         Ok(())
     }
 
-    fn format_declaration<'d, W: ?Sized>(&self, writer: &mut W) -> io::Result<()>
-        where W: Write
+    fn format_declaration<W: ?Sized>(&self, writer: &mut W) -> io::Result<()>
+    where
+        W: Write,
     {
-        try!(write!(writer, "<?xml version={}1.0{}", self.quote_char(), self.quote_char()));
+        write!(
+            writer,
+            "<?xml version={}1.0{}",
+            self.quote_char(),
+            self.quote_char()
+        )?;
 
         if self.write_encoding {
-            try!(write!(writer, " encoding={}UTF-8{}", self.quote_char(), self.quote_char()));
+            write!(
+                writer,
+                " encoding={}UTF-8{}",
+                self.quote_char(),
+                self.quote_char()
+            )?;
         }
 
-        try!(write!(writer, "?>"));
+        write!(writer, "?>")?;
 
         Ok(())
     }
 
     /// Formats a document into a Write
-    pub fn format_document<'d, W: ?Sized>(&self, doc: &'d dom::Document<'d>, writer: &mut W) -> io::Result<()>
-        where W: Write
+    pub fn format_document<'d, W: ?Sized>(
+        &self,
+        doc: &'d dom::Document<'d>,
+        writer: &mut W,
+    ) -> io::Result<()>
+    where
+        W: Write,
     {
-        try!(self.format_declaration(writer));
+        self.format_declaration(writer)?;
 
         for child in doc.root().children().into_iter() {
-            try!(match child {
+            match child {
                 ChildOfRoot::Element(e) => self.format_body(e, writer),
                 ChildOfRoot::Comment(c) => self.format_comment(c, writer),
-                ChildOfRoot::ProcessingInstruction(p) => self.format_processing_instruction(p, writer),
-            })
+                ChildOfRoot::ProcessingInstruction(p) => {
+                    self.format_processing_instruction(p, writer)
+                }
+            }?
         }
 
         Ok(())
@@ -549,22 +614,24 @@ impl Writer {
 
 /// Formats a document into a `Write` using the default `Writer`
 pub fn format_document<'d, W: ?Sized>(doc: &'d dom::Document<'d>, writer: &mut W) -> io::Result<()>
-    where W: Write
+where
+    W: Write,
 {
     Writer::default().format_document(doc, writer)
 }
 
 #[cfg(test)]
 mod test {
-    use super::super::Package;
-    use super::super::dom;
-    use super::Writer;
+    use super::{
+        super::{dom, Package},
+        Writer,
+    };
 
     fn format_xml<'d>(doc: &'d dom::Document<'d>) -> String {
         format_xml_writer(Writer::default(), doc)
     }
 
-    fn format_xml_writer<'d>(writer: Writer, doc: &'d dom::Document) -> String {
+    fn format_xml_writer(writer: Writer, doc: &dom::Document<'_>) -> String {
         let mut w = Vec::new();
         writer.format_document(doc, &mut w).expect("Not formatted");
         String::from_utf8(w).expect("Not a string")
@@ -589,7 +656,10 @@ mod test {
         d.root().append_child(e);
 
         let xml = format_xml(&d);
-        assert_eq!(xml, "<?xml version='1.0'?><autons0:local-part xmlns:autons0='namespace'/>");
+        assert_eq!(
+            xml,
+            "<?xml version='1.0'?><autons0:local-part xmlns:autons0='namespace'/>"
+        );
     }
 
     #[test]
@@ -613,7 +683,10 @@ mod test {
         d.root().append_child(e);
 
         let xml = format_xml(&d);
-        assert_eq!(xml, "<?xml version='1.0'?><prefix:local-part xmlns:prefix='namespace'/>");
+        assert_eq!(
+            xml,
+            "<?xml version='1.0'?><prefix:local-part xmlns:prefix='namespace'/>"
+        );
     }
 
     #[test]
@@ -640,7 +713,6 @@ mod test {
         assert_eq!(xml, r#"<?xml version="1.0"?><hello a="b"/>"#);
     }
 
-
     #[test]
     fn attribute_with_namespace() {
         let p = Package::new();
@@ -650,7 +722,10 @@ mod test {
         d.root().append_child(e);
 
         let xml = format_xml(&d);
-        assert_eq!(xml, "<?xml version='1.0'?><hello autons0:a='b' xmlns:autons0='namespace'/>");
+        assert_eq!(
+            xml,
+            "<?xml version='1.0'?><hello autons0:a='b' xmlns:autons0='namespace'/>"
+        );
     }
 
     #[test]
@@ -663,7 +738,10 @@ mod test {
         d.root().append_child(e);
 
         let xml = format_xml(&d);
-        assert_eq!(xml, "<?xml version='1.0'?><hello p:a='b' xmlns:p='namespace'/>");
+        assert_eq!(
+            xml,
+            "<?xml version='1.0'?><hello p:a='b' xmlns:p='namespace'/>"
+        );
     }
 
     #[test]
@@ -677,7 +755,10 @@ mod test {
         d.root().append_child(e);
 
         let xml = format_xml(&d);
-        assert_eq!(xml, "<?xml version='1.0'?><hello p:a='b' xmlns='namespace' xmlns:p='namespace'/>");
+        assert_eq!(
+            xml,
+            "<?xml version='1.0'?><hello p:a='b' xmlns='namespace' xmlns:p='namespace'/>"
+        );
     }
 
     #[test]
@@ -725,7 +806,10 @@ mod test {
         d.root().append_child(e);
 
         let xml = format_xml(&d);
-        assert_eq!(xml, "<?xml version='1.0'?><hello name='&apos;1 &lt; 2&apos; &amp; &quot;4 &gt; 3&quot;'/>");
+        assert_eq!(
+            xml,
+            "<?xml version='1.0'?><hello name='&apos;1 &lt; 2&apos; &amp; &quot;4 &gt; 3&quot;'/>"
+        );
     }
 
     #[test]
@@ -800,7 +884,10 @@ mod test {
         d.root().append_child(hello);
 
         let xml = format_xml(&d);
-        assert_eq!(xml, "<?xml version='1.0'?><p:hello xmlns:p='outer'><p:world xmlns:p='inner'/></p:hello>");
+        assert_eq!(
+            xml,
+            "<?xml version='1.0'?><p:hello xmlns:p='outer'><p:world xmlns:p='inner'/></p:hello>"
+        );
     }
 
     #[test]
@@ -813,7 +900,10 @@ mod test {
         d.root().append_child(hello);
 
         let xml = format_xml(&d);
-        assert_eq!(xml, "<?xml version='1.0'?><hello>A fine day to you!</hello>");
+        assert_eq!(
+            xml,
+            "<?xml version='1.0'?><hello>A fine day to you!</hello>"
+        );
     }
 
     #[test]
@@ -826,7 +916,10 @@ mod test {
         d.root().append_child(hello);
 
         let xml = format_xml(&d);
-        assert_eq!(xml, "<?xml version='1.0'?><escaped>1 &lt; 3 &amp; 4 &gt; 2</escaped>");
+        assert_eq!(
+            xml,
+            "<?xml version='1.0'?><escaped>1 &lt; 3 &amp; 4 &gt; 2</escaped>"
+        );
     }
 
     #[test]
@@ -839,7 +932,10 @@ mod test {
         d.root().append_child(hello);
 
         let xml = format_xml(&d);
-        assert_eq!(xml, "<?xml version='1.0'?><hello><!-- Fill this in --></hello>");
+        assert_eq!(
+            xml,
+            "<?xml version='1.0'?><hello><!-- Fill this in --></hello>"
+        );
     }
 
     #[test]
@@ -865,7 +961,10 @@ mod test {
         d.root().append_child(hello);
 
         let xml = format_xml(&d);
-        assert_eq!(xml, "<?xml version='1.0'?><hello><?display screen?></hello>");
+        assert_eq!(
+            xml,
+            "<?xml version='1.0'?><hello><?display screen?></hello>"
+        );
     }
 
     #[test]
@@ -908,9 +1007,12 @@ mod test {
         let e = d.create_element("hello");
         d.root().append_child(e);
 
-        let xml = format_xml_writer(Writer::new()
-                                    .set_write_encoding(true)
-                                    .set_single_quotes(false), &d);
+        let xml = format_xml_writer(
+            Writer::new()
+                .set_write_encoding(true)
+                .set_single_quotes(false),
+            &d,
+        );
         assert_eq!(xml, r#"<?xml version="1.0" encoding="UTF-8"?><hello/>"#);
     }
 }

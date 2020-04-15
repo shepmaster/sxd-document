@@ -1,29 +1,33 @@
-use std::collections::HashMap;
-use std::collections::hash_map;
-use std::hash::Hash;
-use std::borrow::Borrow;
+use std::{
+    borrow::Borrow,
+    collections::{hash_map, HashMap},
+    hash::Hash,
+};
 
 pub struct LazyHashMap<K, V> {
     map: Option<HashMap<K, V>>,
 }
 
 impl<K, V> LazyHashMap<K, V>
-    where K: ::std::hash::Hash + Eq
+where
+    K: ::std::hash::Hash + Eq,
 {
     pub fn new() -> LazyHashMap<K, V> {
         LazyHashMap { map: None }
     }
 
     pub fn contains_key<Q: ?Sized>(&self, key: &Q) -> bool
-        where K: Borrow<Q>,
-              Q: Hash + Eq
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq,
     {
         self.map.as_ref().map_or(false, |m| m.contains_key(key))
     }
 
     pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
-        where K: Borrow<Q>,
-              Q: Hash + Eq
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq,
     {
         self.map.as_ref().and_then(|m| m.get(key))
     }
@@ -34,17 +38,15 @@ impl<K, V> LazyHashMap<K, V>
             None => Some(HashMap::new()),
         };
 
-        self.map.as_mut().and_then(|m| {
-            m.insert(key, val)
-        })
+        self.map.as_mut().and_then(|m| m.insert(key, val))
     }
 
-    pub fn iter(&self) -> Iter<K, V> {
+    pub fn iter(&self) -> Iter<'_, K, V> {
         Iter(self.map.as_ref().map(|m| m.iter()))
     }
 }
 
-pub struct Iter<'a, K: 'a, V: 'a>(Option<hash_map::Iter<'a, K, V>>);
+pub struct Iter<'a, K, V>(Option<hash_map::Iter<'a, K, V>>);
 
 impl<'a, K: 'a, V: 'a> Iterator for Iter<'a, K, V> {
     type Item = (&'a K, &'a V);

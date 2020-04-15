@@ -48,36 +48,35 @@
 //!
 //! Try to leverage the type system as much as possible.
 
+#![deny(rust_2018_idioms)]
 #![cfg_attr(feature = "unstable", feature(pattern))]
 #![cfg_attr(feature = "unstable", feature(test))]
-
-extern crate typed_arena;
 
 #[macro_use]
 extern crate peresil;
 
 use std::fmt;
 
-mod str_ext;
 mod lazy_hash_map;
-mod string_pool;
 mod raw;
 mod str;
+mod str_ext;
+mod string_pool;
 
-#[doc(hidden)]
-pub mod thindom;
 pub mod dom;
 pub mod parser;
+#[doc(hidden)]
+pub mod thindom;
 pub mod writer;
 
-pub use str::XmlChar;
+pub use crate::str::XmlChar;
 
-static XML_NS_PREFIX: &'static str = "xml";
-static XML_NS_URI:    &'static str = "http://www.w3.org/XML/1998/namespace";
+static XML_NS_PREFIX: &str = "xml";
+static XML_NS_URI: &str = "http://www.w3.org/XML/1998/namespace";
 
 /// A prefixed name. This represents what is found in the string form
 /// of an XML document, and does not apply any namespace mapping.
-#[derive(Debug,Copy,Clone,PartialEq,Eq,PartialOrd,Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PrefixedName<'a> {
     prefix: Option<&'a str>,
     local_part: &'a str,
@@ -85,26 +84,27 @@ pub struct PrefixedName<'a> {
 
 impl<'a> PrefixedName<'a> {
     /// Create a `PrefixedName` without a prefix
-    pub fn new(local_part: &str) -> PrefixedName {
+    pub fn new(local_part: &str) -> PrefixedName<'_> {
         PrefixedName::with_prefix(None, local_part)
     }
 
     /// Create a `PrefixedName` without an optional prefix
     pub fn with_prefix(prefix: Option<&'a str>, local_part: &'a str) -> PrefixedName<'a> {
-        PrefixedName {
-            prefix: prefix,
-            local_part: local_part,
-        }
+        PrefixedName { prefix, local_part }
     }
 
-    pub fn prefix(&self) -> Option<&str> { self.prefix }
-    pub fn local_part(&self) -> &str { self.local_part }
+    pub fn prefix(&self) -> Option<&str> {
+        self.prefix
+    }
+    pub fn local_part(&self) -> &str {
+        self.local_part
+    }
 }
 
 /// A namespace-qualified name. This represents the name of an element
 /// or attribute *after* the prefix has been mapped to a specific
 /// namespace.
-#[derive(Debug,Copy,Clone,PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QName<'s> {
     namespace_uri: Option<&'s str>,
     local_part: &'s str,
@@ -119,24 +119,34 @@ impl<'s> QName<'s> {
     /// Create a `QName` with an optional namespace
     pub fn with_namespace_uri(namespace_uri: Option<&'s str>, local_part: &'s str) -> QName<'s> {
         QName {
-            namespace_uri: namespace_uri,
-            local_part: local_part,
+            namespace_uri,
+            local_part,
         }
     }
 
-    pub fn namespace_uri(&self) -> Option<&'s str> { self.namespace_uri }
-    pub fn local_part(&self) -> &'s str { self.local_part }
+    pub fn namespace_uri(&self) -> Option<&'s str> {
+        self.namespace_uri
+    }
+    pub fn local_part(&self) -> &'s str {
+        self.local_part
+    }
 }
 
 impl<'s> From<(&'s str, &'s str)> for QName<'s> {
     fn from(v: (&'s str, &'s str)) -> QName<'s> {
-        QName { namespace_uri: Some(v.0), local_part: v.1 }
+        QName {
+            namespace_uri: Some(v.0),
+            local_part: v.1,
+        }
     }
 }
 
 impl<'s> From<&'s str> for QName<'s> {
     fn from(v: &'s str) -> QName<'s> {
-        QName { namespace_uri: None, local_part: v }
+        QName {
+            namespace_uri: None,
+            local_part: v,
+        }
     }
 }
 
@@ -149,8 +159,8 @@ pub struct Package {
     connections: raw::Connections,
 }
 
-impl Package {
-    pub fn new() -> Package {
+impl Default for Package {
+    fn default() -> Package {
         let s = raw::Storage::new();
         let root = s.create_root();
         Package {
@@ -158,13 +168,19 @@ impl Package {
             connections: raw::Connections::new(root),
         }
     }
+}
 
-    pub fn as_document(&self) -> dom::Document {
+impl Package {
+    pub fn new() -> Package {
+        Self::default()
+    }
+
+    pub fn as_document(&self) -> dom::Document<'_> {
         dom::Document::new(&self.storage, &self.connections)
     }
 
     #[doc(hidden)]
-    pub fn as_thin_document(&self) -> (thindom::Storage, thindom::Connections) {
+    pub fn as_thin_document(&self) -> (thindom::Storage<'_>, thindom::Connections<'_>) {
         let s = thindom::Storage::new(&self.storage);
         let c = thindom::Connections::new(&self.connections);
         (s, c)
@@ -178,7 +194,7 @@ impl PartialEq for Package {
 }
 
 impl fmt::Debug for Package {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Package")
     }
 }

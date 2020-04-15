@@ -1,28 +1,26 @@
-use std::marker::PhantomData;
-use std::{fmt,hash,slice};
+use std::{fmt, hash, marker::PhantomData, slice};
 
-use super::QName;
-use super::raw;
+use super::{raw, QName};
 
 pub struct Storage<'d> {
     storage: &'d raw::Storage,
 }
 
 impl<'d> Storage<'d> {
-    pub fn new(storage: &raw::Storage) -> Storage {
-        Storage {
-            storage: storage,
-        }
+    pub fn new(storage: &raw::Storage) -> Storage<'_> {
+        Storage { storage }
     }
 
     pub fn create_element<'n, N>(&'d self, name: N) -> Element<'d>
-        where N: Into<QName<'n>>
+    where
+        N: Into<QName<'n>>,
     {
         Element::wrap(self.storage.create_element(name))
     }
 
     pub fn create_attribute<'n, N>(&'d self, name: N, value: &str) -> Attribute<'d>
-        where N: Into<QName<'n>>
+    where
+        N: Into<QName<'n>>,
     {
         Attribute::wrap(self.storage.create_attribute(name, value))
     }
@@ -35,30 +33,45 @@ impl<'d> Storage<'d> {
         Comment::wrap(self.storage.create_comment(text))
     }
 
-    pub fn create_processing_instruction(&'d self, target: &str, value: Option<&str>) -> ProcessingInstruction<'d> {
+    pub fn create_processing_instruction(
+        &'d self,
+        target: &str,
+        value: Option<&str>,
+    ) -> ProcessingInstruction<'d> {
         ProcessingInstruction::wrap(self.storage.create_processing_instruction(target, value))
     }
 
-    pub fn element_set_name<'n, N>(&self, element: &Element, name: N)
-        where N: Into<QName<'n>>
+    pub fn element_set_name<'n, N>(&self, element: Element<'_>, name: N)
+    where
+        N: Into<QName<'n>>,
     {
         self.storage.element_set_name(element.node, name)
     }
 
-    pub fn text_set_text(&self, text: &Text, new_text: &str) {
+    pub fn text_set_text(&self, text: Text<'_>, new_text: &str) {
         self.storage.text_set_text(text.node, new_text)
     }
 
-    pub fn comment_set_text(&self, comment: &Comment, new_text: &str) {
+    pub fn comment_set_text(&self, comment: Comment<'_>, new_text: &str) {
         self.storage.comment_set_text(comment.node, new_text)
     }
 
-    pub fn processing_instruction_set_target(&self, pi: &ProcessingInstruction, new_target: &str) {
-        self.storage.processing_instruction_set_target(pi.node, new_target)
+    pub fn processing_instruction_set_target(
+        &self,
+        pi: ProcessingInstruction<'_>,
+        new_target: &str,
+    ) {
+        self.storage
+            .processing_instruction_set_target(pi.node, new_target)
     }
 
-    pub fn processing_instruction_set_value(&self, pi: &ProcessingInstruction, new_value: Option<&str>) {
-        self.storage.processing_instruction_set_value(pi.node, new_value)
+    pub fn processing_instruction_set_value(
+        &self,
+        pi: ProcessingInstruction<'_>,
+        new_value: Option<&str>,
+    ) {
+        self.storage
+            .processing_instruction_set_value(pi.node, new_value)
     }
 }
 
@@ -67,10 +80,8 @@ pub struct Connections<'d> {
 }
 
 impl<'d> Connections<'d> {
-    pub fn new(connections: &raw::Connections) -> Connections {
-        Connections {
-            connections: connections,
-        }
+    pub fn new(connections: &raw::Connections) -> Connections<'_> {
+        Connections { connections }
     }
 
     pub fn root(&self) -> Root<'d> {
@@ -78,101 +89,161 @@ impl<'d> Connections<'d> {
     }
 
     pub fn element_parent(&self, child: Element<'d>) -> Option<ParentOfChild<'d>> {
-        self.connections.element_parent(child.node).map(|n| {
-            ParentOfChild::wrap(n)
-        })
+        self.connections
+            .element_parent(child.node)
+            .map(ParentOfChild::wrap)
     }
 
     pub fn text_parent(&self, child: Text<'d>) -> Option<Element<'d>> {
-        self.connections.text_parent(child.node).map(|n| {
-            Element::wrap(n)
-        })
+        self.connections.text_parent(child.node).map(Element::wrap)
     }
 
     pub fn comment_parent(&self, child: Comment<'d>) -> Option<ParentOfChild<'d>> {
-        self.connections.comment_parent(child.node).map(|n| {
-            ParentOfChild::wrap(n)
-        })
+        self.connections
+            .comment_parent(child.node)
+            .map(ParentOfChild::wrap)
     }
 
-    pub fn processing_instruction_parent(&self, child: ProcessingInstruction<'d>) -> Option<ParentOfChild<'d>> {
-        self.connections.processing_instruction_parent(child.node).map(|n| {
-            ParentOfChild::wrap(n)
-        })
+    pub fn processing_instruction_parent(
+        &self,
+        child: ProcessingInstruction<'d>,
+    ) -> Option<ParentOfChild<'d>> {
+        self.connections
+            .processing_instruction_parent(child.node)
+            .map(ParentOfChild::wrap)
     }
 
     pub fn append_root_child<C>(&mut self, child: C)
-        where C: Into<ChildOfRoot<'d>>
+    where
+        C: Into<ChildOfRoot<'d>>,
     {
         let child = child.into();
         self.connections.append_root_child(child.as_raw())
     }
 
     pub fn append_element_child<C>(&mut self, parent: Element<'d>, child: C)
-        where C: Into<ChildOfElement<'d>>
+    where
+        C: Into<ChildOfElement<'d>>,
     {
         let child = child.into();
-        self.connections.append_element_child(parent.node, child.as_raw())
+        self.connections
+            .append_element_child(parent.node, child.as_raw())
     }
 
-    pub fn root_children(&self) -> RootChildren {
+    pub fn root_children(&self) -> RootChildren<'_> {
         // This is safe because we disallow mutation while this borrow is active.
-        unsafe { RootChildren { iter: self.connections.root_children().iter() } }
+        unsafe {
+            RootChildren {
+                iter: self.connections.root_children().iter(),
+            }
+        }
     }
 
-    pub fn element_children(&self, parent: Element) -> ElementChildren {
+    pub fn element_children(&self, parent: Element<'_>) -> ElementChildren<'_> {
         // This is safe because we disallow mutation while this borrow is active.
-        unsafe { ElementChildren { iter: self.connections.element_children(parent.node).iter() } }
+        unsafe {
+            ElementChildren {
+                iter: self.connections.element_children(parent.node).iter(),
+            }
+        }
     }
 
-    pub fn element_preceding_siblings(&self, element: Element) -> Siblings {
+    pub fn element_preceding_siblings(&self, element: Element<'_>) -> Siblings<'_> {
         // This is safe because we disallow mutation while this borrow is active.
-        unsafe { Siblings { iter: self.connections.element_preceding_siblings(element.node) } }
+        unsafe {
+            Siblings {
+                iter: self.connections.element_preceding_siblings(element.node),
+            }
+        }
     }
 
-    pub fn element_following_siblings(&self, element: Element) -> Siblings {
+    pub fn element_following_siblings(&self, element: Element<'_>) -> Siblings<'_> {
         // This is safe because we disallow mutation while this borrow is active.
-        unsafe { Siblings { iter: self.connections.element_following_siblings(element.node) } }
+        unsafe {
+            Siblings {
+                iter: self.connections.element_following_siblings(element.node),
+            }
+        }
     }
 
-    pub fn text_preceding_siblings(&self, text: Text) -> Siblings {
+    pub fn text_preceding_siblings(&self, text: Text<'_>) -> Siblings<'_> {
         // This is safe because we disallow mutation while this borrow is active.
-        unsafe { Siblings { iter: self.connections.text_preceding_siblings(text.node) } }
+        unsafe {
+            Siblings {
+                iter: self.connections.text_preceding_siblings(text.node),
+            }
+        }
     }
 
-    pub fn text_following_siblings(&self, text: Text) -> Siblings {
+    pub fn text_following_siblings(&self, text: Text<'_>) -> Siblings<'_> {
         // This is safe because we disallow mutation while this borrow is active.
-        unsafe { Siblings { iter: self.connections.text_following_siblings(text.node) } }
+        unsafe {
+            Siblings {
+                iter: self.connections.text_following_siblings(text.node),
+            }
+        }
     }
 
-    pub fn comment_preceding_siblings(&self, comment: Comment) -> Siblings {
+    pub fn comment_preceding_siblings(&self, comment: Comment<'_>) -> Siblings<'_> {
         // This is safe because we disallow mutation while this borrow is active.
-        unsafe { Siblings { iter: self.connections.comment_preceding_siblings(comment.node) } }
+        unsafe {
+            Siblings {
+                iter: self.connections.comment_preceding_siblings(comment.node),
+            }
+        }
     }
 
-    pub fn comment_following_siblings(&self, comment: Comment) -> Siblings {
+    pub fn comment_following_siblings(&self, comment: Comment<'_>) -> Siblings<'_> {
         // This is safe because we disallow mutation while this borrow is active.
-        unsafe { Siblings { iter: self.connections.comment_following_siblings(comment.node) } }
+        unsafe {
+            Siblings {
+                iter: self.connections.comment_following_siblings(comment.node),
+            }
+        }
     }
 
-    pub fn processing_instruction_preceding_siblings(&self, pi: ProcessingInstruction) -> Siblings {
+    pub fn processing_instruction_preceding_siblings(
+        &self,
+        pi: ProcessingInstruction<'_>,
+    ) -> Siblings<'_> {
         // This is safe because we disallow mutation while this borrow is active.
-        unsafe { Siblings { iter: self.connections.processing_instruction_preceding_siblings(pi.node) } }
+        unsafe {
+            Siblings {
+                iter: self
+                    .connections
+                    .processing_instruction_preceding_siblings(pi.node),
+            }
+        }
     }
 
-    pub fn processing_instruction_following_siblings(&self, pi: ProcessingInstruction) -> Siblings {
+    pub fn processing_instruction_following_siblings(
+        &self,
+        pi: ProcessingInstruction<'_>,
+    ) -> Siblings<'_> {
         // This is safe because we disallow mutation while this borrow is active.
-        unsafe { Siblings { iter: self.connections.processing_instruction_following_siblings(pi.node) } }
+        unsafe {
+            Siblings {
+                iter: self
+                    .connections
+                    .processing_instruction_following_siblings(pi.node),
+            }
+        }
     }
 
     pub fn attribute_parent(&self, attribute: Attribute<'d>) -> Option<Element<'d>> {
-        self.connections.attribute_parent(attribute.node).map(Element::wrap)
+        self.connections
+            .attribute_parent(attribute.node)
+            .map(Element::wrap)
     }
 
     pub fn attributes(&self, parent: Element<'d>) -> Attributes<'d> {
         // This is safe because we disallow mutation while this borrow is active
         // TODO: Test that
-        unsafe { Attributes { iter: self.connections.attributes(parent.node).iter() } }
+        unsafe {
+            Attributes {
+                iter: self.connections.attributes(parent.node).iter(),
+            }
+        }
     }
 
     pub fn set_attribute(&mut self, parent: Element<'d>, attribute: Attribute<'d>) {
@@ -276,7 +347,7 @@ macro_rules! node(
 node!(Root, raw::Root);
 
 impl<'d> fmt::Debug for Root<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Root")
     }
 }
@@ -284,11 +355,13 @@ impl<'d> fmt::Debug for Root<'d> {
 node!(Element, raw::Element);
 
 impl<'d> Element<'d> {
-    pub fn name(&self) -> QName<'d> { self.node().name() }
+    pub fn name(self) -> QName<'d> {
+        self.node().name()
+    }
 }
 
 impl<'d> fmt::Debug for Element<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Element {{ name: {:?} }}", self.name())
     }
 }
@@ -296,24 +369,35 @@ impl<'d> fmt::Debug for Element<'d> {
 node!(Attribute, raw::Attribute);
 
 impl<'d> Attribute<'d> {
-    pub fn name(&self)  -> QName { self.node().name() }
-    pub fn value(&self) -> &str { self.node().value() }
+    pub fn name(&self) -> QName<'_> {
+        self.node().name()
+    }
+    pub fn value(&self) -> &str {
+        self.node().value()
+    }
 }
 
 impl<'d> fmt::Debug for Attribute<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Attribute {{ name: {:?}, value: {:?} }}", self.name(), self.value())
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Attribute {{ name: {:?}, value: {:?} }}",
+            self.name(),
+            self.value()
+        )
     }
 }
 
 node!(Text, raw::Text);
 
 impl<'d> Text<'d> {
-    pub fn text(&self) -> &str { self.node().text() }
+    pub fn text(&self) -> &str {
+        self.node().text()
+    }
 }
 
 impl<'d> fmt::Debug for Text<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Text {{ text: {:?} }}", self.text())
     }
 }
@@ -321,11 +405,13 @@ impl<'d> fmt::Debug for Text<'d> {
 node!(Comment, raw::Comment);
 
 impl<'d> Comment<'d> {
-    pub fn text(&self) -> &str { self.node().text() }
+    pub fn text(&self) -> &str {
+        self.node().text()
+    }
 }
 
 impl<'d> fmt::Debug for Comment<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Comment {{ text: {:?} }}", self.text())
     }
 }
@@ -333,13 +419,22 @@ impl<'d> fmt::Debug for Comment<'d> {
 node!(ProcessingInstruction, raw::ProcessingInstruction);
 
 impl<'d> ProcessingInstruction<'d> {
-    pub fn target(&self) -> &str { self.node().target() }
-    pub fn value(&self) -> Option<&str> { self.node().value() }
+    pub fn target(self) -> &'d str {
+        self.node().target()
+    }
+    pub fn value(self) -> Option<&'d str> {
+        self.node().value()
+    }
 }
 
 impl<'d> fmt::Debug for ProcessingInstruction<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ProcessingInstruction {{ target: {:?}, value: {:?} }}", self.target(), self.value())
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ProcessingInstruction {{ target: {:?}, value: {:?} }}",
+            self.target(),
+            self.value()
+        )
     }
 }
 
@@ -354,7 +449,7 @@ macro_rules! unpack(
     )
 );
 
-#[derive(Debug,Copy,Clone,PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ChildOfRoot<'d> {
     Element(Element<'d>),
     Comment(Comment<'d>),
@@ -364,26 +459,35 @@ pub enum ChildOfRoot<'d> {
 impl<'d> ChildOfRoot<'d> {
     unpack!(ChildOfRoot, element, Element, Element);
     unpack!(ChildOfRoot, comment, Comment, Comment);
-    unpack!(ChildOfRoot, processing_instruction, ProcessingInstruction, ProcessingInstruction);
+    unpack!(
+        ChildOfRoot,
+        processing_instruction,
+        ProcessingInstruction,
+        ProcessingInstruction
+    );
 
     pub fn wrap(node: raw::ChildOfRoot) -> ChildOfRoot<'d> {
         match node {
-            raw::ChildOfRoot::Element(n)               => ChildOfRoot::Element(Element::wrap(n)),
-            raw::ChildOfRoot::Comment(n)               => ChildOfRoot::Comment(Comment::wrap(n)),
-            raw::ChildOfRoot::ProcessingInstruction(n) => ChildOfRoot::ProcessingInstruction(ProcessingInstruction::wrap(n)),
+            raw::ChildOfRoot::Element(n) => ChildOfRoot::Element(Element::wrap(n)),
+            raw::ChildOfRoot::Comment(n) => ChildOfRoot::Comment(Comment::wrap(n)),
+            raw::ChildOfRoot::ProcessingInstruction(n) => {
+                ChildOfRoot::ProcessingInstruction(ProcessingInstruction::wrap(n))
+            }
         }
     }
 
     pub fn as_raw(&self) -> raw::ChildOfRoot {
         match *self {
-            ChildOfRoot::Element(n)               => raw::ChildOfRoot::Element(n.node),
-            ChildOfRoot::Comment(n)               => raw::ChildOfRoot::Comment(n.node),
-            ChildOfRoot::ProcessingInstruction(n) => raw::ChildOfRoot::ProcessingInstruction(n.node),
+            ChildOfRoot::Element(n) => raw::ChildOfRoot::Element(n.node),
+            ChildOfRoot::Comment(n) => raw::ChildOfRoot::Comment(n.node),
+            ChildOfRoot::ProcessingInstruction(n) => {
+                raw::ChildOfRoot::ProcessingInstruction(n.node)
+            }
         }
     }
 }
 
-#[derive(Debug,Copy,Clone,PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ChildOfElement<'d> {
     Element(Element<'d>),
     Text(Text<'d>),
@@ -395,28 +499,37 @@ impl<'d> ChildOfElement<'d> {
     unpack!(ChildOfElement, element, Element, Element);
     unpack!(ChildOfElement, text, Text, Text);
     unpack!(ChildOfElement, comment, Comment, Comment);
-    unpack!(ChildOfElement, processing_instruction, ProcessingInstruction, ProcessingInstruction);
+    unpack!(
+        ChildOfElement,
+        processing_instruction,
+        ProcessingInstruction,
+        ProcessingInstruction
+    );
 
     pub fn wrap(node: raw::ChildOfElement) -> ChildOfElement<'d> {
         match node {
-            raw::ChildOfElement::Element(n)               => ChildOfElement::Element(Element::wrap(n)),
-            raw::ChildOfElement::Text(n)                  => ChildOfElement::Text(Text::wrap(n)),
-            raw::ChildOfElement::Comment(n)               => ChildOfElement::Comment(Comment::wrap(n)),
-            raw::ChildOfElement::ProcessingInstruction(n) => ChildOfElement::ProcessingInstruction(ProcessingInstruction::wrap(n)),
+            raw::ChildOfElement::Element(n) => ChildOfElement::Element(Element::wrap(n)),
+            raw::ChildOfElement::Text(n) => ChildOfElement::Text(Text::wrap(n)),
+            raw::ChildOfElement::Comment(n) => ChildOfElement::Comment(Comment::wrap(n)),
+            raw::ChildOfElement::ProcessingInstruction(n) => {
+                ChildOfElement::ProcessingInstruction(ProcessingInstruction::wrap(n))
+            }
         }
     }
 
     pub fn as_raw(&self) -> raw::ChildOfElement {
         match *self {
-            ChildOfElement::Element(n)               => raw::ChildOfElement::Element(n.node),
-            ChildOfElement::Text(n)                  => raw::ChildOfElement::Text(n.node),
-            ChildOfElement::Comment(n)               => raw::ChildOfElement::Comment(n.node),
-            ChildOfElement::ProcessingInstruction(n) => raw::ChildOfElement::ProcessingInstruction(n.node),
+            ChildOfElement::Element(n) => raw::ChildOfElement::Element(n.node),
+            ChildOfElement::Text(n) => raw::ChildOfElement::Text(n.node),
+            ChildOfElement::Comment(n) => raw::ChildOfElement::Comment(n.node),
+            ChildOfElement::ProcessingInstruction(n) => {
+                raw::ChildOfElement::ProcessingInstruction(n.node)
+            }
         }
     }
 }
 
-#[derive(Debug,Copy,Clone,PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ParentOfChild<'d> {
     Root(Root<'d>),
     Element(Element<'d>),
@@ -466,8 +579,8 @@ conversion_trait!(
 impl<'d> Into<ChildOfElement<'d>> for ChildOfRoot<'d> {
     fn into(self) -> ChildOfElement<'d> {
         match self {
-            ChildOfRoot::Element(n)               => ChildOfElement::Element(n),
-            ChildOfRoot::Comment(n)               => ChildOfElement::Comment(n),
+            ChildOfRoot::Element(n) => ChildOfElement::Element(n),
+            ChildOfRoot::Comment(n) => ChildOfElement::Comment(n),
             ChildOfRoot::ProcessingInstruction(n) => ChildOfElement::ProcessingInstruction(n),
         }
     }
@@ -475,12 +588,13 @@ impl<'d> Into<ChildOfElement<'d>> for ChildOfRoot<'d> {
 
 #[cfg(test)]
 mod test {
-    use super::super::{Package,QName};
-    use super::{ChildOfRoot,ChildOfElement,ParentOfChild};
-    use super::Attribute;
+    use super::{
+        super::{Package, QName},
+        ChildOfElement, ChildOfRoot, ParentOfChild,
+    };
 
     macro_rules! assert_qname_eq(
-        ($l:expr, $r:expr) => (assert_eq!(Into::<QName>::into($l), $r.into()));
+        ($l:expr, $r:expr) => (assert_eq!(Into::<QName<'_>>::into($l), $r.into()));
     );
 
     #[test]
@@ -492,7 +606,7 @@ mod test {
 
         c.append_root_child(element);
 
-        let children: Vec<ChildOfRoot> = c.root_children().collect();
+        let children: Vec<_> = c.root_children().collect();
         assert_eq!(1, children.len());
         assert_eq!(children[0], ChildOfRoot::Element(element));
     }
@@ -508,7 +622,7 @@ mod test {
         c.append_root_child(alpha);
         c.append_root_child(beta);
 
-        let children: Vec<ChildOfRoot> = c.root_children().collect();
+        let children: Vec<_> = c.root_children().collect();
         assert_eq!(1, children.len());
         assert_eq!(children[0], ChildOfRoot::Element(beta));
     }
@@ -522,7 +636,7 @@ mod test {
 
         c.append_root_child(comment);
 
-        let children: Vec<ChildOfRoot> = c.root_children().collect();
+        let children: Vec<_> = c.root_children().collect();
         assert_eq!(1, children.len());
         assert_eq!(children[0], ChildOfRoot::Comment(comment));
     }
@@ -536,7 +650,7 @@ mod test {
 
         c.append_root_child(pi);
 
-        let children: Vec<ChildOfRoot> = c.root_children().collect();
+        let children: Vec<_> = c.root_children().collect();
         assert_eq!(1, children.len());
         assert_eq!(children[0], ChildOfRoot::ProcessingInstruction(pi));
     }
@@ -559,11 +673,11 @@ mod test {
         let (s, mut c) = package.as_thin_document();
 
         let alpha = s.create_element("alpha");
-        let beta  = s.create_element("beta");
+        let beta = s.create_element("beta");
 
         c.append_element_child(alpha, beta);
 
-        let children: Vec<ChildOfElement> = c.element_children(alpha).collect();
+        let children: Vec<_> = c.element_children(alpha).collect();
 
         assert_eq!(children[0], ChildOfElement::Element(beta));
     }
@@ -580,7 +694,7 @@ mod test {
         c.append_element_child(greek, alpha);
         c.append_element_child(greek, omega);
 
-        let children: Vec<ChildOfElement> = c.element_children(greek).collect();
+        let children: Vec<_> = c.element_children(greek).collect();
 
         assert_eq!(children[0], ChildOfElement::Element(alpha));
         assert_eq!(children[1], ChildOfElement::Element(omega));
@@ -592,7 +706,7 @@ mod test {
         let (s, mut c) = package.as_thin_document();
 
         let alpha = s.create_element("alpha");
-        let beta  = s.create_element("beta");
+        let beta = s.create_element("beta");
 
         c.append_element_child(alpha, beta);
 
@@ -638,7 +752,7 @@ mod test {
         let (s, _) = package.as_thin_document();
 
         let alpha = s.create_element("alpha");
-        s.element_set_name(&alpha, "beta");
+        s.element_set_name(alpha, "beta");
         assert_qname_eq!(alpha.name(), "beta");
     }
 
@@ -711,13 +825,13 @@ mod test {
         c.set_attribute(element, attr1);
         c.set_attribute(element, attr2);
 
-        let mut attrs: Vec<Attribute> = c.attributes(element).collect();
+        let mut attrs: Vec<_> = c.attributes(element).collect();
         attrs.sort_by(|a, b| a.name().namespace_uri().cmp(&b.name().namespace_uri()));
 
         assert_eq!(2, attrs.len());
-        assert_qname_eq!("name1",  attrs[0].name());
+        assert_qname_eq!("name1", attrs[0].name());
         assert_eq!("value1", attrs[0].value());
-        assert_qname_eq!("name2",  attrs[1].name());
+        assert_qname_eq!("name2", attrs[1].name());
         assert_eq!("value2", attrs[1].value());
     }
 
@@ -731,7 +845,7 @@ mod test {
 
         c.append_element_child(sentence, text);
 
-        let children: Vec<ChildOfElement> = c.element_children(sentence).collect();
+        let children: Vec<_> = c.element_children(sentence).collect();
 
         assert_eq!(1, children.len());
         assert_eq!(children[0], ChildOfElement::Text(text));
@@ -757,7 +871,7 @@ mod test {
 
         let text = s.create_text("Now is the winter of our discontent.");
 
-        s.text_set_text(&text, "Made glorious summer by this sun of York");
+        s.text_set_text(text, "Made glorious summer by this sun of York");
 
         assert_eq!(text.text(), "Made glorious summer by this sun of York");
     }
@@ -772,7 +886,7 @@ mod test {
 
         c.append_element_child(sentence, comment);
 
-        let children: Vec<ChildOfElement> = c.element_children(sentence).collect();
+        let children: Vec<_> = c.element_children(sentence).collect();
 
         assert_eq!(1, children.len());
         assert_eq!(children[0], ChildOfElement::Comment(comment));
@@ -788,7 +902,10 @@ mod test {
 
         c.append_element_child(sentence, comment);
 
-        assert_eq!(c.comment_parent(comment), Some(ParentOfChild::Element(sentence)));
+        assert_eq!(
+            c.comment_parent(comment),
+            Some(ParentOfChild::Element(sentence))
+        );
     }
 
     #[test]
@@ -798,7 +915,7 @@ mod test {
 
         let comment = s.create_comment("Now is the winter of our discontent.");
 
-        s.comment_set_text(&comment, "Made glorious summer by this sun of York");
+        s.comment_set_text(comment, "Made glorious summer by this sun of York");
 
         assert_eq!(comment.text(), "Made glorious summer by this sun of York");
     }
@@ -813,7 +930,7 @@ mod test {
 
         c.append_element_child(element, pi);
 
-        let children: Vec<ChildOfElement> = c.element_children(element).collect();
+        let children: Vec<_> = c.element_children(element).collect();
         assert_eq!(1, children.len());
         assert_eq!(children[0], ChildOfElement::ProcessingInstruction(pi));
     }
@@ -828,7 +945,10 @@ mod test {
 
         c.append_element_child(element, pi);
 
-        assert_eq!(c.processing_instruction_parent(pi), Some(ParentOfChild::Element(element)));
+        assert_eq!(
+            c.processing_instruction_parent(pi),
+            Some(ParentOfChild::Element(element))
+        );
     }
 
     #[test]
@@ -838,8 +958,8 @@ mod test {
 
         let pi = s.create_processing_instruction("device", None);
 
-        s.processing_instruction_set_target(&pi, "output");
-        s.processing_instruction_set_value(&pi, Some("full-screen"));
+        s.processing_instruction_set_target(pi, "output");
+        s.processing_instruction_set_value(pi, Some("full-screen"));
 
         assert_eq!(pi.target(), "output");
         assert_eq!(pi.value(), Some("full-screen"));
@@ -888,7 +1008,7 @@ mod test {
         let (s, mut c) = package.as_thin_document();
 
         let alpha = s.create_element("alpha");
-        let beta  = s.create_element("beta");
+        let beta = s.create_element("beta");
 
         for _ in c.element_children(alpha) {
             c.append_element_child(alpha, beta);
@@ -903,7 +1023,7 @@ mod test {
         let (s, mut c) = package.as_thin_document();
 
         let alpha = s.create_element("alpha");
-        let beta  = s.create_element("beta");
+        let beta = s.create_element("beta");
 
         for _ in c.element_preceding_siblings(alpha) {
             c.append_element_child(alpha, beta);

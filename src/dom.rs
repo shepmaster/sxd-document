@@ -1,15 +1,14 @@
 //! A traditional DOM tree interface for navigating and manipulating
 //! XML documents.
 
-use std::{fmt,hash};
+use std::{fmt, hash};
 
-use super::QName;
-use super::raw;
+use super::{raw, QName};
 
-type SiblingFn<T> = unsafe fn(&raw::Connections, T) -> raw::SiblingIter;
+type SiblingFn<T> = unsafe fn(&raw::Connections, T) -> raw::SiblingIter<'_>;
 
 /// An XML document
-#[derive(Copy,Clone)]
+#[derive(Copy, Clone)]
 pub struct Document<'d> {
     storage: &'d raw::Storage,
     connections: &'d raw::Connections,
@@ -37,8 +36,8 @@ impl<'d> Document<'d> {
     #[doc(hidden)]
     pub fn new(storage: &'d raw::Storage, connections: &'d raw::Connections) -> Document<'d> {
         Document {
-            storage: storage,
-            connections: connections,
+            storage,
+            connections,
         }
     }
 
@@ -53,7 +52,9 @@ impl<'d> Document<'d> {
         match node {
             raw::ChildOfRoot::Element(n) => ChildOfRoot::Element(self.wrap_element(n)),
             raw::ChildOfRoot::Comment(n) => ChildOfRoot::Comment(self.wrap_comment(n)),
-            raw::ChildOfRoot::ProcessingInstruction(n) => ChildOfRoot::ProcessingInstruction(self.wrap_pi(n)),
+            raw::ChildOfRoot::ProcessingInstruction(n) => {
+                ChildOfRoot::ProcessingInstruction(self.wrap_pi(n))
+            }
         }
     }
 
@@ -62,7 +63,9 @@ impl<'d> Document<'d> {
             raw::ChildOfElement::Element(n) => ChildOfElement::Element(self.wrap_element(n)),
             raw::ChildOfElement::Text(n) => ChildOfElement::Text(self.wrap_text(n)),
             raw::ChildOfElement::Comment(n) => ChildOfElement::Comment(self.wrap_comment(n)),
-            raw::ChildOfElement::ProcessingInstruction(n) => ChildOfElement::ProcessingInstruction(self.wrap_pi(n)),
+            raw::ChildOfElement::ProcessingInstruction(n) => {
+                ChildOfElement::ProcessingInstruction(self.wrap_pi(n))
+            }
         }
     }
 
@@ -71,7 +74,8 @@ impl<'d> Document<'d> {
     }
 
     pub fn create_element<'n, N>(self, name: N) -> Element<'d>
-        where N: Into<QName<'n>>
+    where
+        N: Into<QName<'n>>,
     {
         self.wrap_element(self.storage.create_element(name))
     }
@@ -84,7 +88,11 @@ impl<'d> Document<'d> {
         self.wrap_comment(self.storage.create_comment(text))
     }
 
-    pub fn create_processing_instruction(self, target: &str, value: Option<&str>) -> ProcessingInstruction<'d> {
+    pub fn create_processing_instruction(
+        self,
+        target: &str,
+        value: Option<&str>,
+    ) -> ProcessingInstruction<'d> {
         self.wrap_pi(self.storage.create_processing_instruction(target, value))
     }
 
@@ -92,21 +100,28 @@ impl<'d> Document<'d> {
         // This is safe because we don't allow the connection
         // information to leak outside of this method.
         unsafe {
-            f(self.connections, node).map(|n| self.wrap_child_of_element(n)).collect()
+            f(self.connections, node)
+                .map(|n| self.wrap_child_of_element(n))
+                .collect()
         }
     }
 }
 
 impl<'d> PartialEq for Document<'d> {
     fn eq(&self, other: &Document<'d>) -> bool {
-        (self.storage as *const raw::Storage, self.connections as *const raw::Connections)
-            == (other.storage as *const raw::Storage, other.connections as *const raw::Connections)
+        (
+            self.storage as *const raw::Storage,
+            self.connections as *const raw::Connections,
+        ) == (
+            other.storage as *const raw::Storage,
+            other.connections as *const raw::Connections,
+        )
     }
 }
 
 impl<'d> fmt::Debug for Document<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Document {{ {:?} }}", self as *const Document)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Document {{ {:?} }}", self as *const Document<'_>)
     }
 }
 
@@ -145,21 +160,24 @@ macro_rules! node(
 );
 
 node!(
-    Root, raw::Root,
+    Root,
+    raw::Root,
     "The logical ancestor of every other node type"
 );
 
 impl<'d> Root<'d> {
     pub fn append_child<C>(&self, child: C)
-        where C: Into<ChildOfRoot<'d>>
+    where
+        C: Into<ChildOfRoot<'d>>,
     {
         let child = child.into();
         self.document.connections.append_root_child(child.as_raw());
     }
 
     pub fn append_children<I>(&self, children: I)
-        where I: IntoIterator,
-              I::Item: Into<ChildOfRoot<'d>>,
+    where
+        I: IntoIterator,
+        I::Item: Into<ChildOfRoot<'d>>,
     {
         for c in children {
             self.append_child(c.into());
@@ -167,15 +185,17 @@ impl<'d> Root<'d> {
     }
 
     pub fn replace_children<I>(&self, children: I)
-        where I: IntoIterator,
-              I::Item: Into<ChildOfRoot<'d>>,
+    where
+        I: IntoIterator,
+        I::Item: Into<ChildOfRoot<'d>>,
     {
         self.clear_children();
         self.append_children(children);
     }
 
     pub fn remove_child<C>(&self, child: C)
-        where C: Into<ChildOfRoot<'d>>,
+    where
+        C: Into<ChildOfRoot<'d>>,
     {
         let child = child.into();
         self.document.connections.remove_root_child(child.as_raw())
@@ -189,15 +209,18 @@ impl<'d> Root<'d> {
         // This is safe because we copy of the children, and the
         // children are never deallocated.
         unsafe {
-            self.document.connections.root_children().iter().map(|n| {
-                self.document.wrap_child_of_root(*n)
-            }).collect()
+            self.document
+                .connections
+                .root_children()
+                .iter()
+                .map(|n| self.document.wrap_child_of_root(*n))
+                .collect()
         }
     }
 }
 
 impl<'d> fmt::Debug for Root<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Root")
     }
 }
@@ -209,27 +232,37 @@ pub struct Namespace<'d> {
 }
 
 impl<'d> Namespace<'d> {
-    pub fn prefix(&self) -> &'d str { self.prefix }
-    pub fn uri(&self) -> &'d str { self.uri }
+    pub fn prefix(&self) -> &'d str {
+        self.prefix
+    }
+    pub fn uri(&self) -> &'d str {
+        self.uri
+    }
 }
 
 node!(
-    Element, raw::Element,
+    Element,
+    raw::Element,
     "Elements are the workhorse of a document and may contain any type of
     node, except for the Root node"
 );
 
 impl<'d> Element<'d> {
-    pub fn name(&self) -> QName<'d> { self.node().name() }
+    pub fn name(&self) -> QName<'d> {
+        self.node().name()
+    }
 
     pub fn set_name<'n, N>(&self, name: N)
-        where N: Into<QName<'n>>
+    where
+        N: Into<QName<'n>>,
     {
         self.document.storage.element_set_name(self.node, name)
     }
 
     pub fn set_default_namespace_uri(&self, namespace_uri: Option<&str>) {
-        self.document.storage.element_set_default_namespace_uri(self.node, namespace_uri);
+        self.document
+            .storage
+            .element_set_default_namespace_uri(self.node, namespace_uri);
     }
 
     pub fn default_namespace_uri(&self) -> Option<&'d str> {
@@ -237,37 +270,49 @@ impl<'d> Element<'d> {
     }
 
     pub fn recursive_default_namespace_uri(&self) -> Option<&'d str> {
-        self.document.connections.element_default_namespace_uri(self.node)
+        self.document
+            .connections
+            .element_default_namespace_uri(self.node)
     }
 
     /// Map a prefix to a namespace URI. Any existing prefix on this
     /// element will be replaced.
     pub fn register_prefix(&self, prefix: &str, namespace_uri: &str) {
-        self.document.storage.element_register_prefix(self.node, prefix, namespace_uri);
+        self.document
+            .storage
+            .element_register_prefix(self.node, prefix, namespace_uri);
     }
 
     /// Recursively resolve the prefix to a namespace URI.
     pub fn namespace_uri_for_prefix(&self, prefix: &str) -> Option<&'d str> {
-        self.document.connections.element_namespace_uri_for_prefix(self.node, prefix)
+        self.document
+            .connections
+            .element_namespace_uri_for_prefix(self.node, prefix)
     }
 
     /// Recursively find a prefix for the namespace URI. Since
     /// multiple prefixes may map to the same URI, `preferred` can be
     /// provided to select a specific prefix, if it is valid.
-    pub fn prefix_for_namespace_uri(&self, namespace_uri: &str, preferred: Option<&str>)
-                                    -> Option<&'d str>
-    {
+    pub fn prefix_for_namespace_uri(
+        &self,
+        namespace_uri: &str,
+        preferred: Option<&str>,
+    ) -> Option<&'d str> {
         self.document.connections.element_prefix_for_namespace_uri(
-            self.node, namespace_uri, preferred
+            self.node,
+            namespace_uri,
+            preferred,
         )
     }
 
     /// Retrieve all namespaces that are in scope, recursively walking
     /// up the document tree.
     pub fn namespaces_in_scope(&self) -> Vec<Namespace<'d>> {
-        self.document.connections.element_namespaces_in_scope(self.node).map(|(prefix, uri)| {
-            Namespace { prefix: prefix, uri: uri }
-        }).collect()
+        self.document
+            .connections
+            .element_namespaces_in_scope(self.node)
+            .map(|(prefix, uri)| Namespace { prefix, uri })
+            .collect()
     }
 
     pub fn preferred_prefix(&self) -> Option<&'d str> {
@@ -275,29 +320,38 @@ impl<'d> Element<'d> {
     }
 
     pub fn set_preferred_prefix(&self, prefix: Option<&str>) {
-        self.document.storage.element_set_preferred_prefix(self.node, prefix);
+        self.document
+            .storage
+            .element_set_preferred_prefix(self.node, prefix);
     }
 
     pub fn parent(&self) -> Option<ParentOfChild<'d>> {
-        self.document.connections.element_parent(self.node).map(|n| {
-            self.document.wrap_parent_of_child(n)
-        })
+        self.document
+            .connections
+            .element_parent(self.node)
+            .map(|n| self.document.wrap_parent_of_child(n))
     }
 
     pub fn remove_from_parent(&self) {
-        self.document.connections.remove_element_from_parent(self.node);
+        self.document
+            .connections
+            .remove_element_from_parent(self.node);
     }
 
     pub fn append_child<C>(&self, child: C)
-        where C: Into<ChildOfElement<'d>>
+    where
+        C: Into<ChildOfElement<'d>>,
     {
         let child = child.into();
-        self.document.connections.append_element_child(self.node, child.as_raw());
+        self.document
+            .connections
+            .append_element_child(self.node, child.as_raw());
     }
 
     pub fn append_children<I>(&self, children: I)
-        where I: IntoIterator,
-              I::Item: Into<ChildOfElement<'d>>,
+    where
+        I: IntoIterator,
+        I::Item: Into<ChildOfElement<'d>>,
     {
         for c in children {
             self.append_child(c.into());
@@ -305,18 +359,22 @@ impl<'d> Element<'d> {
     }
 
     pub fn replace_children<I>(&self, children: I)
-        where I: IntoIterator,
-              I::Item: Into<ChildOfElement<'d>>,
+    where
+        I: IntoIterator,
+        I::Item: Into<ChildOfElement<'d>>,
     {
         self.clear_children();
         self.append_children(children);
     }
 
     pub fn remove_child<C>(&self, child: C)
-        where C: Into<ChildOfElement<'d>>,
+    where
+        C: Into<ChildOfElement<'d>>,
     {
         let child = child.into();
-        self.document.connections.remove_element_child(self.node, child.as_raw());
+        self.document
+            .connections
+            .remove_element_child(self.node, child.as_raw());
     }
 
     pub fn clear_children(&self) {
@@ -327,40 +385,51 @@ impl<'d> Element<'d> {
         // This is safe because we make a copy of the children, and
         // the children are never deallocated.
         unsafe {
-            self.document.connections.element_children(self.node).iter().map(|n| {
-                self.document.wrap_child_of_element(*n)
-            }).collect()
+            self.document
+                .connections
+                .element_children(self.node)
+                .iter()
+                .map(|n| self.document.wrap_child_of_element(*n))
+                .collect()
         }
     }
 
     pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        self.document.siblings(raw::Connections::element_preceding_siblings, self.node)
+        self.document
+            .siblings(raw::Connections::element_preceding_siblings, self.node)
     }
 
     pub fn following_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        self.document.siblings(raw::Connections::element_following_siblings, self.node)
+        self.document
+            .siblings(raw::Connections::element_following_siblings, self.node)
     }
 
     pub fn attribute<'n, N>(&self, name: N) -> Option<Attribute<'d>>
-        where N: Into<QName<'n>>
+    where
+        N: Into<QName<'n>>,
     {
-        self.document.connections.attribute(self.node, name).map(|n| {
-            self.document.wrap_attribute(n)
-        })
+        self.document
+            .connections
+            .attribute(self.node, name)
+            .map(|n| self.document.wrap_attribute(n))
     }
 
     pub fn attributes(&self) -> Vec<Attribute<'d>> {
         // This is safe because we make a copy of the children, and
         // the children are never deallocated.
         unsafe {
-            self.document.connections.attributes(self.node).iter().map(|n| {
-                self.document.wrap_attribute(*n)
-            }).collect()
+            self.document
+                .connections
+                .attributes(self.node)
+                .iter()
+                .map(|n| self.document.wrap_attribute(*n))
+                .collect()
         }
     }
 
     pub fn set_attribute_value<'n, N>(&self, name: N, value: &str) -> Attribute<'d>
-        where N: Into<QName<'n>>
+    where
+        N: Into<QName<'n>>,
     {
         let attr = self.document.storage.create_attribute(name, value);
         self.document.connections.set_attribute(self.node, attr);
@@ -368,21 +437,26 @@ impl<'d> Element<'d> {
     }
 
     pub fn attribute_value<'n, N>(&self, name: N) -> Option<&'d str>
-        where N: Into<QName<'n>>
+    where
+        N: Into<QName<'n>>,
     {
-        self.document.connections.attribute(self.node, name).map(|a| {
-            let a_r = unsafe { &*a };
-            a_r.value()
-        })
+        self.document
+            .connections
+            .attribute(self.node, name)
+            .map(|a| {
+                let a_r = unsafe { &*a };
+                a_r.value()
+            })
     }
 
     pub fn remove_attribute<'n, N>(&self, name: N)
-        where N: Into<QName<'n>>
+    where
+        N: Into<QName<'n>>,
     {
         self.document.connections.remove_attribute(self.node, name);
     }
 
-    pub fn set_text(&self, text: &str) -> Text {
+    pub fn set_text(&self, text: &str) -> Text<'_> {
         let text = self.document.create_text(text);
         self.clear_children();
         self.append_child(text);
@@ -391,61 +465,76 @@ impl<'d> Element<'d> {
 }
 
 impl<'d> fmt::Debug for Element<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Element {{ name: {:?} }}", self.name())
     }
 }
 
 node!(
-    Attribute, raw::Attribute,
+    Attribute,
+    raw::Attribute,
     "Metadata about the current element"
 );
 
 impl<'d> Attribute<'d> {
-    pub fn name(&self)  -> QName<'d> { self.node().name() }
-    pub fn value(&self) -> &'d str { self.node().value() }
+    pub fn name(&self) -> QName<'d> {
+        self.node().name()
+    }
+    pub fn value(&self) -> &'d str {
+        self.node().value()
+    }
 
     pub fn preferred_prefix(&self) -> Option<&'d str> {
         self.node().preferred_prefix()
     }
 
     pub fn set_preferred_prefix(&self, prefix: Option<&str>) {
-        self.document.storage.attribute_set_preferred_prefix(self.node, prefix);
+        self.document
+            .storage
+            .attribute_set_preferred_prefix(self.node, prefix);
     }
 
     pub fn parent(&self) -> Option<Element<'d>> {
-        self.document.connections.attribute_parent(self.node).map(|n| {
-            self.document.wrap_element(n)
-        })
+        self.document
+            .connections
+            .attribute_parent(self.node)
+            .map(|n| self.document.wrap_element(n))
     }
 
     pub fn remove_from_parent(&self) {
-        self.document.connections.remove_attribute_from_parent(self.node);
+        self.document
+            .connections
+            .remove_attribute_from_parent(self.node);
     }
 }
 
 impl<'d> fmt::Debug for Attribute<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Attribute {{ name: {:?}, value: {:?} }}", self.name(), self.value())
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Attribute {{ name: {:?}, value: {:?} }}",
+            self.name(),
+            self.value()
+        )
     }
 }
 
-node!(
-    Text, raw::Text,
-    "Textual data"
-);
+node!(Text, raw::Text, "Textual data");
 
 impl<'d> Text<'d> {
-    pub fn text(&self) -> &'d str { self.node().text() }
+    pub fn text(&self) -> &'d str {
+        self.node().text()
+    }
 
     pub fn set_text(&self, text: &str) {
         self.document.storage.text_set_text(self.node, text)
     }
 
     pub fn parent(&self) -> Option<Element<'d>> {
-        self.document.connections.text_parent(self.node).map(|n| {
-            self.document.wrap_element(n)
-        })
+        self.document
+            .connections
+            .text_parent(self.node)
+            .map(|n| self.document.wrap_element(n))
     }
 
     pub fn remove_from_parent(&self) {
@@ -453,96 +542,125 @@ impl<'d> Text<'d> {
     }
 
     pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        self.document.siblings(raw::Connections::text_preceding_siblings, self.node)
+        self.document
+            .siblings(raw::Connections::text_preceding_siblings, self.node)
     }
 
     pub fn following_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        self.document.siblings(raw::Connections::text_following_siblings, self.node)
+        self.document
+            .siblings(raw::Connections::text_following_siblings, self.node)
     }
 }
 
 impl<'d> fmt::Debug for Text<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Text {{ text: {:?} }}", self.text())
     }
 }
 
-node!(
-    Comment, raw::Comment,
-    "Information only relevant to humans"
-);
+node!(Comment, raw::Comment, "Information only relevant to humans");
 
 impl<'d> Comment<'d> {
-    pub fn text(&self) -> &'d str { self.node().text() }
+    pub fn text(&self) -> &'d str {
+        self.node().text()
+    }
 
     pub fn set_text(&self, new_text: &str) {
         self.document.storage.comment_set_text(self.node, new_text)
     }
 
     pub fn parent(&self) -> Option<ParentOfChild<'d>> {
-        self.document.connections.comment_parent(self.node).map(|n| {
-            self.document.wrap_parent_of_child(n)
-        })
+        self.document
+            .connections
+            .comment_parent(self.node)
+            .map(|n| self.document.wrap_parent_of_child(n))
     }
 
     pub fn remove_from_parent(&self) {
-        self.document.connections.remove_comment_from_parent(self.node);
+        self.document
+            .connections
+            .remove_comment_from_parent(self.node);
     }
 
     pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        self.document.siblings(raw::Connections::comment_preceding_siblings, self.node)
+        self.document
+            .siblings(raw::Connections::comment_preceding_siblings, self.node)
     }
 
     pub fn following_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        self.document.siblings(raw::Connections::comment_following_siblings, self.node)
+        self.document
+            .siblings(raw::Connections::comment_following_siblings, self.node)
     }
 }
 
 impl<'d> fmt::Debug for Comment<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Comment {{ text: {:?} }}", self.text())
     }
 }
 
 node!(
-    ProcessingInstruction, raw::ProcessingInstruction,
+    ProcessingInstruction,
+    raw::ProcessingInstruction,
     "Metadata relevant to the application, but not the XML processor or humans"
 );
 
 impl<'d> ProcessingInstruction<'d> {
-    pub fn target(&self) -> &'d str { self.node().target() }
-    pub fn value(&self) -> Option<&'d str> { self.node().value() }
+    pub fn target(&self) -> &'d str {
+        self.node().target()
+    }
+    pub fn value(&self) -> Option<&'d str> {
+        self.node().value()
+    }
 
     pub fn set_target(&self, new_target: &str) {
-        self.document.storage.processing_instruction_set_target(self.node, new_target);
+        self.document
+            .storage
+            .processing_instruction_set_target(self.node, new_target);
     }
 
     pub fn set_value(&self, new_value: Option<&str>) {
-        self.document.storage.processing_instruction_set_value(self.node, new_value);
+        self.document
+            .storage
+            .processing_instruction_set_value(self.node, new_value);
     }
 
     pub fn parent(&self) -> Option<ParentOfChild<'d>> {
-        self.document.connections.processing_instruction_parent(self.node).map(|n| {
-            self.document.wrap_parent_of_child(n)
-        })
+        self.document
+            .connections
+            .processing_instruction_parent(self.node)
+            .map(|n| self.document.wrap_parent_of_child(n))
     }
 
     pub fn remove_from_parent(&self) {
-        self.document.connections.remove_processing_instruction_from_parent(self.node);
+        self.document
+            .connections
+            .remove_processing_instruction_from_parent(self.node);
     }
 
     pub fn preceding_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        self.document.siblings(raw::Connections::processing_instruction_preceding_siblings, self.node)
+        self.document.siblings(
+            raw::Connections::processing_instruction_preceding_siblings,
+            self.node,
+        )
     }
 
     pub fn following_siblings(&self) -> Vec<ChildOfElement<'d>> {
-        self.document.siblings(raw::Connections::processing_instruction_following_siblings, self.node)
+        self.document.siblings(
+            raw::Connections::processing_instruction_following_siblings,
+            self.node,
+        )
     }
 }
 
 impl<'d> fmt::Debug for ProcessingInstruction<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ProcessingInstruction {{ target: {:?}, value: {:?} }}", self.target(), self.value())
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ProcessingInstruction {{ target: {:?}, value: {:?} }}",
+            self.target(),
+            self.value()
+        )
     }
 }
 
@@ -558,30 +676,36 @@ macro_rules! unpack(
 );
 
 /// Nodes that may occur as a child of the root node
-#[derive(Debug,Copy,Clone,PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ChildOfRoot<'d> {
     Element(Element<'d>),
     Comment(Comment<'d>),
     ProcessingInstruction(ProcessingInstruction<'d>),
 }
 
-
 impl<'d> ChildOfRoot<'d> {
     unpack!(ChildOfRoot, element, Element, Element);
     unpack!(ChildOfRoot, comment, Comment, Comment);
-    unpack!(ChildOfRoot, processing_instruction, ProcessingInstruction, ProcessingInstruction);
+    unpack!(
+        ChildOfRoot,
+        processing_instruction,
+        ProcessingInstruction,
+        ProcessingInstruction
+    );
 
     fn as_raw(&self) -> raw::ChildOfRoot {
         match *self {
             ChildOfRoot::Element(n) => raw::ChildOfRoot::Element(n.node),
             ChildOfRoot::Comment(n) => raw::ChildOfRoot::Comment(n.node),
-            ChildOfRoot::ProcessingInstruction(n) => raw::ChildOfRoot::ProcessingInstruction(n.node),
+            ChildOfRoot::ProcessingInstruction(n) => {
+                raw::ChildOfRoot::ProcessingInstruction(n.node)
+            }
         }
     }
 }
 
 /// Nodes that may occur as a child of an element node
-#[derive(Debug,Copy,Clone,PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ChildOfElement<'d> {
     Element(Element<'d>),
     Text(Text<'d>),
@@ -593,20 +717,27 @@ impl<'d> ChildOfElement<'d> {
     unpack!(ChildOfElement, element, Element, Element);
     unpack!(ChildOfElement, text, Text, Text);
     unpack!(ChildOfElement, comment, Comment, Comment);
-    unpack!(ChildOfElement, processing_instruction, ProcessingInstruction, ProcessingInstruction);
+    unpack!(
+        ChildOfElement,
+        processing_instruction,
+        ProcessingInstruction,
+        ProcessingInstruction
+    );
 
     fn as_raw(&self) -> raw::ChildOfElement {
         match *self {
             ChildOfElement::Element(n) => raw::ChildOfElement::Element(n.node),
             ChildOfElement::Text(n) => raw::ChildOfElement::Text(n.node),
             ChildOfElement::Comment(n) => raw::ChildOfElement::Comment(n.node),
-            ChildOfElement::ProcessingInstruction(n) => raw::ChildOfElement::ProcessingInstruction(n.node),
+            ChildOfElement::ProcessingInstruction(n) => {
+                raw::ChildOfElement::ProcessingInstruction(n.node)
+            }
         }
     }
 }
 
 /// Nodes that may occur as the parent of a child node
-#[derive(Debug,Copy,Clone,PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ParentOfChild<'d> {
     Root(Root<'d>),
     Element(Element<'d>),
@@ -664,11 +795,13 @@ impl<'d> From<ChildOfRoot<'d>> for ChildOfElement<'d> {
 
 #[cfg(test)]
 mod test {
-    use super::super::{Package,QName};
-    use super::{ChildOfRoot,ChildOfElement,ParentOfChild};
+    use super::{
+        super::{Package, QName},
+        ChildOfElement, ChildOfRoot, ParentOfChild,
+    };
 
     macro_rules! assert_qname_eq(
-        ($l:expr, $r:expr) => (assert_eq!(Into::<QName>::into($l), $r.into()));
+        ($l:expr, $r:expr) => (assert_eq!(Into::<QName<'_>>::into($l), $r.into()));
     );
 
     #[test]
@@ -838,7 +971,7 @@ mod test {
         let doc = package.as_document();
 
         let alpha = doc.create_element("alpha");
-        let beta  = doc.create_element("beta");
+        let beta = doc.create_element("beta");
 
         alpha.append_child(beta);
 
@@ -889,7 +1022,7 @@ mod test {
         let doc = package.as_document();
 
         let alpha = doc.create_element("alpha");
-        let beta  = doc.create_element("beta");
+        let beta = doc.create_element("beta");
         alpha.append_child(beta);
 
         alpha.remove_child(beta);
@@ -904,7 +1037,7 @@ mod test {
         let doc = package.as_document();
 
         let alpha = doc.create_element("alpha");
-        let beta  = doc.create_element("beta");
+        let beta = doc.create_element("beta");
         alpha.append_child(beta);
 
         beta.remove_from_parent();
@@ -919,7 +1052,7 @@ mod test {
         let doc = package.as_document();
 
         let alpha = doc.create_element("alpha");
-        let beta  = doc.create_element("beta");
+        let beta = doc.create_element("beta");
         alpha.append_child(beta);
 
         alpha.clear_children();
@@ -952,7 +1085,7 @@ mod test {
         let doc = package.as_document();
 
         let alpha = doc.create_element("alpha");
-        let beta  = doc.create_element("beta");
+        let beta = doc.create_element("beta");
 
         alpha.append_child(beta);
 
@@ -975,7 +1108,10 @@ mod test {
         parent.append_child(c);
         parent.append_child(d);
 
-        assert_eq!(vec![ChildOfElement::Element(a), ChildOfElement::Element(b)], c.preceding_siblings());
+        assert_eq!(
+            vec![ChildOfElement::Element(a), ChildOfElement::Element(b)],
+            c.preceding_siblings()
+        );
     }
 
     #[test]
@@ -994,7 +1130,10 @@ mod test {
         parent.append_child(c);
         parent.append_child(d);
 
-        assert_eq!(vec![ChildOfElement::Element(c), ChildOfElement::Element(d)], b.following_siblings());
+        assert_eq!(
+            vec![ChildOfElement::Element(c), ChildOfElement::Element(d)],
+            b.following_siblings()
+        );
     }
 
     #[test]
@@ -1150,9 +1289,9 @@ mod test {
         attrs.sort_by(|a, b| a.name().namespace_uri().cmp(&b.name().namespace_uri()));
 
         assert_eq!(2, attrs.len());
-        assert_qname_eq!("name1",  attrs[0].name());
+        assert_qname_eq!("name1", attrs[0].name());
         assert_eq!("value1", attrs[0].value());
-        assert_qname_eq!("name2",  attrs[1].name());
+        assert_qname_eq!("name2", attrs[1].name());
         assert_eq!("value2", attrs[1].value());
     }
 
@@ -1398,7 +1537,6 @@ mod test {
 
         assert_eq!(pi.parent(), Some(ParentOfChild::Element(element)));
     }
-
 
     #[test]
     fn processing_instruction_can_be_removed_from_parent() {

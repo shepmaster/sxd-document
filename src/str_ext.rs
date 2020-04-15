@@ -1,7 +1,7 @@
 #[cfg(feature = "unstable")]
-use std::str::pattern::{Pattern,Searcher};
+use std::str::pattern::{Pattern, Searcher};
 
-#[derive(Copy,Clone,Debug,PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum SplitType<'a> {
     Match(&'a str),
     Delimiter(&'a str),
@@ -9,7 +9,8 @@ pub enum SplitType<'a> {
 
 #[cfg(feature = "unstable")]
 pub struct SplitKeepingDelimiter<'p, P>
-    where P: Pattern<'p>
+where
+    P: Pattern<'p>,
 {
     searcher: P::Searcher,
     start: usize,
@@ -18,7 +19,8 @@ pub struct SplitKeepingDelimiter<'p, P>
 
 #[cfg(feature = "unstable")]
 impl<'p, P> Iterator for SplitKeepingDelimiter<'p, P>
-    where P: Pattern<'p>,
+where
+    P: Pattern<'p>,
 {
     type Item = SplitType<'p>;
 
@@ -45,22 +47,27 @@ impl<'p, P> Iterator for SplitKeepingDelimiter<'p, P>
                     self.saved = Some(end);
                     Some(SplitType::Match(s))
                 }
-            },
+            }
             None => {
                 let s = &self.searcher.haystack()[self.start..];
                 self.start = self.searcher.haystack().len();
                 Some(SplitType::Match(s))
-            },
+            }
         }
     }
 }
 
 #[cfg(feature = "unstable")]
 pub trait SplitKeepingDelimiterExt: ::std::ops::Index<::std::ops::RangeFull, Output = str> {
-    fn split_keeping_delimiter<P>(&self, pattern: P) -> SplitKeepingDelimiter<P>
-        where P: for <'a> Pattern<'a>
+    fn split_keeping_delimiter<P>(&self, pattern: P) -> SplitKeepingDelimiter<'_, P>
+    where
+        P: for<'a> Pattern<'a>,
     {
-        SplitKeepingDelimiter { searcher: pattern.into_searcher(&self[..]), start: 0, saved: None }
+        SplitKeepingDelimiter {
+            searcher: pattern.into_searcher(&self[..]),
+            start: 0,
+            saved: None,
+        }
     }
 }
 
@@ -74,7 +81,8 @@ pub struct SplitKeepingDelimiter<'a, F> {
 
 #[cfg(not(feature = "unstable"))]
 impl<'a, F> Iterator for SplitKeepingDelimiter<'a, F>
-    where F: Fn(char) -> bool
+where
+    F: Fn(char) -> bool,
 {
     type Item = SplitType<'a>;
 
@@ -105,22 +113,28 @@ impl<'a, F> Iterator for SplitKeepingDelimiter<'a, F>
                     self.saved = Some(end);
                     Some(SplitType::Match(s))
                 }
-            },
+            }
             None => {
                 let s = &self.haystack[self.start..];
                 self.start = self.haystack.len();
                 Some(SplitType::Match(s))
-            },
+            }
         }
     }
 }
 
 #[cfg(not(feature = "unstable"))]
 pub trait SplitKeepingDelimiterExt: ::std::ops::Index<::std::ops::RangeFull, Output = str> {
-    fn split_keeping_delimiter<F>(&self, chars: F) -> SplitKeepingDelimiter<F>
-        where F: Fn(char) -> bool
+    fn split_keeping_delimiter<F>(&self, chars: F) -> SplitKeepingDelimiter<'_, F>
+    where
+        F: Fn(char) -> bool,
     {
-        SplitKeepingDelimiter { haystack: &self[..], chars: chars, start: 0, saved: None }
+        SplitKeepingDelimiter {
+            haystack: &self[..],
+            chars,
+            start: 0,
+            saved: None,
+        }
     }
 }
 
@@ -128,14 +142,23 @@ impl SplitKeepingDelimiterExt for str {}
 
 #[cfg(test)]
 mod test {
-    use super::{SplitKeepingDelimiterExt};
+    use super::SplitKeepingDelimiterExt;
 
     #[test]
     fn split_with_delimiter() {
         use super::SplitType::*;
         let delims = |b| b == ',' || b == ';';
         let items: Vec<_> = "alpha,beta;gamma".split_keeping_delimiter(delims).collect();
-        assert_eq!(&items, &[Match("alpha"), Delimiter(","), Match("beta"), Delimiter(";"), Match("gamma")]);
+        assert_eq!(
+            &items,
+            &[
+                Match("alpha"),
+                Delimiter(","),
+                Match("beta"),
+                Delimiter(";"),
+                Match("gamma")
+            ]
+        );
     }
 
     #[test]

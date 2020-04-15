@@ -1,16 +1,16 @@
 /// Strongly borrowed from TypedArena
 /// Differs in growth strategy (non-doubling)
 /// And only for variable-sized strings
-
 use std::borrow::Borrow;
-use std::cell::{Cell,RefCell};
-use std::cmp::max;
-use std::collections::LinkedList;
-use std::collections::hash_set::HashSet;
-use std::default::Default;
-use std::ops::Deref;
-use std::slice;
-use std::{fmt,hash,mem,ptr,str};
+use std::{
+    cell::{Cell, RefCell},
+    cmp::max,
+    collections::{hash_set::HashSet, LinkedList},
+    default::Default,
+    fmt, hash, mem,
+    ops::Deref,
+    ptr, slice, str,
+};
 
 struct Chunk {
     start: *mut u8,
@@ -25,10 +25,7 @@ impl Chunk {
         // We will manually track the buffer and then drop it ourselves
         mem::forget(slab);
 
-        Chunk {
-            start: start,
-            capacity: capacity,
-        }
+        Chunk { start, capacity }
     }
 
     // Returns a pointer to the beginning of the allocated space.
@@ -40,7 +37,7 @@ impl Chunk {
     // Returns a pointer to the end of the allocated space.
     #[inline]
     fn end(&self) -> *const u8 {
-        unsafe { self.start().offset(self.capacity as isize) }
+        unsafe { self.start().add(self.capacity) }
     }
 }
 
@@ -55,7 +52,7 @@ impl Drop for Chunk {
     }
 }
 
-#[derive(Copy,Clone)]
+#[derive(Copy, Clone)]
 pub struct InternedString {
     data: *const u8,
     len: usize,
@@ -63,10 +60,7 @@ pub struct InternedString {
 
 impl InternedString {
     fn from_parts(data: *const u8, len: usize) -> InternedString {
-        InternedString {
-            data: data,
-            len: len,
-        }
+        InternedString { data, len }
     }
 
     pub fn from_str(s: &str) -> InternedString {
@@ -86,7 +80,7 @@ impl InternedString {
 }
 
 impl fmt::Debug for InternedString {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.as_slice().fmt(f)
     }
 }
@@ -107,7 +101,8 @@ impl Eq for InternedString {}
 
 impl hash::Hash for InternedString {
     fn hash<H>(&self, state: &mut H)
-        where H: hash::Hasher
+    where
+        H: hash::Hasher,
     {
         self.as_slice().hash(state)
     }
@@ -138,7 +133,7 @@ static CAPACITY: usize = 10240;
 
 impl StringPool {
     pub fn new() -> StringPool {
-        StringPool{
+        StringPool {
             start: Cell::new(ptr::null_mut()),
             end: Cell::new(ptr::null()),
             chunks: RefCell::new(LinkedList::new()),
@@ -147,7 +142,9 @@ impl StringPool {
     }
 
     pub fn intern<'s>(&'s self, s: &str) -> &'s str {
-        if s == "" { return ""; }
+        if s == "" {
+            return "";
+        }
 
         let mut index = self.index.borrow_mut();
         if let Some(interned) = index.get(s) {
@@ -191,7 +188,7 @@ impl StringPool {
             let interned_str = InternedString::from_parts(self.start.get() as *const u8, str_len);
 
             // Increase current pointer
-            self.start.set(self.start.get().offset(str_len as isize));
+            self.start.set(self.start.get().add(str_len));
 
             interned_str
         }
@@ -220,10 +217,7 @@ mod test {
 
         let interned = s.intern(input);
 
-        assert!(
-            input.as_bytes().as_ptr() !=
-            interned.as_bytes().as_ptr()
-        );
+        assert!(input.as_bytes().as_ptr() != interned.as_bytes().as_ptr());
     }
 
     #[test]
@@ -233,10 +227,7 @@ mod test {
         let interned1 = s.intern("world");
         let interned2 = s.intern("world");
 
-        assert_eq!(
-            interned1.as_bytes().as_ptr(),
-            interned2.as_bytes().as_ptr()
-        );
+        assert_eq!(interned1.as_bytes().as_ptr(), interned2.as_bytes().as_ptr());
     }
 
     #[test]
@@ -304,10 +295,7 @@ mod bench {
     fn many_unique_string(b: &mut Bencher) {
         let s = StringPool::new();
 
-        let strings: Vec<String> =
-            (0..1000)
-            .map(|i| format!("str{}str", i))
-            .collect();
+        let strings: Vec<String> = (0..1000).map(|i| format!("str{}str", i)).collect();
         b.iter(|| {
             for ss in strings.iter() {
                 s.intern(ss);
@@ -320,10 +308,7 @@ mod bench {
     fn many_repeated_string(b: &mut Bencher) {
         let s = StringPool::new();
 
-        let strings: Vec<String> =
-            (0..1000)
-            .map(|i| format!("str{}str", i % 100))
-            .collect();
+        let strings: Vec<String> = (0..1000).map(|i| format!("str{}str", i % 100)).collect();
         b.iter(|| {
             for ss in strings.iter() {
                 s.intern(ss);

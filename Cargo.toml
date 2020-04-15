@@ -12,6 +12,8 @@ documentation = "https://docs.rs/sxd-document"
 
 license = "MIT"
 
+edition = "2018"
+
 [features]
 compile_failure = []
 unstable = []
