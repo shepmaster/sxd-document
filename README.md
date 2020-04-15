@@ -2,10 +2,18 @@
 
 An XML library in Rust.
 
-[![Build Status](https://travis-ci.org/shepmaster/sxd-document.svg?branch=master)](https://travis-ci.org/shepmaster/sxd-document)
-[![Current Version](http://meritbadge.herokuapp.com/sxd-document)](https://crates.io/crates/sxd-document)
+[![crates.io][Crate Logo]][Crate]
+[![Documentation][Doc Logo]][Doc]
+[![Build Status][CI Logo]][CI]
 
-[Documentation](https://shepmaster.github.io/sxd-document/)
+[Crate]: https://crates.io/crates/sxd-document
+[Crate Logo]: https://img.shields.io/crates/v/sxd-document.svg
+
+[Doc]: https://docs.rs/sxd-document
+[Doc Logo]: https://docs.rs/sxd-document/badge.svg
+
+[CI]: https://github.com/shepmaster/sxd-document/actions?query=branch%3Amaster
+[CI Logo]: https://github.com/shepmaster/sxd-document/workflows/Continuous%20integration/badge.svg
 
 ## Overview
 
