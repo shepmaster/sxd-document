@@ -178,21 +178,21 @@ impl XmlChar for char {
 
     fn is_ncname_start_char(self) -> bool {
         match self {
-            'A'...'Z'                   |
+            'A'..='Z'                   |
             '_'                         |
-            'a'...'z'                   |
-            '\u{0000C0}'...'\u{0000D6}' |
-            '\u{0000D8}'...'\u{0000F6}' |
-            '\u{0000F8}'...'\u{0002FF}' |
-            '\u{000370}'...'\u{00037D}' |
-            '\u{00037F}'...'\u{001FFF}' |
-            '\u{00200C}'...'\u{00200D}' |
-            '\u{002070}'...'\u{00218F}' |
-            '\u{002C00}'...'\u{002FEF}' |
-            '\u{003001}'...'\u{00D7FF}' |
-            '\u{00F900}'...'\u{00FDCF}' |
-            '\u{00FDF0}'...'\u{00FFFD}' |
-            '\u{010000}'...'\u{0EFFFF}' => true,
+            'a'..='z'                   |
+            '\u{0000C0}'..='\u{0000D6}' |
+            '\u{0000D8}'..='\u{0000F6}' |
+            '\u{0000F8}'..='\u{0002FF}' |
+            '\u{000370}'..='\u{00037D}' |
+            '\u{00037F}'..='\u{001FFF}' |
+            '\u{00200C}'..='\u{00200D}' |
+            '\u{002070}'..='\u{00218F}' |
+            '\u{002C00}'..='\u{002FEF}' |
+            '\u{003001}'..='\u{00D7FF}' |
+            '\u{00F900}'..='\u{00FDCF}' |
+            '\u{00FDF0}'..='\u{00FFFD}' |
+            '\u{010000}'..='\u{0EFFFF}' => true,
             _ => false,
         }
     }
@@ -202,10 +202,10 @@ impl XmlChar for char {
         match self {
             '-'                     |
             '.'                     |
-            '0'...'9'               |
+            '0'..='9'               |
             '\u{00B7}'              |
-            '\u{0300}'...'\u{036F}' |
-            '\u{203F}'...'\u{2040}' => true,
+            '\u{0300}'..='\u{036F}' |
+            '\u{203F}'..='\u{2040}' => true,
             _ => false
         }
     }
@@ -222,33 +222,33 @@ impl XmlChar for char {
 
     fn is_decimal_char(self) -> bool {
         match self {
-            '0'...'9' => true,
+            '0'..='9' => true,
             _ => false,
         }
     }
 
     fn is_hex_char(self) -> bool {
         match self {
-            '0'...'9' |
-            'a'...'f' |
-            'A'...'F' => true,
+            '0'..='9' |
+            'a'..='f' |
+            'A'..='F' => true,
             _ => false,
         }
     }
 
     fn is_encoding_start_char(self) -> bool {
         match self {
-            'A'...'Z' |
-            'a'...'z' => true,
+            'A'..='Z' |
+            'a'..='z' => true,
             _ => false,
         }
     }
 
     fn is_encoding_rest_char(self) -> bool {
         match self {
-            'A'...'Z' |
-            'a'...'z' |
-            '0'...'9' |
+            'A'..='Z' |
+            'a'..='z' |
+            '0'..='9' |
             '.' |
             '_' |
             '-' => true,
