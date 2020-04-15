@@ -324,10 +324,7 @@ impl Writer {
     }
 
     fn quote_char(&self) -> &'static str {
-        match self.single_quotes {
-            true => "'",
-            false => "\"",
-        }
+        if self.single_quotes { "'" } else { "\"" }
     }
 }
 
