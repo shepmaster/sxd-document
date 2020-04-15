@@ -1,0 +1,123 @@
+on:
+  push:
+  schedule:
+    - cron:  '13 5 * * FRI'
+
+name: Continuous integration
+
+jobs:
+  primary:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+          components: rustfmt, clippy
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+        continue-on-error: true # Currently not clean
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -D warnings
+        continue-on-error: true # Currently not clean
+
+  secondary:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - beta
+          - nightly
+          - 1.31.0
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+
+  features:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - nightly
+        features:
+          - unstable
+          # - compile_failure # Currently not clean
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --features ${{ matrix.features }}
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --features ${{ matrix.features }}
+
+  windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
