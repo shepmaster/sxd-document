@@ -39,25 +39,25 @@ impl<'d> Storage<'d> {
         ProcessingInstruction::wrap(self.storage.create_processing_instruction(target, value))
     }
 
-    pub fn element_set_name<'n, N>(&self, element: &Element, name: N)
+    pub fn element_set_name<'n, N>(&self, element: Element, name: N)
         where N: Into<QName<'n>>
     {
         self.storage.element_set_name(element.node, name)
     }
 
-    pub fn text_set_text(&self, text: &Text, new_text: &str) {
+    pub fn text_set_text(&self, text: Text, new_text: &str) {
         self.storage.text_set_text(text.node, new_text)
     }
 
-    pub fn comment_set_text(&self, comment: &Comment, new_text: &str) {
+    pub fn comment_set_text(&self, comment: Comment, new_text: &str) {
         self.storage.comment_set_text(comment.node, new_text)
     }
 
-    pub fn processing_instruction_set_target(&self, pi: &ProcessingInstruction, new_target: &str) {
+    pub fn processing_instruction_set_target(&self, pi: ProcessingInstruction, new_target: &str) {
         self.storage.processing_instruction_set_target(pi.node, new_target)
     }
 
-    pub fn processing_instruction_set_value(&self, pi: &ProcessingInstruction, new_value: Option<&str>) {
+    pub fn processing_instruction_set_value(&self, pi: ProcessingInstruction, new_value: Option<&str>) {
         self.storage.processing_instruction_set_value(pi.node, new_value)
     }
 }
@@ -284,7 +284,7 @@ impl<'d> fmt::Debug for Root<'d> {
 node!(Element, raw::Element);
 
 impl<'d> Element<'d> {
-    pub fn name(&self) -> QName<'d> { self.node().name() }
+    pub fn name(self) -> QName<'d> { self.node().name() }
 }
 
 impl<'d> fmt::Debug for Element<'d> {
@@ -333,8 +333,8 @@ impl<'d> fmt::Debug for Comment<'d> {
 node!(ProcessingInstruction, raw::ProcessingInstruction);
 
 impl<'d> ProcessingInstruction<'d> {
-    pub fn target(&self) -> &str { self.node().target() }
-    pub fn value(&self) -> Option<&str> { self.node().value() }
+    pub fn target(self) -> &'d str { self.node().target() }
+    pub fn value(self) -> Option<&'d str> { self.node().value() }
 }
 
 impl<'d> fmt::Debug for ProcessingInstruction<'d> {
@@ -638,7 +638,7 @@ mod test {
         let (s, _) = package.as_thin_document();
 
         let alpha = s.create_element("alpha");
-        s.element_set_name(&alpha, "beta");
+        s.element_set_name(alpha, "beta");
         assert_qname_eq!(alpha.name(), "beta");
     }
 
@@ -757,7 +757,7 @@ mod test {
 
         let text = s.create_text("Now is the winter of our discontent.");
 
-        s.text_set_text(&text, "Made glorious summer by this sun of York");
+        s.text_set_text(text, "Made glorious summer by this sun of York");
 
         assert_eq!(text.text(), "Made glorious summer by this sun of York");
     }
@@ -798,7 +798,7 @@ mod test {
 
         let comment = s.create_comment("Now is the winter of our discontent.");
 
-        s.comment_set_text(&comment, "Made glorious summer by this sun of York");
+        s.comment_set_text(comment, "Made glorious summer by this sun of York");
 
         assert_eq!(comment.text(), "Made glorious summer by this sun of York");
     }
@@ -838,8 +838,8 @@ mod test {
 
         let pi = s.create_processing_instruction("device", None);
 
-        s.processing_instruction_set_target(&pi, "output");
-        s.processing_instruction_set_value(&pi, Some("full-screen"));
+        s.processing_instruction_set_target(pi, "output");
+        s.processing_instruction_set_value(pi, Some("full-screen"));
 
         assert_eq!(pi.target(), "output");
         assert_eq!(pi.value(), Some("full-screen"));
