@@ -2,14 +2,15 @@
 /// Differs in growth strategy (non-doubling)
 /// And only for variable-sized strings
 use std::borrow::Borrow;
-use std::cell::{Cell, RefCell};
-use std::cmp::max;
-use std::collections::hash_set::HashSet;
-use std::collections::LinkedList;
-use std::default::Default;
-use std::ops::Deref;
-use std::slice;
-use std::{fmt, hash, mem, ptr, str};
+use std::{
+    cell::{Cell, RefCell},
+    cmp::max,
+    collections::{hash_set::HashSet, LinkedList},
+    default::Default,
+    fmt, hash, mem,
+    ops::Deref,
+    ptr, slice, str,
+};
 
 struct Chunk {
     start: *mut u8,

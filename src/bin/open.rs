@@ -2,10 +2,12 @@
 
 extern crate sxd_document;
 
-use std::cmp::min;
-use std::env;
-use std::fs::File;
-use std::io::{self, Read, Write};
+use std::{
+    cmp::min,
+    env,
+    fs::File,
+    io::{self, Read, Write},
+};
 
 use sxd_document::parser;
 

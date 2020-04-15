@@ -1,9 +1,7 @@
-use super::lazy_hash_map::LazyHashMap;
-use super::QName;
+use super::{lazy_hash_map::LazyHashMap, QName};
 
-use std::marker::PhantomData;
-use std::slice;
 use crate::string_pool::{InternedString, StringPool};
+use std::{marker::PhantomData, slice};
 use typed_arena::Arena;
 
 struct InternedQName {

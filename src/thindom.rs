@@ -1,8 +1,6 @@
-use std::marker::PhantomData;
-use std::{fmt, hash, slice};
+use std::{fmt, hash, marker::PhantomData, slice};
 
-use super::raw;
-use super::QName;
+use super::{raw, QName};
 
 pub struct Storage<'d> {
     storage: &'d raw::Storage,
@@ -582,9 +580,10 @@ impl<'d> Into<ChildOfElement<'d>> for ChildOfRoot<'d> {
 
 #[cfg(test)]
 mod test {
-    use super::super::{Package, QName};
-    use super::Attribute;
-    use super::{ChildOfElement, ChildOfRoot, ParentOfChild};
+    use super::{
+        super::{Package, QName},
+        Attribute, ChildOfElement, ChildOfRoot, ParentOfChild,
+    };
 
     macro_rules! assert_qname_eq(
         ($l:expr, $r:expr) => (assert_eq!(Into::<QName>::into($l), $r.into()));

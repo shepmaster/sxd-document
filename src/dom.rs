@@ -3,8 +3,7 @@
 
 use std::{fmt, hash};
 
-use super::raw;
-use super::QName;
+use super::{raw, QName};
 
 type SiblingFn<T> = unsafe fn(&raw::Connections, T) -> raw::SiblingIter;
 
@@ -796,8 +795,10 @@ impl<'d> From<ChildOfRoot<'d>> for ChildOfElement<'d> {
 
 #[cfg(test)]
 mod test {
-    use super::super::{Package, QName};
-    use super::{ChildOfElement, ChildOfRoot, ParentOfChild};
+    use super::{
+        super::{Package, QName},
+        ChildOfElement, ChildOfRoot, ParentOfChild,
+    };
 
     macro_rules! assert_qname_eq(
         ($l:expr, $r:expr) => (assert_eq!(Into::<QName>::into($l), $r.into()));

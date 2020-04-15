@@ -16,18 +16,19 @@
 
 #[allow(unused, deprecated)] // rust-lang/rust#46510
 use std::ascii::AsciiExt;
-use std::collections::{BTreeSet, HashMap};
-use std::mem::replace;
-use std::ops::Deref;
-use std::{char, error, fmt, iter};
+use std::{
+    char,
+    collections::{BTreeSet, HashMap},
+    error, fmt, iter,
+    mem::replace,
+    ops::Deref,
+};
 
 use peresil::{self, ParseMaster, Recoverable, StringPoint};
 
 use self::Reference::*;
 
-use super::dom;
-use super::str::XmlStr;
-use super::{PrefixedName, QName};
+use super::{dom, str::XmlStr, PrefixedName, QName};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum SpecificError {
@@ -113,8 +114,7 @@ impl Recoverable for SpecificError {
 impl fmt::Display for SpecificError {
     #[allow(deprecated)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use self::error::Error;
-        use self::SpecificError::*;
+        use self::{error::Error, SpecificError::*};
 
         match *self {
             Expected(s) | ExpectedClosingQuote(s) | ExpectedOpeningQuote(s) => {

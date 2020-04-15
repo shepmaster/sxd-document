@@ -22,18 +22,24 @@
 //! - Single vs double quotes
 //! - Fixed ordering of attributes
 
-use std::borrow::ToOwned;
-use std::io::{self, Write};
-use std::slice;
+use std::{
+    borrow::ToOwned,
+    io::{self, Write},
+    slice,
+};
 
 use self::Content::*;
 
-use super::str_ext::{SplitKeepingDelimiterExt, SplitType};
-use super::QName;
+use super::{
+    str_ext::{SplitKeepingDelimiterExt, SplitType},
+    QName,
+};
 
-use super::dom;
-use super::dom::{ChildOfElement, ChildOfRoot};
-use super::lazy_hash_map::LazyHashMap;
+use super::{
+    dom,
+    dom::{ChildOfElement, ChildOfRoot},
+    lazy_hash_map::LazyHashMap,
+};
 
 trait WriteStr: Write {
     fn write_str(&mut self, s: &str) -> io::Result<()> {
@@ -616,9 +622,10 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::super::dom;
-    use super::super::Package;
-    use super::Writer;
+    use super::{
+        super::{dom, Package},
+        Writer,
+    };
 
     fn format_xml<'d>(doc: &'d dom::Document<'d>) -> String {
         format_xml_writer(Writer::default(), doc)

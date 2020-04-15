@@ -1,7 +1,8 @@
-use std::borrow::Borrow;
-use std::collections::hash_map;
-use std::collections::HashMap;
-use std::hash::Hash;
+use std::{
+    borrow::Borrow,
+    collections::{hash_map, HashMap},
+    hash::Hash,
+};
 
 pub struct LazyHashMap<K, V> {
     map: Option<HashMap<K, V>>,
