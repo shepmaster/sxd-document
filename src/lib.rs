@@ -70,7 +70,7 @@ pub mod parser;
 pub mod thindom;
 pub mod writer;
 
-pub use str::XmlChar;
+pub use crate::str::XmlChar;
 
 static XML_NS_PREFIX: &str = "xml";
 static XML_NS_URI: &str = "http://www.w3.org/XML/1998/namespace";

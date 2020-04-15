@@ -976,7 +976,7 @@ impl<'d> DomBuilder<'d> {
 
         if !self.seen_top_element {
             self.seen_top_element = true;
-            element.register_prefix(::XML_NS_PREFIX, ::XML_NS_URI);
+            element.register_prefix(crate::XML_NS_PREFIX, crate::XML_NS_URI);
         }
 
         self.append_to_either(element);
@@ -1350,7 +1350,7 @@ impl<'a> DeferredAttributes<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use {dom, Package, QName};
+    use crate::{dom, Package, QName};
 
     macro_rules! assert_qname_eq(
         ($l:expr, $r:expr) => (assert_eq!(Into::<QName>::into($l), $r.into()));
@@ -1612,7 +1612,7 @@ mod test {
         let top = top(&doc);
 
         assert_eq!(
-            top.attribute((::XML_NS_URI, "space")).unwrap().value(),
+            top.attribute((crate::XML_NS_URI, "space")).unwrap().value(),
             "preserve"
         );
 

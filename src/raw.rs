@@ -3,7 +3,7 @@ use super::QName;
 
 use std::marker::PhantomData;
 use std::slice;
-use string_pool::{InternedString, StringPool};
+use crate::string_pool::{InternedString, StringPool};
 use typed_arena::Arena;
 
 struct InternedQName {
@@ -889,7 +889,7 @@ impl Connections {
     pub fn element_namespaces_in_scope(&self, element: *mut Element) -> NamespacesInScope {
         let mut namespaces = Vec::new();
 
-        namespaces.push((::XML_NS_PREFIX, ::XML_NS_URI));
+        namespaces.push((crate::XML_NS_PREFIX, crate::XML_NS_URI));
 
         let all_namespaces = self
             .element_parents(element)
