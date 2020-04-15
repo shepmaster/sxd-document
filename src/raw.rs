@@ -690,7 +690,7 @@ impl Connections {
         element_r.attributes.iter().find(|a| {
             let a_r: &Attribute = unsafe { &***a };
             a_r.name.as_qname() == name
-        }).copied()
+        }).cloned()
     }
 
     pub fn remove_attribute<'n, N>(&self, element: *mut Element, name: N)
