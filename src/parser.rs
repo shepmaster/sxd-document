@@ -210,9 +210,9 @@ impl<T> Span<T> {
 
 #[derive(Debug,Copy,Clone)]
 enum Reference<'a> {
-    EntityReference(Span<&'a str>),
-    DecimalCharReference(Span<&'a str>),
-    HexCharReference(Span<&'a str>),
+    Entity(Span<&'a str>),
+    DecimalChar(Span<&'a str>),
+    HexChar(Span<&'a str>),
 }
 
 /// Common reusable XML parsing methods
@@ -616,7 +616,7 @@ fn parse_entity_ref(xml: StringPoint) -> XmlProgress<Reference> {
     let (xml, name) = try_parse!(Span::parse(xml, |xml| xml.consume_name().map_err(|_| SpecificError::ExpectedNamedReferenceValue)));
     let (xml, _) = try_parse!(xml.expect_literal(";"));
 
-    success(EntityReference(name), xml)
+    success(Entity(name), xml)
 }
 
 fn parse_decimal_char_ref(xml: StringPoint) -> XmlProgress<Reference> {
@@ -624,7 +624,7 @@ fn parse_decimal_char_ref(xml: StringPoint) -> XmlProgress<Reference> {
     let (xml, dec) = try_parse!(Span::parse(xml, |xml| xml.consume_decimal_chars().map_err(|_| SpecificError::ExpectedDecimalReferenceValue)));
     let (xml, _) = try_parse!(xml.expect_literal(";"));
 
-    success(DecimalCharReference(dec), xml)
+    success(DecimalChar(dec), xml)
 }
 
 fn parse_hex_char_ref(xml: StringPoint) -> XmlProgress<Reference> {
@@ -632,7 +632,7 @@ fn parse_hex_char_ref(xml: StringPoint) -> XmlProgress<Reference> {
     let (xml, hex) = try_parse!(Span::parse(xml, |xml| xml.consume_hex_chars()));
     let (xml, _) = try_parse!(xml.expect_literal(";"));
 
-    success(HexCharReference(hex), xml)
+    success(HexChar(hex), xml)
 }
 
 fn parse_reference<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> XmlProgress<'a, Reference<'a>> {
@@ -1106,7 +1106,7 @@ fn decode_reference<F>(ref_data: Reference, cb: F) -> DomBuilderResult<()>
     where F: FnOnce(&str)
 {
     match ref_data {
-        DecimalCharReference(span) => {
+        DecimalChar(span) => {
             u32::from_str_radix(span.value, 10).ok()
                 .and_then(char::from_u32)
                 .ok_or(span.map(|_| SpecificError::InvalidDecimalReference))
@@ -1116,7 +1116,7 @@ fn decode_reference<F>(ref_data: Reference, cb: F) -> DomBuilderResult<()>
                     Ok(())
                 })
         },
-        HexCharReference(span) => {
+        HexChar(span) => {
             u32::from_str_radix(span.value, 16).ok()
                 .and_then(char::from_u32)
                 .ok_or(span.map(|_| SpecificError::InvalidHexReference))
@@ -1126,7 +1126,7 @@ fn decode_reference<F>(ref_data: Reference, cb: F) -> DomBuilderResult<()>
                     Ok(())
                 })
         },
-        EntityReference(span) => {
+        Entity(span) => {
             let s = match span.value {
                 "amp"  => "&",
                 "lt"   => "<",
