@@ -515,7 +515,7 @@ impl Writer {
         Ok(())
     }
 
-    fn format_declaration<'d, W: ?Sized>(&self, writer: &mut W) -> io::Result<()>
+    fn format_declaration<W: ?Sized>(&self, writer: &mut W) -> io::Result<()>
         where W: Write
     {
         try!(write!(writer, "<?xml version={}1.0{}", self.quote_char(), self.quote_char()));
@@ -564,7 +564,7 @@ mod test {
         format_xml_writer(Writer::default(), doc)
     }
 
-    fn format_xml_writer<'d>(writer: Writer, doc: &'d dom::Document) -> String {
+    fn format_xml_writer(writer: Writer, doc: &dom::Document) -> String {
         let mut w = Vec::new();
         writer.format_document(doc, &mut w).expect("Not formatted");
         String::from_utf8(w).expect("Not a string")

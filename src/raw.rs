@@ -706,7 +706,7 @@ impl Connections {
         self.remove_attribute_x(element, |a| a.name.as_qname() == name)
     }
 
-    pub fn remove_attribute_x<'n, F>(&self, element: *mut Element, mut pred: F)
+    pub fn remove_attribute_x<F>(&self, element: *mut Element, mut pred: F)
         where F: FnMut(&mut Attribute) -> bool,
     {
         let element_r = unsafe { &mut *element };
