@@ -113,6 +113,7 @@ impl Recoverable for SpecificError {
 }
 
 impl fmt::Display for SpecificError {
+    #[allow(deprecated)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::error::Error;
         use self::SpecificError::*;
