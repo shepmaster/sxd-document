@@ -522,10 +522,15 @@ fn parse_xml_declaration<'a>(
     success(Token::XmlDeclaration, xml)
 }
 
-/* only the SYSTEM variant */
+// Allows for SYSTEM and PUBLIC external IDs common in XML and HTML respectively
 fn parse_external_id<'a>(pm: &mut XmlMaster<'a>, xml: StringPoint<'a>) -> XmlProgress<'a, &'a str> {
     let (xml, _) = try_parse!(xml.expect_space());
-    let (xml, _) = try_parse!(xml.expect_literal("SYSTEM"));
+
+    let (xml, _) = try_parse!(pm
+        .alternate()
+        .one(|_| xml.expect_literal("SYSTEM"))
+        .one(|_| xml.expect_literal("PUBLIC")).finish());
+    
     let (xml, _) = try_parse!(xml.expect_space());
     let (xml, external_id) = try_parse!(parse_quoted_value(pm, xml, |_, xml, quote| xml
         .consume_attribute_value(quote)
@@ -551,6 +556,7 @@ fn parse_document_type_declaration<'a>(
     pm: &mut XmlMaster<'a>,
     xml: StringPoint<'a>,
 ) -> XmlProgress<'a, Token<'a>> {
+    // TODO: support lowercase html-style <!doctype html>
     let (xml, _) = try_parse!(xml.expect_literal("<!DOCTYPE"));
     let (xml, _) = try_parse!(xml.expect_space());
     let (xml, _type_name) = try_parse!(xml
@@ -757,6 +763,8 @@ impl<'a> Iterator for PullParser<'a> {
         let r = match self.state {
             State::AtBeginning => pm
                 .alternate()
+                // TODO: we may use a separate alternative for the HTML doctype
+                // .one(|_| parse)
                 .one(|pm| parse_xml_declaration(pm, xml))
                 .one(|_| parse_element_start(xml))
                 .one(|_| xml.expect_space().map(Token::Whitespace))
