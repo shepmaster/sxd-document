@@ -33,7 +33,7 @@ jobs:
         rust:
           - beta
           - nightly
-          - 1.31.0
+          - 1.56.0
 
     steps:
       - uses: actions/checkout@v4
