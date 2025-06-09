@@ -109,10 +109,7 @@ pub enum ChildOfRoot {
 
 impl ChildOfRoot {
     fn is_element(&self) -> bool {
-        match *self {
-            ChildOfRoot::Element(_) => true,
-            _ => false,
-        }
+        matches!(self, ChildOfRoot::Element(_))
     }
 
     fn replace_parent(&self, parent: *mut Root) {

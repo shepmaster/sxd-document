@@ -551,9 +551,9 @@ macro_rules! conversion_trait(
     ($res_type:ident, {
         $($leaf_type:ident => $variant:expr),*
     }) => (
-        $(impl<'d> Into<$res_type<'d>> for $leaf_type<'d> {
-            fn into(self) -> $res_type<'d> {
-                $variant(self)
+        $(impl<'d> From<$leaf_type<'d>> for $res_type<'d>{
+            fn from(other: $leaf_type<'d>) -> $res_type<'d> {
+                $variant(other)
             }
         })*
     )

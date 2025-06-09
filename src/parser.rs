@@ -91,22 +91,22 @@ impl Recoverable for SpecificError {
     fn recoverable(&self) -> bool {
         use self::SpecificError::*;
 
-        match *self {
+        !matches!(
+            self,
             ExpectedEncoding
-            | ExpectedYesNo
-            | InvalidProcessingInstructionTarget
-            | MismatchedElementEndName
-            | InvalidDecimalReference
-            | InvalidHexReference
-            | UnknownNamedReference
-            | DuplicateAttribute
-            | RedefinedNamespace
-            | RedefinedDefaultNamespace
-            | EmptyNamespace
-            | UnknownNamespacePrefix
-            | UnclosedElement => false,
-            _ => true,
-        }
+                | ExpectedYesNo
+                | InvalidProcessingInstructionTarget
+                | MismatchedElementEndName
+                | InvalidDecimalReference
+                | InvalidHexReference
+                | UnknownNamedReference
+                | DuplicateAttribute
+                | RedefinedNamespace
+                | RedefinedDefaultNamespace
+                | EmptyNamespace
+                | UnknownNamespacePrefix
+                | UnclosedElement
+        )
     }
 }
 
@@ -358,7 +358,7 @@ enum Token<'a> {
     DocumentTypeDeclaration,
     Comment(&'a str),
     ProcessingInstruction(&'a str, Option<&'a str>),
-    Whitespace(&'a str),
+    Whitespace(#[allow(dead_code)] &'a str),
     ElementStart(Span<PrefixedName<'a>>),
     ElementStartClose,
     ElementSelfClose,
@@ -399,7 +399,7 @@ impl<'a> PullParser<'a> {
     }
 }
 
-fn parse_comment<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'_>> {
+fn parse_comment<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
     let (xml, _) = try_parse!(xml
         .consume_literal("<!--")
         .map_err(|_| SpecificError::ExpectedComment));
@@ -568,7 +568,7 @@ fn parse_pi_value(xml: StringPoint<'_>) -> XmlProgress<'_, &str> {
     xml.consume_pi_value()
 }
 
-fn parse_pi<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'_>> {
+fn parse_pi<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
     let (xml, _) = try_parse!(xml
         .consume_literal("<?")
         .map_err(|_| SpecificError::ExpectedProcessingInstruction));
@@ -726,11 +726,11 @@ fn parse_attribute_reference<'a>(
     success(Token::ReferenceAttributeValue(val), xml)
 }
 
-fn parse_char_data<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'_>> {
+fn parse_char_data<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
     xml.consume_char_data().map(Token::CharData)
 }
 
-fn parse_cdata<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'_>> {
+fn parse_cdata<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
     let (xml, _) = try_parse!(xml.expect_literal("<![CDATA["));
     let (xml, text) = try_parse!(xml.consume_cdata());
     let (xml, _) = try_parse!(xml.expect_literal("]]>"));
@@ -1181,6 +1181,7 @@ where
     F: FnOnce(&str),
 {
     match ref_data {
+        #[allow(clippy::from_str_radix_10)]
         DecimalChar(span) => u32::from_str_radix(span.value, 10)
             .ok()
             .and_then(char::from_u32)
