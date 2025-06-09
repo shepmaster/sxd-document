@@ -142,13 +142,13 @@ impl StringPool {
     }
 
     pub fn intern<'s>(&'s self, s: &str) -> &'s str {
-        if s == "" {
+        if s.is_empty() {
             return "";
         }
 
         let mut index = self.index.borrow_mut();
         if let Some(interned) = index.get(s) {
-            return unsafe { mem::transmute(interned as &str) };
+            return unsafe { mem::transmute::<&str, &str>(interned) };
         }
 
         let interned_str = self.do_intern(s);

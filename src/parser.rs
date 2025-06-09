@@ -19,8 +19,7 @@ use std::ascii::AsciiExt;
 use std::{
     char,
     collections::{BTreeSet, HashMap},
-    error, fmt, iter,
-    mem::replace,
+    error, fmt,
     ops::Deref,
 };
 
@@ -92,22 +91,22 @@ impl Recoverable for SpecificError {
     fn recoverable(&self) -> bool {
         use self::SpecificError::*;
 
-        match *self {
+        !matches!(
+            self,
             ExpectedEncoding
-            | ExpectedYesNo
-            | InvalidProcessingInstructionTarget
-            | MismatchedElementEndName
-            | InvalidDecimalReference
-            | InvalidHexReference
-            | UnknownNamedReference
-            | DuplicateAttribute
-            | RedefinedNamespace
-            | RedefinedDefaultNamespace
-            | EmptyNamespace
-            | UnknownNamespacePrefix
-            | UnclosedElement => false,
-            _ => true,
-        }
+                | ExpectedYesNo
+                | InvalidProcessingInstructionTarget
+                | MismatchedElementEndName
+                | InvalidDecimalReference
+                | InvalidHexReference
+                | UnknownNamedReference
+                | DuplicateAttribute
+                | RedefinedNamespace
+                | RedefinedDefaultNamespace
+                | EmptyNamespace
+                | UnknownNamespacePrefix
+                | UnclosedElement
+        )
     }
 }
 
@@ -359,7 +358,7 @@ enum Token<'a> {
     DocumentTypeDeclaration,
     Comment(&'a str),
     ProcessingInstruction(&'a str, Option<&'a str>),
-    Whitespace(&'a str),
+    Whitespace(#[allow(dead_code)] &'a str),
     ElementStart(Span<PrefixedName<'a>>),
     ElementStartClose,
     ElementSelfClose,
@@ -400,7 +399,7 @@ impl<'a> PullParser<'a> {
     }
 }
 
-fn parse_comment<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'_>> {
+fn parse_comment<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
     let (xml, _) = try_parse!(xml
         .consume_literal("<!--")
         .map_err(|_| SpecificError::ExpectedComment));
@@ -569,7 +568,7 @@ fn parse_pi_value(xml: StringPoint<'_>) -> XmlProgress<'_, &str> {
     xml.consume_pi_value()
 }
 
-fn parse_pi<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'_>> {
+fn parse_pi<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
     let (xml, _) = try_parse!(xml
         .consume_literal("<?")
         .map_err(|_| SpecificError::ExpectedProcessingInstruction));
@@ -727,11 +726,11 @@ fn parse_attribute_reference<'a>(
     success(Token::ReferenceAttributeValue(val), xml)
 }
 
-fn parse_char_data<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'_>> {
+fn parse_char_data<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
     xml.consume_char_data().map(Token::CharData)
 }
 
-fn parse_cdata<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'_>> {
+fn parse_cdata<'a>(xml: StringPoint<'a>) -> XmlProgress<'a, Token<'a>> {
     let (xml, _) = try_parse!(xml.expect_literal("<![CDATA["));
     let (xml, text) = try_parse!(xml.consume_cdata());
     let (xml, _) = try_parse!(xml.expect_literal("]]>"));
@@ -922,7 +921,7 @@ impl<'d> DomBuilder<'d> {
 
     fn finish_opening_tag(&mut self) -> DomBuilderResult<()> {
         let deferred_element = self.element_names.last().expect("Unknown element name");
-        let attributes = DeferredAttributes::new(replace(&mut self.attributes, Vec::new()));
+        let attributes = DeferredAttributes::new(std::mem::take(&mut self.attributes));
 
         attributes.check_duplicates()?;
         let default_namespace = attributes.default_namespace()?;
@@ -971,7 +970,7 @@ impl<'d> DomBuilder<'d> {
         };
 
         for (prefix, ns_uri) in &new_prefix_mappings {
-            element.register_prefix(*prefix, ns_uri);
+            element.register_prefix(prefix, ns_uri);
         }
 
         if !self.seen_top_element {
@@ -1182,24 +1181,17 @@ where
     F: FnOnce(&str),
 {
     match ref_data {
+        #[allow(clippy::from_str_radix_10)]
         DecimalChar(span) => u32::from_str_radix(span.value, 10)
             .ok()
             .and_then(char::from_u32)
             .ok_or_else(|| span.map(|_| SpecificError::InvalidDecimalReference))
-            .and_then(|c| {
-                let s: String = iter::repeat(c).take(1).collect();
-                cb(&s);
-                Ok(())
-            }),
+            .map(|c| cb(&c.to_string())),
         HexChar(span) => u32::from_str_radix(span.value, 16)
             .ok()
             .and_then(char::from_u32)
             .ok_or_else(|| span.map(|_| SpecificError::InvalidHexReference))
-            .and_then(|c| {
-                let s: String = iter::repeat(c).take(1).collect();
-                cb(&s);
-                Ok(())
-            }),
+            .map(|c| cb(&c.to_string())),
         Entity(span) => {
             let s = match span.value {
                 "amp" => "&",

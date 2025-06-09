@@ -189,7 +189,7 @@ impl Package {
 
 impl PartialEq for Package {
     fn eq(&self, other: &Package) -> bool {
-        self as *const Package == other as *const Package
+        std::ptr::eq(self, other)
     }
 }
 

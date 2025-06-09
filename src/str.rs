@@ -5,7 +5,7 @@ trait StrParseExt {
         F2: Fn(char) -> bool;
 }
 
-impl<'a> StrParseExt for &'a str {
+impl StrParseExt for &str {
     fn end_of_start_rest<F1, F2>(&self, is_first: F1, is_rest: F2) -> Option<usize>
     where
         F1: Fn(char) -> bool,
@@ -55,7 +55,7 @@ pub trait XmlStr {
     fn end_of_int_subset(&self) -> Option<usize>;
 }
 
-impl<'a> XmlStr for &'a str {
+impl XmlStr for &str {
     fn end_of_attribute(&self, quote: &str) -> Option<usize> {
         if self.is_empty()
             || self.starts_with('&')
@@ -67,8 +67,7 @@ impl<'a> XmlStr for &'a str {
 
         let quote_char = quote.chars().next().expect("Cant have null quote");
 
-        self.find(&['&', '<', quote_char][..])
-            .or_else(|| Some(self.len()))
+        self.find(&['&', '<', quote_char][..]).or(Some(self.len()))
     }
 
     fn end_of_char_data(&self) -> Option<usize> {
@@ -131,7 +130,7 @@ impl<'a> XmlStr for &'a str {
         let mut positions = self.char_indices();
 
         match positions.next() {
-            Some((_, c)) if '<' == c => (),
+            Some((_, '<')) => (),
             _ => return None,
         };
 
@@ -157,6 +156,7 @@ impl<'a> XmlStr for &'a str {
 }
 
 /// Predicates used when parsing an characters in an XML document.
+#[allow(clippy::wrong_self_convention)]
 pub trait XmlChar {
     /// Is this a [NameStartChar](http://www.w3.org/TR/xml/#NT-NameStartChar)?
     fn is_name_start_char(self) -> bool;
@@ -184,8 +184,7 @@ impl XmlChar for char {
     }
 
     fn is_ncname_start_char(self) -> bool {
-        match self {
-            'A'..='Z'
+        matches!(self, 'A'..='Z'
             | '_'
             | 'a'..='z'
             | '\u{0000C0}'..='\u{0000D6}'
@@ -199,59 +198,39 @@ impl XmlChar for char {
             | '\u{003001}'..='\u{00D7FF}'
             | '\u{00F900}'..='\u{00FDCF}'
             | '\u{00FDF0}'..='\u{00FFFD}'
-            | '\u{010000}'..='\u{0EFFFF}' => true,
-            _ => false,
-        }
+            | '\u{010000}'..='\u{0EFFFF}')
     }
 
     fn is_ncname_char(self) -> bool {
         if self.is_ncname_start_char() {
             return true;
         }
-        match self {
-            '-'
+        matches!(self, '-'
             | '.'
             | '0'..='9'
             | '\u{00B7}'
             | '\u{0300}'..='\u{036F}'
-            | '\u{203F}'..='\u{2040}' => true,
-            _ => false,
-        }
+            | '\u{203F}'..='\u{2040}')
     }
 
     fn is_space_char(self) -> bool {
-        match self {
-            '\x20' | '\x09' | '\x0D' | '\x0A' => true,
-            _ => false,
-        }
+        matches!(self, '\x20' | '\x09' | '\x0D' | '\x0A')
     }
 
     fn is_decimal_char(self) -> bool {
-        match self {
-            '0'..='9' => true,
-            _ => false,
-        }
+        self.is_ascii_digit()
     }
 
     fn is_hex_char(self) -> bool {
-        match self {
-            '0'..='9' | 'a'..='f' | 'A'..='F' => true,
-            _ => false,
-        }
+        self.is_ascii_hexdigit()
     }
 
     fn is_encoding_start_char(self) -> bool {
-        match self {
-            'A'..='Z' | 'a'..='z' => true,
-            _ => false,
-        }
+        self.is_ascii_alphabetic()
     }
 
     fn is_encoding_rest_char(self) -> bool {
-        match self {
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '.' | '_' | '-' => true,
-            _ => false,
-        }
+        matches!(self, 'A'..='Z' | 'a'..='z' | '0'..='9' | '.' | '_' | '-')
     }
 }
 
