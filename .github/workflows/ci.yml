@@ -1,7 +1,4 @@
-on:
-  push:
-  schedule:
-    - cron:  '13 5 * * FRI'
+on: [push, pull_request]
 
 name: Continuous integration
 
@@ -14,32 +11,20 @@ jobs:
           - stable
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
           components: rustfmt, clippy
 
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
+      - run: cargo build
 
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
+      - run: cargo test
 
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+      - run: cargo fmt --all -- --check
 
-      - uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings
+      - run: cargo clippy -- -D warnings
 
   secondary:
     runs-on: ubuntu-latest
@@ -51,21 +36,15 @@ jobs:
           - 1.31.0
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
 
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
+      - run: cargo build
 
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
+      - run: cargo test
 
   features:
     runs-on: ubuntu-latest
@@ -78,23 +57,15 @@ jobs:
           # - compile_failure # Currently not clean
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
 
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --features ${{ matrix.features }}
+      - run: cargo build --features ${{ matrix.features }}
 
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --features ${{ matrix.features }}
+      - run: cargo test--features ${{ matrix.features }}
 
   windows:
     runs-on: windows-latest
@@ -104,18 +75,12 @@ jobs:
           - stable
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
 
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
+      - run: cargo build
 
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
+      - run: cargo test
