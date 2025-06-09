@@ -2,6 +2,8 @@
 name = "sxd-document"
 version = "0.3.2"
 authors = ["Jake Goulding <jake.goulding@gmail.com>"]
+edition = "2018"
+rust-version = "1.56"
 
 description = "A Rust XML DOM library"
 readme = "README.md"
@@ -11,8 +13,6 @@ repository = "https://github.com/shepmaster/sxd-document"
 documentation = "https://docs.rs/sxd-document"
 
 license = "MIT"
-
-edition = "2018"
 
 [features]
 compile_failure = []
