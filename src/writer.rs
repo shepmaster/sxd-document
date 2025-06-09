@@ -434,7 +434,7 @@ impl Writer {
             writer.write_str("'")?;
         }
 
-        for &(ref prefix, ref ns_uri) in mapping.prefixes_in_current_scope() {
+        for (prefix, ns_uri) in mapping.prefixes_in_current_scope() {
             writer.write_str(" xmlns:")?;
             writer.write_str(prefix)?;
             write!(writer, "='{}'", ns_uri)?;

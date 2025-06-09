@@ -5,7 +5,7 @@ trait StrParseExt {
         F2: Fn(char) -> bool;
 }
 
-impl<'a> StrParseExt for &'a str {
+impl StrParseExt for &str {
     fn end_of_start_rest<F1, F2>(&self, is_first: F1, is_rest: F2) -> Option<usize>
     where
         F1: Fn(char) -> bool,
@@ -55,7 +55,7 @@ pub trait XmlStr {
     fn end_of_int_subset(&self) -> Option<usize>;
 }
 
-impl<'a> XmlStr for &'a str {
+impl XmlStr for &str {
     fn end_of_attribute(&self, quote: &str) -> Option<usize> {
         if self.is_empty()
             || self.starts_with('&')
@@ -67,8 +67,7 @@ impl<'a> XmlStr for &'a str {
 
         let quote_char = quote.chars().next().expect("Cant have null quote");
 
-        self.find(&['&', '<', quote_char][..])
-            .or_else(|| Some(self.len()))
+        self.find(&['&', '<', quote_char][..]).or(Some(self.len()))
     }
 
     fn end_of_char_data(&self) -> Option<usize> {

@@ -317,7 +317,7 @@ macro_rules! node(
         impl<'d> $name<'d> {
             fn wrap(node: *mut $raw) -> $name<'d> {
                 $name {
-                    node: node,
+                    node,
                     lifetime: PhantomData,
                 }
             }
@@ -576,9 +576,9 @@ conversion_trait!(
     }
 );
 
-impl<'d> Into<ChildOfElement<'d>> for ChildOfRoot<'d> {
-    fn into(self) -> ChildOfElement<'d> {
-        match self {
+impl<'d> From<ChildOfRoot<'d>> for ChildOfElement<'d> {
+    fn from(val: ChildOfRoot<'d>) -> Self {
+        match val {
             ChildOfRoot::Element(n) => ChildOfElement::Element(n),
             ChildOfRoot::Comment(n) => ChildOfElement::Comment(n),
             ChildOfRoot::ProcessingInstruction(n) => ChildOfElement::ProcessingInstruction(n),

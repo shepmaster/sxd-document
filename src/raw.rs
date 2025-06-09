@@ -580,7 +580,7 @@ impl Connections {
     pub fn remove_attribute_from_parent(&self, child: *mut Attribute) {
         let child_r = unsafe { &mut *child };
         if let Some(parent) = child_r.parent {
-            self.remove_attribute_x(parent, |attr| attr as *mut Attribute == child);
+            self.remove_attribute_x(parent, |attr| std::ptr::eq(attr, child));
         }
     }
 

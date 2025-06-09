@@ -142,7 +142,7 @@ impl StringPool {
     }
 
     pub fn intern<'s>(&'s self, s: &str) -> &'s str {
-        if s == "" {
+        if s.is_empty() {
             return "";
         }
 

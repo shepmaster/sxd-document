@@ -19,8 +19,7 @@ use std::ascii::AsciiExt;
 use std::{
     char,
     collections::{BTreeSet, HashMap},
-    error, fmt, iter,
-    mem::replace,
+    error, fmt,
     ops::Deref,
 };
 
@@ -922,7 +921,7 @@ impl<'d> DomBuilder<'d> {
 
     fn finish_opening_tag(&mut self) -> DomBuilderResult<()> {
         let deferred_element = self.element_names.last().expect("Unknown element name");
-        let attributes = DeferredAttributes::new(replace(&mut self.attributes, Vec::new()));
+        let attributes = DeferredAttributes::new(std::mem::take(&mut self.attributes));
 
         attributes.check_duplicates()?;
         let default_namespace = attributes.default_namespace()?;
@@ -971,7 +970,7 @@ impl<'d> DomBuilder<'d> {
         };
 
         for (prefix, ns_uri) in &new_prefix_mappings {
-            element.register_prefix(*prefix, ns_uri);
+            element.register_prefix(prefix, ns_uri);
         }
 
         if !self.seen_top_element {
@@ -1186,20 +1185,12 @@ where
             .ok()
             .and_then(char::from_u32)
             .ok_or_else(|| span.map(|_| SpecificError::InvalidDecimalReference))
-            .and_then(|c| {
-                let s: String = iter::repeat(c).take(1).collect();
-                cb(&s);
-                Ok(())
-            }),
+            .map(|c| cb(&c.to_string())),
         HexChar(span) => u32::from_str_radix(span.value, 16)
             .ok()
             .and_then(char::from_u32)
             .ok_or_else(|| span.map(|_| SpecificError::InvalidHexReference))
-            .and_then(|c| {
-                let s: String = iter::repeat(c).take(1).collect();
-                cb(&s);
-                Ok(())
-            }),
+            .map(|c| cb(&c.to_string())),
         Entity(span) => {
             let s = match span.value {
                 "amp" => "&",

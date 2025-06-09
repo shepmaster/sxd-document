@@ -19,7 +19,7 @@ macro_rules! wrapper(
         fn $name(self, node: *mut $inner) -> $wrapper<'d> {
             $wrapper {
                 document: self,
-                node: node,
+                node,
             }
         }
     )
