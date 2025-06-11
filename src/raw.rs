@@ -512,9 +512,9 @@ impl Connections {
         C: Into<ChildOfRoot>,
     {
         let child = child.into();
-        let parent_r = unsafe { &mut *self.root };
-
         child.replace_parent(self.root);
+
+        let parent_r = unsafe { &mut *self.root };
         parent_r.children.push(child);
     }
 

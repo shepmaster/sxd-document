@@ -63,3 +63,20 @@ jobs:
       - run: cargo build
 
       - run: cargo test
+
+  miri:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - nightly
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: miri
+
+      - run: cargo miri test
