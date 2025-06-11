@@ -49,7 +49,6 @@
 //! Try to leverage the type system as much as possible.
 
 #![deny(rust_2018_idioms)]
-#![cfg_attr(feature = "unstable", feature(pattern))]
 #![cfg_attr(feature = "unstable", feature(test))]
 
 #[macro_use]
