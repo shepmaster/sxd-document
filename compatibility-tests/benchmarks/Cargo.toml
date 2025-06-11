@@ -1,0 +1,17 @@
+# This exists so that our Rust version choice doesn't affect our
+# benchmarking tool choice.
+
+[package]
+name = "benchmarks"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+sxd-document = { path = "../..", features = ["__internal_expose_string_pool"] }
+
+criterion = "0.6.0"
+
+[[bench]]
+name = "string_pool"
+harness = false
