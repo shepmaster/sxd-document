@@ -1,0 +1,45 @@
+error[E0502]: cannot borrow `c` as mutable because it is also borrowed as immutable
+  --> tests/ui/thindom.rs:10:9
+   |
+9  |     for _ in c.root_children() {
+   |              -----------------
+   |              |
+   |              immutable borrow occurs here
+   |              immutable borrow later used here
+10 |         c.append_root_child(alpha);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable borrow occurs here
+
+error[E0502]: cannot borrow `c` as mutable because it is also borrowed as immutable
+  --> tests/ui/thindom.rs:22:9
+   |
+21 |     for _ in c.element_children(alpha) {
+   |              -------------------------
+   |              |
+   |              immutable borrow occurs here
+   |              immutable borrow later used here
+22 |         c.append_element_child(alpha, beta);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable borrow occurs here
+
+error[E0502]: cannot borrow `c` as mutable because it is also borrowed as immutable
+  --> tests/ui/thindom.rs:34:9
+   |
+33 |     for _ in c.element_preceding_siblings(alpha) {
+   |              -----------------------------------
+   |              |
+   |              immutable borrow occurs here
+   |              immutable borrow later used here
+34 |         c.append_element_child(alpha, beta);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable borrow occurs here
+
+error[E0597]: `s` does not live long enough
+  --> tests/ui/thindom.rs:44:9
+   |
+41 |     let _node = {
+   |         ----- borrow later stored here
+42 |         let (s, _) = package.as_thin_document();
+   |              - binding `s` declared here
+43 |
+44 |         s.create_element("hello")
+   |         ^ borrowed value does not live long enough
+45 |     };
+   |     - `s` dropped here while still borrowed

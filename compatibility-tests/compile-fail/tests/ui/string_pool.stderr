@@ -1,0 +1,11 @@
+error[E0597]: `pool` does not live long enough
+ --> tests/ui/string_pool.rs:6:9
+  |
+4 |     let _s = {
+  |         -- borrow later stored here
+5 |         let pool = StringPool::new();
+  |             ---- binding `pool` declared here
+6 |         pool.intern("hello")
+  |         ^^^^ borrowed value does not live long enough
+7 |     };
+  |     - `pool` dropped here while still borrowed
