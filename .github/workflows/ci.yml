@@ -26,6 +26,8 @@ jobs:
 
       - run: cargo clippy -- -D warnings
 
+      - run: cd compatibility-tests/compile-fail && cargo test
+
   secondary:
     runs-on: ubuntu-latest
     strategy:

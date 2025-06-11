@@ -1,0 +1,9 @@
+[package]
+name = "compile-fail"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sxd-document = { path = "../..", features = ["__internal_expose_string_pool"] }
+
+trybuild = "1.0"

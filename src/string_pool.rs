@@ -231,15 +231,6 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "compile_failure")]
-    fn string_cannot_outlive_the_pool() {
-        let z = {
-            let s = StringPool::new();
-            s.intern("hello")
-        };
-    }
-
-    #[test]
     fn ignores_the_lifetime_of_the_input_string() {
         let s = StringPool::new();
 
