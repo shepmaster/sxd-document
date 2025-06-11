@@ -49,7 +49,6 @@
 //! Try to leverage the type system as much as possible.
 
 #![deny(rust_2018_idioms)]
-#![cfg_attr(feature = "unstable", feature(test))]
 
 #[macro_use]
 extern crate peresil;
@@ -67,6 +66,11 @@ pub mod parser;
 #[doc(hidden)]
 pub mod thindom;
 pub mod writer;
+
+#[cfg(feature = "__internal_expose_string_pool")]
+pub mod __internal {
+    pub use super::string_pool::StringPool;
+}
 
 pub use crate::str::XmlChar;
 

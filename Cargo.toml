@@ -16,7 +16,8 @@ license = "MIT"
 
 [features]
 compile_failure = []
-unstable = []
+
+__internal_expose_string_pool = []
 
 [dependencies]
 peresil = "0.3.0"
