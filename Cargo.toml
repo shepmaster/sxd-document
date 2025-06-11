@@ -2,7 +2,7 @@
 name = "sxd-document"
 version = "0.3.2"
 authors = ["Jake Goulding <jake.goulding@gmail.com>"]
-edition = "2018"
+edition = "2021"
 rust-version = "1.56"
 
 description = "A Rust XML DOM library"
