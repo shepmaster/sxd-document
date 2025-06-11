@@ -20,4 +20,4 @@ unstable = []
 
 [dependencies]
 peresil = "0.3.0"
-typed-arena = "1.0"
+typed-arena = "2.0"
