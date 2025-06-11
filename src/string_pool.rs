@@ -47,7 +47,7 @@ impl Drop for Chunk {
         // have a destructor. This means the len doesn't matter, only
         // the capacity.
         unsafe {
-            Vec::from_raw_parts(self.start, self.capacity, self.capacity);
+            Vec::from_raw_parts(self.start, 0, self.capacity);
         }
     }
 }
